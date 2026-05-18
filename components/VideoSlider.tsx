@@ -93,15 +93,17 @@ export default function VideoSlider({ slides }: VideoSliderProps) {
         {/* Video + glow wrapper */}
         <div className="relative" style={{ aspectRatio: "9/16", height: frameHeight, maxHeight: "calc(100vh - 160px)", overflow: "visible" }}>
 
-          {/* Glow layer — no overflow:hidden so blur bleeds outward freely */}
+          {/* Glow layer — feathered with radial mask so edges fully dissolve */}
           <div
             style={{
               position: "absolute",
-              inset: "-60px",
+              inset: "-80px",
               zIndex: 0,
-              filter: "blur(50px)",
-              opacity: 0.9,
+              filter: "blur(40px)",
+              opacity: 0.95,
               mixBlendMode: "screen",
+              WebkitMaskImage: "radial-gradient(ellipse 75% 80% at 50% 50%, black 30%, transparent 75%)",
+              maskImage: "radial-gradient(ellipse 75% 80% at 50% 50%, black 30%, transparent 75%)",
             }}
           >
             {slides.map((slide, i) => (
