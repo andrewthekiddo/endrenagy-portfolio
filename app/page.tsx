@@ -1,4 +1,5 @@
 import HeroVideo from "@/components/HeroVideo";
+import Timeline from "@/components/Timeline";
 
 export default function HomePage() {
   return (
@@ -23,6 +24,11 @@ export default function HomePage() {
           </p>
         </div>
       </section>
+
+      {/* FOLLOW MY JOURNEY + Timeline */}
+      <div className="border-t border-white/[0.07]">
+        <Timeline />
+      </div>
     </main>
   );
 }
