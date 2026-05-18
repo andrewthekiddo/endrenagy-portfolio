@@ -8,12 +8,14 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["var(--font-geist-sans)"],
-        mono: ["var(--font-geist-mono)"],
+        sans:    ["var(--font-inter)"],
+        display: ["var(--font-syne)"],
       },
       colors: {
-        cream: "#F5F5F0",
-        charcoal: "#1A1A1A",
+        bg:     "#080808",
+        blue:   "#5468E0",
+        blue2:  "#56B4F0",
+        pink:   "#FF2D9B",
       },
     },
   },

@@ -5,14 +5,14 @@ interface SectionPageProps {
 
 export default function SectionPage({ title, children }: SectionPageProps) {
   return (
-    <main className="min-h-screen pt-20">
-      <div className="px-6 pt-16 pb-8 border-b border-black/10">
-        <p className="text-xs tracking-widest uppercase text-black/40 mb-2">Work</p>
-        <h1 className="text-4xl font-light tracking-tight">{title}</h1>
+    <main className="min-h-screen pt-14">
+      <div className="px-8 pt-20 pb-10 border-b border-white/[0.07]">
+        <p className="text-[11px] font-sans font-medium tracking-widest text-white/30 mb-4 uppercase">Work</p>
+        <h1 className="font-display text-7xl font-extrabold tracking-tight leading-none">{title}</h1>
       </div>
-      <div className="px-6 py-12">
+      <div className="px-8 py-12">
         {children ?? (
-          <p className="text-sm text-black/30 italic">Content coming soon — send materials to populate this section.</p>
+          <p className="text-sm font-sans text-white/20 italic">Content coming soon.</p>
         )}
       </div>
     </main>

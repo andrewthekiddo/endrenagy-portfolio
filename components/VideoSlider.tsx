@@ -113,7 +113,7 @@ export default function VideoSlider({ slides }: VideoSliderProps) {
       <div className="flex items-center gap-3">
         <button
           onClick={prev_}
-          className="w-7 h-7 flex items-center justify-center rounded-full border border-black/20 hover:border-black/60 hover:bg-black/5 transition-all duration-200 text-black/50 hover:text-black"
+          className="w-7 h-7 flex items-center justify-center rounded-full border border-white/20 hover:border-white/60 hover:bg-white/10 transition-all duration-200 text-white/50 hover:text-white"
           aria-label="Previous"
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -126,7 +126,7 @@ export default function VideoSlider({ slides }: VideoSliderProps) {
             key={i}
             onClick={() => goTo(i, i > current ? "right" : "left")}
             className={`rounded-full transition-all duration-300 ${
-              i === current ? "w-5 h-2 bg-black" : "w-2 h-2 bg-black/25 hover:bg-black/50"
+              i === current ? "w-5 h-2 bg-white" : "w-2 h-2 bg-white/25 hover:bg-white/60"
             }`}
             aria-label={`Go to slide ${i + 1}`}
           />
@@ -134,7 +134,7 @@ export default function VideoSlider({ slides }: VideoSliderProps) {
 
         <button
           onClick={next}
-          className="w-7 h-7 flex items-center justify-center rounded-full border border-black/20 hover:border-black/60 hover:bg-black/5 transition-all duration-200 text-black/50 hover:text-black"
+          className="w-7 h-7 flex items-center justify-center rounded-full border border-white/20 hover:border-white/60 hover:bg-white/10 transition-all duration-200 text-white/50 hover:text-white"
           aria-label="Next"
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">

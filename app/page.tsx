@@ -6,14 +6,13 @@ export default function HomePage() {
       <HeroVideo />
 
       {/* BIO */}
-      <section className="max-w-3xl mx-auto px-6 py-32">
-        <p className="text-xs tracking-widest uppercase text-black/40 mb-8">About</p>
-        <h2 className="text-3xl font-light leading-relaxed mb-8">
+      <section className="max-w-4xl mx-auto px-8 py-32 border-t border-white/[0.07]">
+        <p className="text-[11px] font-sans font-medium tracking-widest text-white/30 mb-6 uppercase">About</p>
+        <h2 className="font-display text-6xl font-extrabold tracking-tight leading-tight mb-10">
           Endre Nagy
         </h2>
-        <div className="space-y-5 text-base font-light leading-relaxed text-black/70">
+        <div className="space-y-5 text-base font-sans font-normal leading-relaxed text-white/55 max-w-2xl">
           <p>
-            {/* BIO szöveg ide kerül — küld el és beillesztem */}
             Creative director and motion designer based in Budapest.
             Specializing in animation, VFX, FOOH, and immersive visual experiences.
           </p>

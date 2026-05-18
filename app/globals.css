@@ -3,25 +3,21 @@
 @tailwind utilities;
 
 :root {
-  --background: #F5F5F0;
-  --foreground: #1A1A1A;
+  --bg:     #080808;
+  --blue:   #5468E0;
+  --blue2:  #56B4F0;
+  --white:  #FFFFFF;
 }
 
-* {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
-}
+* { box-sizing: border-box; padding: 0; margin: 0; }
 
-html,
-body {
+html, body {
   max-width: 100vw;
   overflow-x: hidden;
-  background-color: var(--background);
-  color: var(--foreground);
+  background-color: var(--bg);
+  color: var(--white);
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
-}
+a { color: inherit; text-decoration: none; }
+
+::selection { background: var(--blue); color: #fff; }
