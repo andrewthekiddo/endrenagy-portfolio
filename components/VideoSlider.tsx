@@ -57,8 +57,8 @@ function sampleColor(video: HTMLVideoElement, canvas: HTMLCanvasElement): string
     r = Math.round(r / n); g = Math.round(g / n); b = Math.round(b / n);
     // Boost saturation & clamp lightness so it stays vivid
     let [h, s, l] = rgbToHsl(r, g, b);
-    s = Math.max(s, 70);   // min 70% saturation
-    l = Math.min(Math.max(l, 45), 65); // lightness 45–65%
+    s = Math.max(s, 45);   // min 45% saturation — natural but vivid
+    l = Math.min(Math.max(l, 48), 68); // lightness 48–68%
     const [rr, gg, bb] = hslToRgb(h, s, l);
     return `rgb(${rr},${gg},${bb})`;
   } catch {
@@ -156,9 +156,9 @@ export default function VideoSlider({ slides }: VideoSliderProps) {
           height: "calc(100% - 64px)",
           maxHeight: "calc(100vh - 180px)",
           borderRadius: "24px",
-          border: `2px solid ${glowColor}`,
-          boxShadow: `0 0 18px ${glowColor}, 0 0 50px ${glowColor}66, inset 0 0 14px ${glowColor}22`,
-          transition: "border-color 600ms ease, box-shadow 600ms ease",
+          border: `3px solid ${glowColor}`,
+          boxShadow: `0 0 8px ${glowColor}, 0 0 25px ${glowColor}, 0 0 60px ${glowColor}BB, 0 0 100px ${glowColor}55, inset 0 0 20px ${glowColor}33`,
+          transition: "border-color 700ms ease, box-shadow 700ms ease",
         }}
       >
         {slides.map((slide, i) => (
