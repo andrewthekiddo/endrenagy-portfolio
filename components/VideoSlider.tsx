@@ -102,8 +102,8 @@ export default function VideoSlider({ slides }: VideoSliderProps) {
               filter: "blur(40px)",
               opacity: 0.95,
               mixBlendMode: "screen",
-              WebkitMaskImage: "radial-gradient(ellipse 75% 80% at 50% 50%, black 30%, transparent 75%)",
-              maskImage: "radial-gradient(ellipse 75% 80% at 50% 50%, black 30%, transparent 75%)",
+              WebkitMaskImage: "radial-gradient(ellipse 90% 90% at 50% 50%, black 5%, transparent 100%)",
+              maskImage: "radial-gradient(ellipse 90% 90% at 50% 50%, black 5%, transparent 100%)",
             }}
           >
             {slides.map((slide, i) => (
