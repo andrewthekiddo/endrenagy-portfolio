@@ -45,9 +45,10 @@ export default function Nav() {
                   href={link.href}
                   className={`px-3 py-1.5 rounded-full text-[12px] font-medium transition-all duration-200 ${
                     isActive
-                      ? "bg-white/10 text-white"
+                      ? "text-white"
                       : "text-white/45 hover:text-white hover:bg-white/[0.06]"
                   }`}
+                  style={isActive ? { background: "linear-gradient(135deg, #5468E0, #56B4F0)" } : {}}
                 >
                   {link.label}
                 </Link>
