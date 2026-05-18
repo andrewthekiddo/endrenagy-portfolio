@@ -102,6 +102,7 @@ export default function VideoSlider({ slides }: VideoSliderProps) {
               filter: "blur(40px)",
               opacity: 0.95,
               mixBlendMode: "screen",
+              pointerEvents: "none",
               WebkitMaskImage: "radial-gradient(ellipse 90% 90% at 50% 50%, black 5%, transparent 100%)",
               maskImage: "radial-gradient(ellipse 90% 90% at 50% 50%, black 5%, transparent 100%)",
             }}
@@ -173,7 +174,7 @@ export default function VideoSlider({ slides }: VideoSliderProps) {
       </div>
 
       {/* Controls */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 relative" style={{ zIndex: 2 }}>
         <button onClick={prev_} className="w-7 h-7 flex items-center justify-center rounded-full border border-white/20 hover:border-white/60 hover:bg-white/10 transition-all duration-200 text-white/50 hover:text-white" aria-label="Previous">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M15 18l-6-6 6-6" /></svg>
         </button>
