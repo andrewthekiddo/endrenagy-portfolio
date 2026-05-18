@@ -3,6 +3,7 @@ import { Inter, Syne } from "next/font/google";
 import "./globals.css";
 import Nav from "@/components/Nav";
 import LoadingScreen from "@/components/LoadingScreen";
+import { TransitionProvider } from "@/components/TransitionProvider";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -29,9 +30,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.variable} ${syne.variable} font-sans antialiased bg-bg text-white`}>
-        <LoadingScreen />
-        <Nav />
-        {children}
+        <TransitionProvider>
+          <LoadingScreen />
+          <Nav />
+          {children}
+        </TransitionProvider>
       </body>
     </html>
   );
