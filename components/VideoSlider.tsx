@@ -31,28 +31,19 @@ export default function VideoSlider({ slides }: VideoSliderProps) {
 
   useEffect(() => {
     if (animating) {
-      const t = setTimeout(() => {
-        setPrev(null);
-        setAnimating(false);
-      }, 600);
+      const t = setTimeout(() => { setPrev(null); setAnimating(false); }, 600);
       return () => clearTimeout(t);
     }
   }, [animating]);
 
-  // Play current, pause others
   useEffect(() => {
     videoRefs.current.forEach((vid, i) => {
       if (!vid) return;
-      if (i === current) {
-        vid.currentTime = 0;
-        vid.play().catch(() => {});
-      } else {
-        vid.pause();
-      }
+      if (i === current) { vid.currentTime = 0; vid.play().catch(() => {}); }
+      else vid.pause();
     });
   }, [current]);
 
-  // Keyboard nav
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "ArrowRight") next();
@@ -65,52 +56,39 @@ export default function VideoSlider({ slides }: VideoSliderProps) {
   const getSlideStyle = (index: number): React.CSSProperties => {
     const isActive = index === current;
     const isPrev = index === prev;
-
-    if (isActive && animating) {
-      const enterFrom = direction === "right" ? "100%" : "-100%";
-      return {
-        position: "absolute",
-        inset: 0,
-        transform: `translateX(0)`,
-        animation: `slideIn${direction === "right" ? "Right" : "Left"} 600ms cubic-bezier(0.76, 0, 0.24, 1) forwards`,
-      };
-    }
-    if (isPrev && animating) {
-      return {
-        position: "absolute",
-        inset: 0,
-        animation: `slideOut${direction === "right" ? "Left" : "Right"} 600ms cubic-bezier(0.76, 0, 0.24, 1) forwards`,
-      };
-    }
-    if (isActive) {
-      return { position: "absolute", inset: 0, transform: "translateX(0)" };
-    }
+    if (isActive && animating) return {
+      position: "absolute", inset: 0,
+      animation: `slideIn${direction === "right" ? "Right" : "Left"} 600ms cubic-bezier(0.76,0,0.24,1) forwards`,
+    };
+    if (isPrev && animating) return {
+      position: "absolute", inset: 0,
+      animation: `slideOut${direction === "right" ? "Left" : "Right"} 600ms cubic-bezier(0.76,0,0.24,1) forwards`,
+    };
+    if (isActive) return { position: "absolute", inset: 0, transform: "translateX(0)" };
     return { position: "absolute", inset: 0, transform: "translateX(100%)", visibility: "hidden" };
   };
 
   return (
-    <div className="relative w-full h-full select-none">
-      {/* Slides */}
-      <div className="relative w-full h-full overflow-hidden">
-        <style>{`
-          @keyframes slideInRight {
-            from { transform: translateX(100%); }
-            to   { transform: translateX(0); }
-          }
-          @keyframes slideInLeft {
-            from { transform: translateX(-100%); }
-            to   { transform: translateX(0); }
-          }
-          @keyframes slideOutLeft {
-            from { transform: translateX(0); }
-            to   { transform: translateX(-100%); }
-          }
-          @keyframes slideOutRight {
-            from { transform: translateX(0); }
-            to   { transform: translateX(100%); }
-          }
-        `}</style>
+    <div className="w-full h-full flex flex-col items-center justify-center gap-5 select-none py-6">
+      <style>{`
+        @keyframes slideInRight  { from { transform: translateX(100%); } to { transform: translateX(0); } }
+        @keyframes slideInLeft   { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+        @keyframes slideOutLeft  { from { transform: translateX(0); } to { transform: translateX(-100%); } }
+        @keyframes slideOutRight { from { transform: translateX(0); } to { transform: translateX(100%); } }
+      `}</style>
 
+      {/* Video frame — neon pink border, 9:16 */}
+      <div
+        className="relative overflow-hidden"
+        style={{
+          aspectRatio: "9 / 16",
+          height: "calc(100% - 64px)",
+          maxHeight: "calc(100vh - 180px)",
+          borderRadius: "24px",
+          border: "2px solid #FF2D9B",
+          boxShadow: "0 0 16px #FF2D9B, 0 0 40px #FF2D9B66, inset 0 0 12px #FF2D9B22",
+        }}
+      >
         {slides.map((slide, i) => (
           <div key={slide.src} style={getSlideStyle(i)}>
             <video
@@ -120,53 +98,49 @@ export default function VideoSlider({ slides }: VideoSliderProps) {
               muted
               playsInline
               autoPlay={i === 0}
-              className="w-full h-full object-contain bg-black"
+              className="w-full h-full object-cover"
             />
           </div>
         ))}
+
+        {/* Counter top-right inside frame */}
+        <div className="absolute top-3 right-3 z-10 text-white/70 text-[10px] tracking-widest font-mono bg-black/30 backdrop-blur-sm px-2 py-1 rounded-full">
+          {String(current + 1).padStart(2, "0")} / {String(slides.length).padStart(2, "0")}
+        </div>
       </div>
 
-      {/* Prev arrow */}
-      <button
-        onClick={prev_}
-        className="absolute left-4 top-1/2 -translate-y-1/2 z-10 w-10 h-10 flex items-center justify-center rounded-full bg-white/20 hover:bg-white/40 backdrop-blur-sm transition-all duration-200 text-white"
-        aria-label="Previous"
-      >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M15 18l-6-6 6-6" />
-        </svg>
-      </button>
+      {/* Controls: [<]  dots  [>] */}
+      <div className="flex items-center gap-3">
+        <button
+          onClick={prev_}
+          className="w-7 h-7 flex items-center justify-center rounded-full border border-black/20 hover:border-black/60 hover:bg-black/5 transition-all duration-200 text-black/50 hover:text-black"
+          aria-label="Previous"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
 
-      {/* Next arrow */}
-      <button
-        onClick={next}
-        className="absolute right-4 top-1/2 -translate-y-1/2 z-10 w-10 h-10 flex items-center justify-center rounded-full bg-white/20 hover:bg-white/40 backdrop-blur-sm transition-all duration-200 text-white"
-        aria-label="Next"
-      >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M9 18l6-6-6-6" />
-        </svg>
-      </button>
-
-      {/* Dot indicators */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2">
         {slides.map((_, i) => (
           <button
             key={i}
             onClick={() => goTo(i, i > current ? "right" : "left")}
             className={`rounded-full transition-all duration-300 ${
-              i === current
-                ? "w-6 h-2 bg-white"
-                : "w-2 h-2 bg-white/40 hover:bg-white/70"
+              i === current ? "w-5 h-2 bg-black" : "w-2 h-2 bg-black/25 hover:bg-black/50"
             }`}
             aria-label={`Go to slide ${i + 1}`}
           />
         ))}
-      </div>
 
-      {/* Counter */}
-      <div className="absolute top-4 right-4 z-10 text-white/60 text-xs tracking-widest font-mono">
-        {String(current + 1).padStart(2, "0")} / {String(slides.length).padStart(2, "0")}
+        <button
+          onClick={next}
+          className="w-7 h-7 flex items-center justify-center rounded-full border border-black/20 hover:border-black/60 hover:bg-black/5 transition-all duration-200 text-black/50 hover:text-black"
+          aria-label="Next"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <path d="M9 18l6-6-6-6" />
+          </svg>
+        </button>
       </div>
     </div>
   );

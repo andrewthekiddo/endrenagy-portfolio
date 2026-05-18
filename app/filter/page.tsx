@@ -24,7 +24,7 @@ export default function FilterPage() {
       </div>
 
       {/* Full-height slider */}
-      <div className="flex-1 bg-black overflow-hidden">
+      <div className="flex-1 overflow-hidden">
         <VideoSlider slides={slides} />
       </div>
     </main>
