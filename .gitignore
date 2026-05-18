@@ -35,3 +35,7 @@ next-env.d.ts
 
 # tmp
 .tmp/
+
+# large video files — deployed directly via Vercel CLI, not through GitHub
+public/videos/*.mp4
+public/videos/filterya/*.mp4
