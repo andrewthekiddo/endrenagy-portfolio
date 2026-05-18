@@ -88,20 +88,19 @@ export default function VideoSlider({ slides }: VideoSliderProps) {
         @keyframes slideOutRight { from{transform:translateX(0)} to{transform:translateX(100%)} }
       `}</style>
 
-      <div className="flex items-center gap-12">
+      <div className="flex items-center gap-12" style={{ overflow: "visible" }}>
 
         {/* Video + glow wrapper */}
-        <div className="relative" style={{ aspectRatio: "9/16", height: frameHeight, maxHeight: "calc(100vh - 160px)" }}>
+        <div className="relative" style={{ aspectRatio: "9/16", height: frameHeight, maxHeight: "calc(100vh - 160px)", overflow: "visible" }}>
 
-          {/* Glow layer — blurred duplicate behind the frame */}
+          {/* Glow layer — no overflow:hidden so blur bleeds outward freely */}
           <div
-            className="absolute overflow-hidden"
             style={{
-              inset: "-12px",
-              borderRadius: "36px",
-              filter: "blur(24px)",
-              opacity: 0.75,
+              position: "absolute",
+              inset: "-60px",
               zIndex: 0,
+              filter: "blur(50px)",
+              opacity: 0.9,
               mixBlendMode: "screen",
             }}
           >
