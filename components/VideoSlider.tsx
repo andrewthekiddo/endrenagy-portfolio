@@ -88,7 +88,7 @@ export default function VideoSlider({ slides }: VideoSliderProps) {
         @keyframes slideOutRight { from{transform:translateX(0)} to{transform:translateX(100%)} }
       `}</style>
 
-      <div className="flex items-end gap-12" style={{ overflow: "visible" }}>
+      <div className="flex items-center gap-12" style={{ overflow: "visible" }}>
 
         {/* Video column: glow + frame + controls stacked */}
         <div className="flex flex-col items-center gap-5" style={{ overflow: "visible" }}>
@@ -104,8 +104,8 @@ export default function VideoSlider({ slides }: VideoSliderProps) {
               opacity: 0.95,
               mixBlendMode: "screen",
               pointerEvents: "none",
-              WebkitMaskImage: "radial-gradient(ellipse 90% 90% at 50% 50%, black 5%, transparent 100%)",
-              maskImage: "radial-gradient(ellipse 90% 90% at 50% 50%, black 5%, transparent 100%)",
+              WebkitMaskImage: "radial-gradient(ellipse 55% 60% at 50% 50%, black 50%, transparent 100%)",
+              maskImage: "radial-gradient(ellipse 55% 60% at 50% 50%, black 50%, transparent 100%)",
             }}
           >
             {slides.map((slide, i) => (

@@ -57,8 +57,8 @@ export default function FilterPage() {
         </p>
       </div>
 
-      {/* Slider — overflow-x:clip keeps slide animations contained but allows glow to bleed */}
-      <div className="flex-1" style={{ overflowX: "clip" }}>
+      {/* Slider — no overflow clip, glow bleeds freely. Slide animations are clipped inside the frame div. */}
+      <div className="flex-1">
         <VideoSlider slides={slides} />
       </div>
 
