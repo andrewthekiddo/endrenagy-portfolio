@@ -88,10 +88,11 @@ export default function VideoSlider({ slides }: VideoSliderProps) {
         @keyframes slideOutRight { from{transform:translateX(0)} to{transform:translateX(100%)} }
       `}</style>
 
-      <div className="flex items-center gap-12" style={{ overflow: "visible" }}>
+      <div className="flex items-end gap-12" style={{ overflow: "visible" }}>
 
-        {/* Video + glow wrapper */}
-        <div className="relative" style={{ aspectRatio: "9/16", height: frameHeight, maxHeight: "calc(100vh - 160px)", overflow: "visible" }}>
+        {/* Video column: glow + frame + controls stacked */}
+        <div className="flex flex-col items-center gap-5" style={{ overflow: "visible" }}>
+        <div className="relative" style={{ aspectRatio: "9/16", height: frameHeight, maxHeight: "calc(100vh - 200px)", overflow: "visible" }}>
 
           {/* Glow layer — feathered with radial mask so edges fully dissolve */}
           <div
@@ -152,7 +153,25 @@ export default function VideoSlider({ slides }: VideoSliderProps) {
               {String(current + 1).padStart(2, "0")} / {String(slides.length).padStart(2, "0")}
             </div>
           </div>
+        </div>{/* end video+glow wrapper */}
+
+        {/* Controls — under the video, centered */}
+        <div className="flex items-center gap-3 relative" style={{ zIndex: 2 }}>
+          <button onClick={prev_} className="w-7 h-7 flex items-center justify-center rounded-full border border-white/20 hover:border-white/60 hover:bg-white/10 transition-all duration-200 text-white/50 hover:text-white" aria-label="Previous">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M15 18l-6-6 6-6" /></svg>
+          </button>
+          {slides.map((_, i) => (
+            <button key={i} onClick={() => goTo(i, i > current ? "right" : "left")}
+              className={`rounded-full transition-all duration-300 ${i === current ? "w-5 h-2 bg-white" : "w-2 h-2 bg-white/25 hover:bg-white/60"}`}
+              aria-label={`Go to slide ${i + 1}`}
+            />
+          ))}
+          <button onClick={next} className="w-7 h-7 flex items-center justify-center rounded-full border border-white/20 hover:border-white/60 hover:bg-white/10 transition-all duration-200 text-white/50 hover:text-white" aria-label="Next">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 18l6-6-6-6" /></svg>
+          </button>
         </div>
+
+        </div>{/* end video column */}
 
         {/* Info panel — right of video */}
         <div
@@ -171,22 +190,6 @@ export default function VideoSlider({ slides }: VideoSliderProps) {
           </p>
         </div>
 
-      </div>
-
-      {/* Controls */}
-      <div className="flex items-center gap-3 relative" style={{ zIndex: 2 }}>
-        <button onClick={prev_} className="w-7 h-7 flex items-center justify-center rounded-full border border-white/20 hover:border-white/60 hover:bg-white/10 transition-all duration-200 text-white/50 hover:text-white" aria-label="Previous">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M15 18l-6-6 6-6" /></svg>
-        </button>
-        {slides.map((_, i) => (
-          <button key={i} onClick={() => goTo(i, i > current ? "right" : "left")}
-            className={`rounded-full transition-all duration-300 ${i === current ? "w-5 h-2 bg-white" : "w-2 h-2 bg-white/25 hover:bg-white/60"}`}
-            aria-label={`Go to slide ${i + 1}`}
-          />
-        ))}
-        <button onClick={next} className="w-7 h-7 flex items-center justify-center rounded-full border border-white/20 hover:border-white/60 hover:bg-white/10 transition-all duration-200 text-white/50 hover:text-white" aria-label="Next">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 18l6-6-6-6" /></svg>
-        </button>
       </div>
     </div>
   );
