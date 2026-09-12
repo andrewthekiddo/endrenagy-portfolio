@@ -40,7 +40,7 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPrefere
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.1;
+renderer.toneMappingExposure = 0.85;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x141d2b);
@@ -61,11 +61,11 @@ controls.enablePan = false;
 controls.enabled = false;
 
 // Fények: alap hangulat (a végleges verzióban ezt kisütött lightmap váltja ki)
-scene.add(new THREE.HemisphereLight(0x3bc3ee, 0x101828, 0.55));
-const key = new THREE.DirectionalLight(0xffe9d0, 1.1);
+scene.add(new THREE.HemisphereLight(0x3bc3ee, 0x101828, 0.4));
+const key = new THREE.DirectionalLight(0xffe9d0, 0.7);
 key.position.set(120, 220, 80);
 scene.add(key);
-const rim = new THREE.DirectionalLight(0x5a6cff, 0.35);
+const rim = new THREE.DirectionalLight(0x5a6cff, 0.25);
 rim.position.set(-150, 120, -120);
 scene.add(rim);
 
