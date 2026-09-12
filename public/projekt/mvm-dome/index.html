@@ -61,8 +61,8 @@
   .mk .pin svg{width:19px;height:19px;fill:none;stroke:var(--navy);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
   .mk .stem{width:2px;height:12px;background:var(--pin);opacity:.8}
   .mk.focus{--pin:var(--pin-active) !important}
-  .mk.focus .pin{animation:pulse 1.4s ease-in-out infinite}
-  @keyframes pulse{0%,100%{transform:scale(1);box-shadow:0 0 0 3px rgba(16,24,40,.6),0 6px 18px rgba(0,0,0,.45),0 0 14px var(--pin)}50%{transform:scale(1.15);box-shadow:0 0 0 5px rgba(252,191,32,.25),0 6px 18px rgba(0,0,0,.45),0 0 28px var(--pin)}}
+  .mk.focus .pin{animation:pulse 2.6s ease-in-out infinite}
+  @keyframes pulse{0%,100%{transform:scale(1);box-shadow:0 0 0 3px rgba(16,24,40,.6),0 6px 18px rgba(0,0,0,.45),0 0 12px var(--pin)}50%{transform:scale(1.05);box-shadow:0 0 0 6px rgba(252,191,32,.14),0 6px 18px rgba(0,0,0,.45),0 0 22px var(--pin)}}
   .mk:hover .pin,.mk.sel .pin{transform:scale(1.18)}
   .mk .lbl{position:absolute;bottom:calc(100% + 6px);white-space:nowrap;background:var(--navy);border:1px solid var(--panel-border);padding:5px 9px;border-radius:7px;font-size:12px;font-weight:500;opacity:0;transition:.15s;pointer-events:none}
   .mk:hover .lbl{opacity:1}
