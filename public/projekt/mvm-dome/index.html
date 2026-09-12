@@ -96,6 +96,7 @@
   /* --- vissza az áttekintéshez (részletnézetben) --- */
   .overview{position:fixed;left:50%;top:72px;transform:translateX(-50%);z-index:10;display:none;align-items:center;gap:8px;padding:9px 16px;border-radius:999px;background:var(--panel);border:1px solid var(--panel-border);color:var(--text);font:700 13px Nunito,sans-serif;cursor:pointer;backdrop-filter:blur(14px)}
   .overview.show{display:inline-flex}
+  body.panel-open .overview{display:none}
   .overview:hover{border-color:var(--yellow)}
 
   /* --- loader --- */
@@ -165,7 +166,6 @@
     <p id="panelText"></p>
     <div class="near" id="panelNear"></div>
     <a class="more" id="panelMore" href="https://mvm-dome.hu/hu/szolgaltatasok" target="_blank" rel="noopener">Bővebben <span>›</span></a>
-    <button class="back" id="panelBack">‹ Vissza az áttekintéshez</button>
   </div>
 </aside>
 <button class="overview" id="overviewBtn">‹ Vissza az áttekintéshez</button>

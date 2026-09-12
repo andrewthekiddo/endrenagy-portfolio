@@ -306,8 +306,8 @@ function closePanel(backToTour = true) {
   highlightSector(null);
   if (backToTour) enterTour();
 }
-$('#panelX').addEventListener('click', () => { closePanel(false); armIdle(); });
-$('#panelBack').addEventListener('click', () => closePanel(true));
+// Bezárásra azonnal vissza a körútra – onnan folytatja, ahol a kamera éppen áll
+$('#panelX').addEventListener('click', () => closePanel(true));
 
 // Szektor-kiemelés: a lelátó és a székek mesh-ei név alapján, pulzáló sárga
 let hlMeshes = [];
