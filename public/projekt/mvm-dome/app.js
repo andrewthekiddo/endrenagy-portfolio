@@ -74,8 +74,15 @@ loader.setMeshoptDecoder(MeshoptDecoder);
 
 let current = null;          // { root, pois, markers, lights }
 
-// ---------- Anyag-hangolás: a színek a Blender-fájlból jönnek, itt csak a "világító" felületek kapnak emissive-et ----------
+// ---------- Anyag-hangolás ----------
+// A színek a Blender-fájlból jönnek. Itt két dolog történik:
+//  - a lelátó / székek / lépcsők / küzdőtér elsötétítése (darken = szorzó a Blender-színre), hogy a folyosó és a szolgáltatások kapják a hangsúlyt
+//  - a "világító" felületek (pult, feliratok, kiszolgálóterek) emissive-et kapnak
 const MAT = {
+  lelato_beton:       { darken: 0.22, roughness: 0.95 },
+  szekek:             { darken: 0.45, roughness: 0.95 },
+  korlat:             { darken: 0.5 },
+  'material.001':     { darken: 0.28, roughness: 0.95 },   // küzdőtér padlója
   kiszolgalopult:     { roughness: 0.6, emissive: 0xfcbf20, emissiveIntensity: 0.25 },
   kiszolgaloter_padlo:{ roughness: 0.8, emissive: 0xfcd97a, emissiveIntensity: 0.18 },
   felirat:            { emissive: 0xffffff, emissiveIntensity: 0.6 },
@@ -89,6 +96,7 @@ function tuneMaterials(root) {
     const k = Object.keys(MAT).find(k => n.includes(k));
     if (!k) return;
     const t = MAT[k];
+    if (t.darken !== undefined) m.color.multiplyScalar(t.darken);
     if (t.roughness !== undefined) m.roughness = t.roughness;
     if (t.metalness !== undefined) m.metalness = t.metalness;
     if (t.emissive !== undefined) { m.emissive = new THREE.Color(t.emissive); m.emissiveIntensity = t.emissiveIntensity; }
