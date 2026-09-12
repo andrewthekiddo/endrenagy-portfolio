@@ -15,13 +15,13 @@ const LEVELS = {
 };
 
 const CATS = {
-  wc:         { label: 'Mosdó',           color: '#3BC3EE', photo: 'img/arena.jpg',  icon: '<circle cx="6.5" cy="4" r="2"/><path d="M3.5 8h6v7H8v6H5v-6H3.5z"/><path d="M12 2v20"/><circle cx="17.5" cy="4" r="2"/><path d="M15.5 8h4l2 7h-2v6h-4v-6h-2z"/>', text: 'Női, férfi és akadálymentes mosdó. A mosdók a körüljáróról nyílnak, a szektorbejáratok közelében.' },
-  bar:        { label: 'Bár',             color: '#F79009', photo: 'img/pult.jpg',   icon: '<path d="M4 4h16l-6 8v6h-4v-6z"/><path d="M8 20h8"/>', text: 'Italok, snackek, kávé. Kártyás és mobilos fizetés. A rendezvény kezdete előtt egy órával nyit.' },
-  ruhatar:    { label: 'Ruhatár',         color: '#B692F6', photo: 'img/arena.jpg',  icon: '<path d="M12 4a2 2 0 1 0 0 4v2"/><path d="M12 10 3 16h18z"/>', text: 'Kabát- és táskamegőrzés a rendezvény teljes ideje alatt. A ruhatárjegyet őrizd meg.' },
-  lift:       { label: 'Lift',            color: '#6CE9A6', photo: 'img/arena.jpg',  icon: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 11l3-3 3 3"/><path d="M9 14l3 3 3-3"/>', text: 'Akadálymentes közlekedés a szintek között. Kerekesszékkel és babakocsival is használható.' },
-  elsosegely: { label: 'Elsősegély',      color: '#F97066', photo: 'img/arena.jpg',  icon: '<path d="M12 5v14"/><path d="M5 12h14"/>', text: 'Egészségügyi ügyelet a rendezvény ideje alatt. Sürgős esetben szólj a legközelebbi teremőrnek.' },
-  baba:       { label: 'Baba-mama szoba', color: '#F670C7', photo: 'img/arena.jpg',  icon: '<circle cx="12" cy="8" r="4"/><path d="M6 21a6 6 0 0 1 12 0"/>', text: 'Pelenkázó és szoptatóhelyiség, csendes, elkülönített térben.' },
-  lepcso:     { label: 'Lépcsőház',       color: '#D0D5DD', photo: 'img/lepcso.jpg', icon: '<path d="M4 20h4v-4h4v-4h4V8h4"/>', text: 'Lépcsőház a szintek között. Vészhelyzet esetén ez a kijelölt menekülési útvonal.' },
+  wc:         { label: 'Mosdó',           color: '#FCBF20', photo: 'img/arena.jpg',  icon: '<circle cx="6.5" cy="4" r="2"/><path d="M3.5 8h6v7H8v6H5v-6H3.5z"/><path d="M12 2v20"/><circle cx="17.5" cy="4" r="2"/><path d="M15.5 8h4l2 7h-2v6h-4v-6h-2z"/>', text: 'Női, férfi és akadálymentes mosdó. A mosdók a körüljáróról nyílnak, a szektorbejáratok közelében.' },
+  bar:        { label: 'Bár',             color: '#FCBF20', photo: 'img/pult.jpg',   icon: '<path d="M4 4h16l-6 8v6h-4v-6z"/><path d="M8 20h8"/>', text: 'Italok, snackek, kávé. Kártyás és mobilos fizetés. A rendezvény kezdete előtt egy órával nyit.' },
+  ruhatar:    { label: 'Ruhatár',         color: '#FCBF20', photo: 'img/arena.jpg',  icon: '<path d="M12 4a2 2 0 1 0 0 4v2"/><path d="M12 10 3 16h18z"/>', text: 'Kabát- és táskamegőrzés a rendezvény teljes ideje alatt. A ruhatárjegyet őrizd meg.' },
+  lift:       { label: 'Lift',            color: '#FCBF20', photo: 'img/arena.jpg',  icon: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 11l3-3 3 3"/><path d="M9 14l3 3 3-3"/>', text: 'Akadálymentes közlekedés a szintek között. Kerekesszékkel és babakocsival is használható.' },
+  elsosegely: { label: 'Elsősegély',      color: '#FCBF20', photo: 'img/arena.jpg',  icon: '<path d="M12 5v14"/><path d="M5 12h14"/>', text: 'Egészségügyi ügyelet a rendezvény ideje alatt. Sürgős esetben szólj a legközelebbi teremőrnek.' },
+  baba:       { label: 'Baba-mama szoba', color: '#FCBF20', photo: 'img/arena.jpg',  icon: '<circle cx="12" cy="8" r="4"/><path d="M6 21a6 6 0 0 1 12 0"/>', text: 'Pelenkázó és szoptatóhelyiség, csendes, elkülönített térben.' },
+  lepcso:     { label: 'Lépcsőház',       color: '#FCBF20', photo: 'img/lepcso.jpg', icon: '<path d="M4 20h4v-4h4v-4h4V8h4"/>', text: 'Lépcsőház a szintek között. Vészhelyzet esetén ez a kijelölt menekülési útvonal.' },
   szektor:    { label: 'Szektor',         color: '#FCBF20', photo: 'img/lelato.jpg', icon: '', text: 'Felső lelátó, 14 sor. A szektor bejárata a körüljáróról nyílik; a legközelebbi mosdó és bár a bejárat mellett található.' },
 };
 // Szűrés: null = minden szolgáltatás látszik; egy kategória = csak az látszik (sárgán, pulzálva). A szektorszámok külön kapcsolhatók.
@@ -95,7 +95,7 @@ function tuneMaterials(root) {
   });
 }
 
-// Fényfoltok a szolgáltatások fölé – sárga a bároknál, kék a többinél (a végleges verzióban kisütött lightmap)
+// Fényfoltok a szolgáltatások fölé – kategóriánként más színű (az ikonok egységesen sárgák, a fények nem) (a végleges verzióban kisütött lightmap)
 const LIGHT = { bar: [0xfcbf20, 520], wc: [0x3bc3ee, 260], ruhatar: [0x3bc3ee, 200], lift: [0x3bc3ee, 150], elsosegely: [0xfcbf20, 150], baba: [0x3bc3ee, 150] };
 function addPoiLights(pois) {
   const lights = [];
