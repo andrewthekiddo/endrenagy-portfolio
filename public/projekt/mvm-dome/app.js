@@ -328,14 +328,14 @@ function highlightSector(num) {
 
 // Szektor-kereső
 function goSector() {
-  const v = $('#sec').value.trim();
+  const v = ($('#sec')?.value || '').trim();
   const p = current?.pois.find(x => x.id === `szektor_${v}`);
   if (!p) { showToast(`Nincs ${v || 'ilyen'} számú szektor ezen a szinten (301–320).`); return; }
   showSectors = true; syncChips();
   selectPoi(p);
 }
-$('#secBtn').addEventListener('click', goSector);
-$('#sec').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.keyCode === 13) goSector(); });
+$('#secBtn')?.addEventListener('click', goSector);
+$('#sec')?.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.keyCode === 13) goSector(); });
 
 // ---------- Szűrőpanel: egy kategória kiválasztása = csak az látszik; újra kattintva vissza az összes ----------
 const FILTER_COLUMNS = [
@@ -364,10 +364,6 @@ function buildFilters() {
     }
     f.appendChild(wrap);
   }
-  const all = document.createElement('button');
-  all.className = 'chip all'; all.innerHTML = `<span>Összes szolgáltatás</span>`;
-  all.addEventListener('click', () => { activeCat = null; showSectors = true; syncChips(); });
-  f.appendChild(all);
 }
 function syncChips() {
   document.querySelectorAll('.chip[data-cat]').forEach(b => {
