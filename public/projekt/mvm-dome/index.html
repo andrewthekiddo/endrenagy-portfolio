@@ -25,13 +25,13 @@
   .brand small{display:block;color:var(--muted);font-size:11.5px;font-weight:600;margin-top:1px;text-transform:none;letter-spacing:0}
 
   /* --- level switcher: keskeny, magas pirula; az aktív szint hosszabb sárga gomb chevronnal --- */
-  .levels{position:fixed;right:22px;bottom:28px;z-index:10;display:flex;flex-direction:column;align-items:center;gap:14px;padding:8px;border-radius:999px;background:var(--panel);border:1.5px solid rgba(252,252,253,.16);backdrop-filter:blur(14px)}
-  .levels button{width:60px;height:64px;border-radius:999px;border:0;background:transparent;color:var(--text);font:600 24px Nunito,sans-serif;cursor:pointer;transition:height .25s,background .2s,color .2s;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+  .levels{position:fixed;right:22px;bottom:28px;z-index:10;display:flex;flex-direction:column;align-items:center;gap:14px;padding:6px;border-radius:999px;background:var(--panel);border:1.5px solid rgba(252,252,253,.16);backdrop-filter:blur(14px)}
+  .levels button{width:34px;height:64px;border-radius:999px;border:0;background:transparent;color:var(--text);font:600 22px Nunito,sans-serif;cursor:pointer;transition:height .25s,background .2s,color .2s;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
   .levels button:hover{color:var(--yellow)}
   .levels button .chev{display:none;width:20px;height:20px;margin-bottom:-4px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
   .levels button.active{height:100px;background:var(--yellow);color:var(--navy)}
   .levels button.active .chev{display:block}
-  .levels button .tip{position:absolute;right:74px;top:50%;transform:translateY(-50%);white-space:nowrap;background:var(--navy);border:1px solid var(--panel-border);color:var(--text);font-size:12px;font-weight:600;padding:6px 10px;border-radius:8px;opacity:0;pointer-events:none;transition:.15s}
+  .levels button .tip{position:absolute;right:48px;top:50%;transform:translateY(-50%);white-space:nowrap;background:var(--navy);border:1px solid var(--panel-border);color:var(--text);font-size:12px;font-weight:600;padding:6px 10px;border-radius:8px;opacity:0;pointer-events:none;transition:.15s}
   .levels button:hover .tip{opacity:1}
 
   /* --- filter panel --- */
