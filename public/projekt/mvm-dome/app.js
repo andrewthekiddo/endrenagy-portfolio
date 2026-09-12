@@ -162,7 +162,7 @@ function updateMarkers() {
 // 'tour'   – a kamera egy rögzített íven halad a folyosó fölött; húzással ugyanezen az íven lehet előre-hátra tekerni
 // 'detail' – dupla kattintás / marker után egy horgonypont körül szabadon forgatható (OrbitControls)
 // speed negatív = balról jobbra halad; ta/tb kicsi = a kamera az aréna közepe felé néz, nem a folyosó mentén előre
-const TOUR = { a: 124, b: 136, h: 64, ta: 22, tb: 26, th: -4, lead: 0.4, speed: -(2 * Math.PI) / 110, idleMs: 12000 };
+const TOUR = { a: 108, b: 120, h: 50, ta: 22, tb: 26, th: -4, lead: 0.4, speed: -(2 * Math.PI) / 110, idleMs: 12000 };
 const tour = { t: 0, lastNow: 0, zoom: 1, drag: null, vel: 0 };
 let mode = 'tour';
 let anim = null;
@@ -414,7 +414,7 @@ async function loadLevel(key) {
   document.querySelectorAll('#levels button').forEach(b => b.classList.toggle('active', b.dataset.level === key));
   renderer.compile(scene, camera);
   setTimeout(() => loaderEl.classList.add('hide'), 250);
-  enterTour(2400);
+  enterTour(1); // azonnal az íven indul, nincs berepülés
 }
 
 document.querySelectorAll('#levels button').forEach(b => b.addEventListener('click', () => loadLevel(b.dataset.level)));
