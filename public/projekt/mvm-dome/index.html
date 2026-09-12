@@ -33,18 +33,20 @@
   .levels button:hover .tip{opacity:1}
 
   /* --- filter panel --- */
-  .filters{position:fixed;left:18px;bottom:24px;z-index:10;display:flex;flex-direction:column;gap:6px;padding:10px;border-radius:16px;background:var(--panel);border:1px solid var(--panel-border);backdrop-filter:blur(14px);max-width:220px}
-  .filters .title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:2px 6px 4px}
+  .filters{position:fixed;left:18px;bottom:24px;z-index:10;display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;padding:12px;border-radius:18px;background:var(--panel);border:1px solid var(--panel-border);backdrop-filter:blur(14px);width:min(420px,calc(100vw - 36px))}
+  .filters .title{grid-column:1/-1;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);padding:2px 6px 6px}
+  .filters .col{display:flex;flex-direction:column;gap:2px}
+  .filters .col+.col{border-left:1px solid var(--panel-border);padding-left:10px}
   .chip{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;border:0;background:transparent;color:var(--text);font:600 13px Nunito,sans-serif;cursor:pointer;text-align:left;transition:.15s;width:100%}
   .chip:hover{background:rgba(252,252,253,.05)}
-  .chip .dot{width:24px;height:24px;border-radius:7px;display:grid;place-items:center;flex:none;background:var(--blue);color:var(--navy);font-size:12px;font-weight:800;transition:.15s}
+  .chip .dot{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;flex:none;background:var(--col,var(--blue));color:var(--navy);font-size:12px;font-weight:800;transition:.15s}
   .chip .dot svg{width:16px;height:16px;fill:none;stroke:var(--navy);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
   .chip .n{margin-left:auto;color:var(--muted);font-size:12px}
   .chip.active{background:rgba(252,191,32,.14);color:var(--yellow)}
   .chip.active .dot{background:var(--yellow)}
   .chip.dim{opacity:.45}
   .chip.off .dot{background:#344054}.chip.off{color:var(--muted)}
-  .chip.all{border-top:1px solid var(--panel-border);margin-top:4px;padding-top:10px;border-radius:0 0 10px 10px}
+  .chip.all{grid-column:1/-1;justify-content:center;margin-top:6px;padding:10px;border-radius:10px;background:rgba(252,252,253,.04);font-weight:800}
 
   /* --- sector search --- */
   .search{position:fixed;top:18px;right:18px;z-index:10;display:flex;gap:6px;padding:6px;border-radius:12px;background:var(--panel);border:1px solid var(--panel-border);backdrop-filter:blur(14px)}
@@ -58,7 +60,7 @@
   .mk .pin{width:32px;height:32px;border-radius:50%;background:var(--pin);display:grid;place-items:center;box-shadow:0 0 0 3px rgba(16,24,40,.6),0 6px 18px rgba(0,0,0,.45),0 0 18px var(--pin);transition:transform .15s,background .2s}
   .mk .pin svg{width:19px;height:19px;fill:none;stroke:var(--navy);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
   .mk .stem{width:2px;height:12px;background:var(--pin);opacity:.8}
-  .mk.focus{--pin:var(--pin-active)}
+  .mk.focus{--pin:var(--pin-active) !important}
   .mk.focus .pin{animation:pulse 1.4s ease-in-out infinite}
   @keyframes pulse{0%,100%{transform:scale(1);box-shadow:0 0 0 3px rgba(16,24,40,.6),0 6px 18px rgba(0,0,0,.45),0 0 14px var(--pin)}50%{transform:scale(1.15);box-shadow:0 0 0 5px rgba(252,191,32,.25),0 6px 18px rgba(0,0,0,.45),0 0 28px var(--pin)}}
   .mk:hover .pin,.mk.sel .pin{transform:scale(1.18)}
@@ -69,14 +71,29 @@
   .mk.szektor.sel .pin{background:var(--yellow);color:var(--navy)}
   .mk.szektor .stem{display:none}
 
-  /* --- info card --- */
-  .card{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);z-index:11;width:min(360px,calc(100vw - 36px));padding:16px 18px;border-radius:16px;background:var(--panel);border:1px solid var(--panel-border);backdrop-filter:blur(16px);opacity:0;pointer-events:none;transition:.25s}
-  .card.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
-  .card .cat{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--yellow)}
-  .card h3{margin:4px 0 6px;font-size:17px;font-weight:800}
-  .card p{margin:0;color:var(--muted);font-size:13px;line-height:1.5}
-  .card .x{position:absolute;top:10px;right:12px;background:transparent;border:0;color:var(--muted);font-size:20px;cursor:pointer;line-height:1}
-  .card .near{margin-top:10px;font-size:12px;color:var(--text)}
+  /* --- jobb oldali infópanel (Ziggo-stílus) --- */
+  .panel{position:fixed;top:0;right:0;bottom:0;width:min(400px,100vw);z-index:12;background:var(--navy);border-left:1px solid var(--panel-border);transform:translateX(100%);transition:transform .35s cubic-bezier(.2,.8,.2,1);display:flex;flex-direction:column;overflow:hidden}
+  .panel.show{transform:translateX(0)}
+  .panel .photo{aspect-ratio:16/10;background:#1D2939 center/cover no-repeat;flex:none;position:relative}
+  .panel .photo::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(16,24,40,0) 55%,var(--navy) 100%)}
+  .panel .x{position:absolute;top:14px;right:14px;z-index:2;width:36px;height:36px;border-radius:50%;border:0;background:rgba(16,24,40,.75);color:var(--text);font-size:20px;cursor:pointer;line-height:1;backdrop-filter:blur(8px)}
+  .panel .body{padding:22px 26px 26px;overflow:auto}
+  .panel .cat{font-size:13px;font-weight:800;color:var(--yellow);letter-spacing:.02em}
+  .panel h2{margin:6px 0 12px;font-size:28px;font-weight:800;letter-spacing:-.01em;line-height:1.15}
+  .panel p{margin:0 0 8px;color:#D0D5DD;font-size:15px;line-height:1.55}
+  .panel .near{margin:14px 0 0;font-size:13px;color:var(--muted)}
+  .panel .near b{color:var(--text);font-weight:700}
+  .panel .more{display:inline-flex;align-items:center;gap:10px;margin-top:22px;padding:11px 20px;border-radius:999px;border:2px solid var(--yellow);color:var(--text);font:700 15px Nunito,sans-serif;background:transparent;cursor:pointer;text-decoration:none}
+  .panel .more:hover{background:rgba(252,191,32,.12)}
+  .panel .back{margin-top:12px;display:block;background:transparent;border:0;color:var(--muted);font:600 13px Nunito,sans-serif;cursor:pointer;padding:0}
+  .panel .back:hover{color:var(--text)}
+  body.panel-open .search,body.panel-open .levels{transform:translateX(calc(-1 * min(400px,100vw)))}
+  .search,.levels{transition:transform .35s cubic-bezier(.2,.8,.2,1)}
+
+  /* --- vissza az áttekintéshez (részletnézetben) --- */
+  .overview{position:fixed;left:50%;top:72px;transform:translateX(-50%);z-index:10;display:none;align-items:center;gap:8px;padding:9px 16px;border-radius:999px;background:var(--panel);border:1px solid var(--panel-border);color:var(--text);font:700 13px Nunito,sans-serif;cursor:pointer;backdrop-filter:blur(14px)}
+  .overview.show{display:inline-flex}
+  .overview:hover{border-color:var(--yellow)}
 
   /* --- loader --- */
   .loader{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;transition:opacity .5s}
@@ -94,14 +111,20 @@
   .hint.hide{opacity:0}
 
   @media (max-width:640px){
-    .filters{max-width:none;left:12px;right:12px;bottom:12px;flex-direction:row;flex-wrap:nowrap;overflow-x:auto;padding:6px;border-radius:12px;gap:2px}
+    .filters{width:auto;left:12px;right:12px;bottom:12px;display:flex;flex-wrap:nowrap;overflow-x:auto;padding:6px;border-radius:12px;gap:2px}
     .filters .title{display:none}
-    .chip{width:auto;padding:6px 8px;white-space:nowrap}.chip .n{display:none}.chip.all{border:0;margin:0;padding-top:6px}
+    .filters .col{flex-direction:row}.filters .col+.col{border:0;padding:0}
+    .chip{width:auto;padding:6px 8px;white-space:nowrap}.chip .n{display:none}.chip.all{margin:0;padding:6px 10px;background:transparent}
     .levels{bottom:78px;right:12px;flex-direction:row}
     .levels button .tip{display:none}
     .search{top:auto;bottom:78px;left:12px;right:auto}
     .search input{width:88px}
-    .card{bottom:78px}
+    .panel{top:auto;left:0;right:0;width:100%;height:62vh;border-left:0;border-top:1px solid var(--panel-border);border-radius:18px 18px 0 0;transform:translateY(100%)}
+    .panel.show{transform:translateY(0)}
+    .panel .photo{aspect-ratio:16/7}
+    .panel h2{font-size:22px}
+    body.panel-open .search,body.panel-open .levels{transform:none}
+    .overview{top:auto;bottom:140px}
     .brand img{height:24px}.brand h1{font-size:12px}
     .hint{display:none}
   }
@@ -112,12 +135,12 @@
 <div id="markers"></div>
 
 <div class="brand">
-  <img src="logo.svg" alt="MVM Dome">
+  <img src="/projekt/mvm-dome/logo.svg" alt="MVM Dome">
   <div class="sep"></div>
   <div><h1>Interaktív térkép</h1><small>Felső körüljáró szint · prototípus</small></div>
 </div>
 
-<div class="hint" id="hint">Húzd a forgatáshoz · görgess a nagyításhoz · dupla kattintás: odarepül</div>
+<div class="hint" id="hint">Húzd jobbra-balra a körbejáráshoz · dupla kattintás: odarepül és szabadon forgatható</div>
 
 <div class="search">
   <input id="sec" type="text" inputmode="numeric" placeholder="Szektor (pl. 305)" maxlength="3">
@@ -134,16 +157,21 @@
   <button data-level="also"><span class="tip">Alsó körüljáró · következő fázis</span>A</button>
 </div>
 
-<div class="card" id="card">
-  <button class="x" id="cardX">×</button>
-  <div class="cat" id="cardCat"></div>
-  <h3 id="cardTitle"></h3>
-  <p id="cardText"></p>
-  <div class="near" id="cardNear"></div>
-</div>
+<aside class="panel" id="panel">
+  <div class="photo" id="panelPhoto"><button class="x" id="panelX" aria-label="Bezárás">×</button></div>
+  <div class="body">
+    <div class="cat" id="panelCat"></div>
+    <h2 id="panelTitle"></h2>
+    <p id="panelText"></p>
+    <div class="near" id="panelNear"></div>
+    <a class="more" id="panelMore" href="https://mvm-dome.hu/hu/szolgaltatasok" target="_blank" rel="noopener">Bővebben <span>›</span></a>
+    <button class="back" id="panelBack">‹ Vissza az áttekintéshez</button>
+  </div>
+</aside>
+<button class="overview" id="overviewBtn">‹ Vissza az áttekintéshez</button>
 
 <div class="loader" id="loader">
-  <img class="logo" src="loader-logo.png" alt="MVM Dome">
+  <img class="logo" src="/projekt/mvm-dome/loader-logo.png" alt="MVM Dome">
   <div class="pct" id="pct">0%</div>
   <div class="bar"><i id="barfill"></i></div>
   <div class="lvl" id="lvlName">Felső körüljáró szint betöltése</div>
