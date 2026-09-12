@@ -1,0 +1,549 @@
+{
+ "level": "felso",
+ "pois": [
+  {
+   "id": "baba_01",
+   "cat": "baba",
+   "name": "Baba-mama szoba 1",
+   "x": -54.08,
+   "y": -27.6,
+   "z": 2.04
+  },
+  {
+   "id": "baba_02",
+   "cat": "baba",
+   "name": "Baba-mama szoba 2",
+   "x": 54.3,
+   "y": -27.46,
+   "z": 2.04
+  },
+  {
+   "id": "bar_01",
+   "cat": "bar",
+   "name": "Bár 1",
+   "x": -12.66,
+   "y": 69.97,
+   "z": 2.68
+  },
+  {
+   "id": "bar_02",
+   "cat": "bar",
+   "name": "Bár 2",
+   "x": 12.9,
+   "y": 69.97,
+   "z": 2.68
+  },
+  {
+   "id": "bar_03",
+   "cat": "bar",
+   "name": "Bár 3",
+   "x": 64.05,
+   "y": 0.26,
+   "z": 2.68
+  },
+  {
+   "id": "bar_04",
+   "cat": "bar",
+   "name": "Bár 4",
+   "x": -64.22,
+   "y": 0.04,
+   "z": 2.68
+  },
+  {
+   "id": "bar_05",
+   "cat": "bar",
+   "name": "Bár 5",
+   "x": -11.25,
+   "y": -68.29,
+   "z": 2.68
+  },
+  {
+   "id": "bar_06",
+   "cat": "bar",
+   "name": "Bár 6",
+   "x": 11.35,
+   "y": -68.29,
+   "z": 2.68
+  },
+  {
+   "id": "elsosegely_01",
+   "cat": "elsosegely",
+   "name": "Elsősegély 1",
+   "x": 2.82,
+   "y": 70.39,
+   "z": 2.04
+  },
+  {
+   "id": "elsosegely_02",
+   "cat": "elsosegely",
+   "name": "Elsősegély 2",
+   "x": -1.62,
+   "y": -68.71,
+   "z": 2.04
+  },
+  {
+   "id": "lift_01",
+   "cat": "lift",
+   "name": "Lift 1",
+   "x": -23.58,
+   "y": 68.7,
+   "z": 2.24
+  },
+  {
+   "id": "lift_02",
+   "cat": "lift",
+   "name": "Lift 2",
+   "x": 23.6,
+   "y": 68.7,
+   "z": 2.24
+  },
+  {
+   "id": "lepcso_01",
+   "cat": "lepcso",
+   "name": "Lépcsőház 1",
+   "x": -58.56,
+   "y": -13.81,
+   "z": 1.01
+  },
+  {
+   "id": "lepcso_02",
+   "cat": "lepcso",
+   "name": "Lépcsőház 2",
+   "x": -61.23,
+   "y": -13.76,
+   "z": 1.01
+  },
+  {
+   "id": "lepcso_03",
+   "cat": "lepcso",
+   "name": "Lépcsőház 3",
+   "x": -58.54,
+   "y": 13.83,
+   "z": 1.01
+  },
+  {
+   "id": "lepcso_04",
+   "cat": "lepcso",
+   "name": "Lépcsőház 4",
+   "x": -61.21,
+   "y": 13.76,
+   "z": 1.01
+  },
+  {
+   "id": "lepcso_05",
+   "cat": "lepcso",
+   "name": "Lépcsőház 5",
+   "x": 58.56,
+   "y": -13.78,
+   "z": 1.01
+  },
+  {
+   "id": "lepcso_06",
+   "cat": "lepcso",
+   "name": "Lépcsőház 6",
+   "x": 61.23,
+   "y": -13.78,
+   "z": 1.01
+  },
+  {
+   "id": "lepcso_07",
+   "cat": "lepcso",
+   "name": "Lépcsőház 7",
+   "x": 58.56,
+   "y": 13.73,
+   "z": 1.01
+  },
+  {
+   "id": "lepcso_08",
+   "cat": "lepcso",
+   "name": "Lépcsőház 8",
+   "x": 61.23,
+   "y": 13.73,
+   "z": 1.01
+  },
+  {
+   "id": "lepcso_09",
+   "cat": "lepcso",
+   "name": "Lépcsőház 9",
+   "x": 41.69,
+   "y": -56.84,
+   "z": 1.01
+  },
+  {
+   "id": "lepcso_10",
+   "cat": "lepcso",
+   "name": "Lépcsőház 10",
+   "x": 42.98,
+   "y": -58.14,
+   "z": 1.01
+  },
+  {
+   "id": "lepcso_11",
+   "cat": "lepcso",
+   "name": "Lépcsőház 11",
+   "x": -41.7,
+   "y": -56.83,
+   "z": 1.01
+  },
+  {
+   "id": "lepcso_12",
+   "cat": "lepcso",
+   "name": "Lépcsőház 12",
+   "x": -42.99,
+   "y": -58.14,
+   "z": 1.01
+  },
+  {
+   "id": "lepcso_13",
+   "cat": "lepcso",
+   "name": "Lépcsőház 13",
+   "x": -46.65,
+   "y": 54.47,
+   "z": 1.01
+  },
+  {
+   "id": "lepcso_14",
+   "cat": "lepcso",
+   "name": "Lépcsőház 14",
+   "x": -56.84,
+   "y": 39.94,
+   "z": 1.01
+  },
+  {
+   "id": "lepcso_15",
+   "cat": "lepcso",
+   "name": "Lépcsőház 15",
+   "x": -45.33,
+   "y": 52.43,
+   "z": 1.01
+  },
+  {
+   "id": "lepcso_16",
+   "cat": "lepcso",
+   "name": "Lépcsőház 16",
+   "x": -53.87,
+   "y": 36.86,
+   "z": 1.01
+  },
+  {
+   "id": "lepcso_17",
+   "cat": "lepcso",
+   "name": "Lépcsőház 17",
+   "x": 46.65,
+   "y": 54.47,
+   "z": 1.01
+  },
+  {
+   "id": "lepcso_18",
+   "cat": "lepcso",
+   "name": "Lépcsőház 18",
+   "x": 56.84,
+   "y": 39.94,
+   "z": 1.01
+  },
+  {
+   "id": "lepcso_19",
+   "cat": "lepcso",
+   "name": "Lépcsőház 19",
+   "x": 45.33,
+   "y": 52.43,
+   "z": 1.01
+  },
+  {
+   "id": "lepcso_20",
+   "cat": "lepcso",
+   "name": "Lépcsőház 20",
+   "x": 53.87,
+   "y": 36.86,
+   "z": 1.01
+  },
+  {
+   "id": "ruhatar_01",
+   "cat": "ruhatar",
+   "name": "Ruhatár 1",
+   "x": 53.35,
+   "y": 12.3,
+   "z": 1.83
+  },
+  {
+   "id": "ruhatar_02",
+   "cat": "ruhatar",
+   "name": "Ruhatár 2",
+   "x": -53.13,
+   "y": 12.3,
+   "z": 1.83
+  },
+  {
+   "id": "ruhatar_03",
+   "cat": "ruhatar",
+   "name": "Ruhatár 3",
+   "x": -53.13,
+   "y": -13.18,
+   "z": 1.83
+  },
+  {
+   "id": "ruhatar_04",
+   "cat": "ruhatar",
+   "name": "Ruhatár 4",
+   "x": 53.35,
+   "y": -13.18,
+   "z": 1.83
+  },
+  {
+   "id": "szektor_301",
+   "cat": "szektor",
+   "name": "Szektor 301",
+   "x": 44.04,
+   "y": -26.47,
+   "z": 0.91
+  },
+  {
+   "id": "szektor_302",
+   "cat": "szektor",
+   "name": "Szektor 302",
+   "x": 45.17,
+   "y": -8.83,
+   "z": 0.91
+  },
+  {
+   "id": "szektor_303",
+   "cat": "szektor",
+   "name": "Szektor 303",
+   "x": 45.17,
+   "y": 8.77,
+   "z": 0.91
+  },
+  {
+   "id": "szektor_304",
+   "cat": "szektor",
+   "name": "Szektor 304",
+   "x": 44.03,
+   "y": 26.3,
+   "z": 0.91
+  },
+  {
+   "id": "szektor_305",
+   "cat": "szektor",
+   "name": "Szektor 305",
+   "x": 38.12,
+   "y": 41.81,
+   "z": 0.91
+  },
+  {
+   "id": "szektor_306",
+   "cat": "szektor",
+   "name": "Szektor 306",
+   "x": 27.22,
+   "y": 52.76,
+   "z": 0.91
+  },
+  {
+   "id": "szektor_307",
+   "cat": "szektor",
+   "name": "Szektor 307",
+   "x": 10.28,
+   "y": 58.73,
+   "z": 0.91
+  },
+  {
+   "id": "szektor_308",
+   "cat": "szektor",
+   "name": "Szektor 308",
+   "x": -10.17,
+   "y": 58.72,
+   "z": 0.91
+  },
+  {
+   "id": "szektor_309",
+   "cat": "szektor",
+   "name": "Szektor 309",
+   "x": -27.33,
+   "y": 52.8,
+   "z": 0.91
+  },
+  {
+   "id": "szektor_310",
+   "cat": "szektor",
+   "name": "Szektor 310",
+   "x": -38.17,
+   "y": 41.9,
+   "z": 0.91
+  },
+  {
+   "id": "szektor_311",
+   "cat": "szektor",
+   "name": "Szektor 311",
+   "x": -44.04,
+   "y": 26.47,
+   "z": 0.91
+  },
+  {
+   "id": "szektor_312",
+   "cat": "szektor",
+   "name": "Szektor 312",
+   "x": -45.17,
+   "y": 8.83,
+   "z": 0.91
+  },
+  {
+   "id": "szektor_313",
+   "cat": "szektor",
+   "name": "Szektor 313",
+   "x": -45.17,
+   "y": -8.77,
+   "z": 0.91
+  },
+  {
+   "id": "szektor_314",
+   "cat": "szektor",
+   "name": "Szektor 314",
+   "x": -44.03,
+   "y": -26.54,
+   "z": 0.91
+  },
+  {
+   "id": "szektor_315",
+   "cat": "szektor",
+   "name": "Szektor 315",
+   "x": -38.13,
+   "y": -41.98,
+   "z": 0.91
+  },
+  {
+   "id": "szektor_316",
+   "cat": "szektor",
+   "name": "Szektor 316",
+   "x": -27.22,
+   "y": -52.74,
+   "z": 0.91
+  },
+  {
+   "id": "szektor_317",
+   "cat": "szektor",
+   "name": "Szektor 317",
+   "x": -10.31,
+   "y": -58.69,
+   "z": 0.91
+  },
+  {
+   "id": "szektor_318",
+   "cat": "szektor",
+   "name": "Szektor 318",
+   "x": 10.16,
+   "y": -58.68,
+   "z": 0.91
+  },
+  {
+   "id": "szektor_319",
+   "cat": "szektor",
+   "name": "Szektor 319",
+   "x": 27.13,
+   "y": -52.78,
+   "z": 0.91
+  },
+  {
+   "id": "szektor_320",
+   "cat": "szektor",
+   "name": "Szektor 320",
+   "x": 38.07,
+   "y": -41.9,
+   "z": 0.91
+  },
+  {
+   "id": "wc_01",
+   "cat": "wc",
+   "name": "Mosdó 1",
+   "x": 29.84,
+   "y": 61.97,
+   "z": 2.04
+  },
+  {
+   "id": "wc_02",
+   "cat": "wc",
+   "name": "Mosdó 2",
+   "x": -31.52,
+   "y": 61.66,
+   "z": 2.04
+  },
+  {
+   "id": "wc_03",
+   "cat": "wc",
+   "name": "Mosdó 3",
+   "x": 47.26,
+   "y": 45.08,
+   "z": 2.04
+  },
+  {
+   "id": "wc_04",
+   "cat": "wc",
+   "name": "Mosdó 4",
+   "x": -48.52,
+   "y": 44.88,
+   "z": 2.04
+  },
+  {
+   "id": "wc_05",
+   "cat": "wc",
+   "name": "Mosdó 5",
+   "x": -53.32,
+   "y": 31.04,
+   "z": 2.04
+  },
+  {
+   "id": "wc_06",
+   "cat": "wc",
+   "name": "Mosdó 6",
+   "x": 50.37,
+   "y": -36.46,
+   "z": 2.04
+  },
+  {
+   "id": "wc_07",
+   "cat": "wc",
+   "name": "Mosdó 7",
+   "x": -50.35,
+   "y": -37.2,
+   "z": 2.04
+  },
+  {
+   "id": "wc_08",
+   "cat": "wc",
+   "name": "Mosdó 8",
+   "x": 45.65,
+   "y": -45.84,
+   "z": 2.04
+  },
+  {
+   "id": "wc_09",
+   "cat": "wc",
+   "name": "Mosdó 9",
+   "x": 33.41,
+   "y": -58.57,
+   "z": 2.04
+  },
+  {
+   "id": "wc_10",
+   "cat": "wc",
+   "name": "Mosdó 10",
+   "x": -45.34,
+   "y": -46.58,
+   "z": 2.04
+  },
+  {
+   "id": "wc_11",
+   "cat": "wc",
+   "name": "Mosdó 11",
+   "x": -32.98,
+   "y": -59.0,
+   "z": 2.04
+  },
+  {
+   "id": "wc_12",
+   "cat": "wc",
+   "name": "Mosdó 12",
+   "x": 53.23,
+   "y": 31.78,
+   "z": 2.04
+  }
+ ]
+}
