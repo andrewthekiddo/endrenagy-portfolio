@@ -153,7 +153,7 @@ function updateMarkers() {
     m.el.classList.remove('hidden');
     const x = (_v.x * 0.5 + 0.5) * w, y = (-_v.y * 0.5 + 0.5) * h;
     const focus = activeCat !== null && m.p.cat === activeCat;
-    const s = THREE.MathUtils.clamp(95 / camDist + 0.28, 0.5, 1.1) * (focus ? 1.7 : 1);
+    const s = THREE.MathUtils.clamp(95 / camDist + 0.28, 0.5, 1.1) * (focus ? 1.3 : 1);
     m.el.style.transform = `translate(${x}px,${y}px) translate(-50%,-100%) scale(${s})`;
   }
 }
