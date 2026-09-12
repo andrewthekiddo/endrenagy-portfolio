@@ -74,20 +74,11 @@ loader.setMeshoptDecoder(MeshoptDecoder);
 
 let current = null;          // { root, pois, markers, lights }
 
-// ---------- Anyag-hangolás: sötét alap, csak a megvilágított / világító felületek emelkednek ki ----------
+// ---------- Anyag-hangolás: a színek a Blender-fájlból jönnek, itt csak a "világító" felületek kapnak emissive-et ----------
 const MAT = {
-  padlo_vilagos:      { color: 0x3d3d44, roughness: 0.92 },
-  falak:              { color: 0x2a2a30, roughness: 0.95 },
-  lelato_beton:       { color: 0x303036, roughness: 0.95 },
-  szekek:             { color: 0x5c5c68, roughness: 0.9 },
-  korlat:             { color: 0x5a5a64, roughness: 0.5, metalness: 0.6 },
-  kiszolgalopult:     { color: 0x3a2f18, roughness: 0.6, emissive: 0xfcbf20, emissiveIntensity: 0.32 },
-  kiszolgaloter_padlo:{ color: 0x5a5648, roughness: 0.8, emissive: 0xfcd97a, emissiveIntensity: 0.22 },
-  felirat:            { color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.7 },
-  homlokzat_01:       { color: 0x1c1c21, roughness: 0.7, metalness: 0.3 },
-  homlokzat_02:       { color: 0x3a3a42, roughness: 0.6, metalness: 0.3 },
-  homlokzat_03:       { color: 0x121215, roughness: 0.9 },
-  homlokzat_04:       { color: 0x2a2a31, roughness: 0.7, metalness: 0.3 },
+  kiszolgalopult:     { roughness: 0.6, emissive: 0xfcbf20, emissiveIntensity: 0.25 },
+  kiszolgaloter_padlo:{ roughness: 0.8, emissive: 0xfcd97a, emissiveIntensity: 0.18 },
+  felirat:            { emissive: 0xffffff, emissiveIntensity: 0.6 },
 };
 function tuneMaterials(root) {
   const done = new Set();
@@ -98,7 +89,6 @@ function tuneMaterials(root) {
     const k = Object.keys(MAT).find(k => n.includes(k));
     if (!k) return;
     const t = MAT[k];
-    m.color.setHex(t.color);
     if (t.roughness !== undefined) m.roughness = t.roughness;
     if (t.metalness !== undefined) m.metalness = t.metalness;
     if (t.emissive !== undefined) { m.emissive = new THREE.Color(t.emissive); m.emissiveIntensity = t.emissiveIntensity; }
