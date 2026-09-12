@@ -161,7 +161,8 @@ function updateMarkers() {
 // ---------- Kamera: két mód ----------
 // 'tour'   – a kamera egy rögzített íven halad a folyosó fölött; húzással ugyanezen az íven lehet előre-hátra tekerni
 // 'detail' – dupla kattintás / marker után egy horgonypont körül szabadon forgatható (OrbitControls)
-const TOUR = { a: 138, b: 152, h: 68, ta: 50, tb: 62, th: -2, lead: 0.55, speed: (2 * Math.PI) / 110, idleMs: 12000 };
+// speed negatív = balról jobbra halad; ta/tb kicsi = a kamera az aréna közepe felé néz, nem a folyosó mentén előre
+const TOUR = { a: 124, b: 136, h: 64, ta: 22, tb: 26, th: -4, lead: 0.4, speed: -(2 * Math.PI) / 110, idleMs: 12000 };
 const tour = { t: 0, lastNow: 0, zoom: 1, drag: null, vel: 0 };
 let mode = 'tour';
 let anim = null;
