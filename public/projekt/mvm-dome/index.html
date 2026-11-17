@@ -43,10 +43,12 @@
   .chip:hover{background:rgba(252,252,253,.05)}
   .chip .dot{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;flex:none;background:rgba(252,252,253,.07);color:var(--text);font-size:12px;font-weight:800;transition:.15s}
   .chip .dot svg{width:16px;height:16px;fill:none;stroke:var(--text);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
-  .chip.active .dot svg{stroke:var(--navy)}
+  .chip .dot svg{stroke:var(--col,var(--text))}
+  .chip.active .dot svg{stroke:var(--ink,var(--navy))}
   .chip .n{margin-left:auto;color:var(--muted);font-size:12px}
-  .chip.active{background:rgba(252,191,32,.14);color:var(--yellow)}
-  .chip.active .dot{background:var(--yellow);color:var(--navy)}
+  .chip.active{background:rgba(252,252,253,.07);color:var(--col,var(--yellow))}
+  .chip.active .dot{background:var(--col,var(--yellow));color:var(--navy)}
+  .chip.none{display:none}
   .chip.dim{opacity:.45}
   .chip.off{opacity:.45}
   .chip.all{grid-column:1/-1;justify-content:center;margin-top:6px;padding:10px;border-radius:10px;background:rgba(252,252,253,.04);font-weight:800}
@@ -61,11 +63,10 @@
   #markers{position:fixed;inset:0;pointer-events:none;z-index:5}
   .mk{position:absolute;left:0;top:0;transform:translate(-50%,-100%);pointer-events:auto;cursor:pointer;display:flex;flex-direction:column;align-items:center;transition:opacity .2s;will-change:transform}
   .mk .pin{width:32px;height:32px;border-radius:50%;background:var(--pin);display:grid;place-items:center;box-shadow:0 0 0 3px rgba(16,24,40,.6),0 6px 18px rgba(0,0,0,.45),0 0 18px var(--pin);transition:transform .15s,background .2s}
-  .mk .pin svg{width:19px;height:19px;fill:none;stroke:var(--navy);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+  .mk .pin svg{width:19px;height:19px;fill:none;stroke:var(--ink,var(--navy));stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
   .mk .stem{width:2px;height:12px;background:var(--pin);opacity:.8}
-  .mk.focus{--pin:var(--pin-active) !important}
-  .mk.focus .pin{animation:pulse 2.6s ease-in-out infinite}
-  @keyframes pulse{0%,100%{transform:scale(1);box-shadow:0 0 0 3px rgba(16,24,40,.6),0 6px 18px rgba(0,0,0,.45),0 0 12px var(--pin)}50%{transform:scale(1.05);box-shadow:0 0 0 6px rgba(252,191,32,.14),0 6px 18px rgba(0,0,0,.45),0 0 22px var(--pin)}}
+    .mk.focus .pin{animation:pulse 2.6s ease-in-out infinite}
+  @keyframes pulse{0%,100%{transform:scale(1);box-shadow:0 0 0 3px rgba(16,24,40,.6),0 6px 18px rgba(0,0,0,.45),0 0 12px var(--pin)}50%{transform:scale(1.05);box-shadow:0 0 0 6px rgba(252,252,253,.12),0 6px 18px rgba(0,0,0,.45),0 0 22px var(--pin)}}
   .mk:hover .pin,.mk.sel .pin{transform:scale(1.18)}
   .mk .lbl{position:absolute;bottom:calc(100% + 6px);white-space:nowrap;background:var(--navy);border:1px solid var(--panel-border);padding:5px 9px;border-radius:7px;font-size:12px;font-weight:500;opacity:0;transition:.15s;pointer-events:none}
   .mk:hover .lbl{opacity:1}
@@ -142,7 +143,7 @@
 <div class="brand">
   <img src="/projekt/mvm-dome/logo.svg" alt="MVM Dome">
   <div class="sep"></div>
-  <div><h1>Interaktív térkép</h1><small>Felső körüljáró szint · prototípus</small></div>
+  <div><h1>Interaktív térkép</h1><small id="lvlSub">Felső körüljáró</small></div>
 </div>
 
 <div class="hint" id="hint" hidden></div>
@@ -153,9 +154,10 @@
 </div>
 
 <div class="levels" id="levels">
-  <button data-level="paholy"><span class="tip">Páholy szint · következő fázis</span><svg class="chev" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg>P</button>
   <button data-level="felso" class="active"><span class="tip">Felső körüljáró</span><svg class="chev" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg>F</button>
-  <button data-level="also"><span class="tip">Alsó körüljáró · következő fázis</span><svg class="chev" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg>A</button>
+  <button data-level="paholy"><span class="tip">VIP páholy szint</span><svg class="chev" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg>P</button>
+  <button data-level="also"><span class="tip">Alsó körüljáró</span><svg class="chev" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg>A</button>
+  <button data-level="lobby"><span class="tip">Lobby és küzdőtér</span><svg class="chev" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg>L</button>
 </div>
 
 <aside class="panel" id="panel">
@@ -174,7 +176,7 @@
   <img class="logo" src="/projekt/mvm-dome/loader-logo.png" alt="MVM Dome">
   <div class="pct" id="pct">0%</div>
   <div class="bar"><i id="barfill"></i></div>
-  <div class="lvl" id="lvlName">Felső körüljáró szint betöltése</div>
+  <div class="lvl" id="lvlName">Térkép betöltése</div>
 </div>
 <div class="toast" id="toast"></div>
 

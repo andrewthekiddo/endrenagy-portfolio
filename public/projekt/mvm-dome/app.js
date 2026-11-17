@@ -2,32 +2,40 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
-// Minden asset (modell, poi.json, fotók) az app.js helyéhez képest töltődik, így a térkép
+// Minden asset (modell, adat, fotók) az app.js helyéhez képest töltődik, így a térkép
 // önállóan (web/) és beágyazva (/projekt/mvm-dome) is működik.
 const asset = (rel) => new URL(rel, import.meta.url).href;
+const QS = new URLSearchParams(location.search);
+const SHOT = QS.has('shot');   // képernyőkép-mód (fej nélküli böngésző): a betöltő azonnal eltűnik
 
 // ---------- konfiguráció ----------
+// 4 szint, mindegyik a saját padlóján (y = 0), az aréna középpontja az origó. A modellek a Blender showreel-fájlból
+// (00_Teljes_epulet/…_showreel_v01.blend) jönnek: _Blender_Projects/00_Web_export/scripts/export_web.py + web_adat.py
 const LEVELS = {
-  felso:  { name: 'Felső körüljáró szint', model: 'models/felso.glb', poi: 'poi.json' },
-  paholy: { name: 'Páholy szint', model: null },
-  also:   { name: 'Alsó körüljáró szint', model: null },
+  felso:  { key: 'S3', name: 'Felső körüljáró', model: 'models/S3.glb', data: 'data/S3.json', tier: 'Felső lelátó (3xx)' },
+  paholy: { key: 'S2', name: 'VIP páholy szint', model: 'models/S2.glb', data: 'data/S2.json', tier: 'Alsó lelátó (2xx)' },
+  also:   { key: 'S1', name: 'Alsó körüljáró', model: 'models/S1.glb', data: 'data/S1.json', tier: 'Alsó lelátó (2xx)' },
+  lobby:  { key: 'S0', name: 'Lobby és küzdőtér', model: 'models/S0.glb', data: 'data/S0.json', tier: 'Küzdőtéri lelátó (1xx)' },
 };
 
+// Pinek: funkciónként színes (a térkép-stílus palettája), az ikon fehér vagy sötét a jobb olvashatóságért
 const CATS = {
-  wc:         { label: 'Mosdó',           color: '#FCBF20', photo: 'img/arena.jpg',  icon: '<circle cx="6.5" cy="4" r="2"/><path d="M3.5 8h6v7H8v6H5v-6H3.5z"/><path d="M12 2v20"/><circle cx="17.5" cy="4" r="2"/><path d="M15.5 8h4l2 7h-2v6h-4v-6h-2z"/>', text: 'Női, férfi és akadálymentes mosdó. A mosdók a körüljáróról nyílnak, a szektorbejáratok közelében.' },
-  bar:        { label: 'Bár',             color: '#FCBF20', photo: 'img/pult.jpg',   icon: '<path d="M4 4h16l-6 8v6h-4v-6z"/><path d="M8 20h8"/>', text: 'Italok, snackek, kávé. Kártyás és mobilos fizetés. A rendezvény kezdete előtt egy órával nyit.' },
-  ruhatar:    { label: 'Ruhatár',         color: '#FCBF20', photo: 'img/arena.jpg',  icon: '<path d="M12 4a2 2 0 1 0 0 4v2"/><path d="M12 10 3 16h18z"/>', text: 'Kabát- és táskamegőrzés a rendezvény teljes ideje alatt. A ruhatárjegyet őrizd meg.' },
-  lift:       { label: 'Lift',            color: '#FCBF20', photo: 'img/arena.jpg',  icon: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 11l3-3 3 3"/><path d="M9 14l3 3 3-3"/>', text: 'Akadálymentes közlekedés a szintek között. Kerekesszékkel és babakocsival is használható.' },
-  elsosegely: { label: 'Elsősegély',      color: '#FCBF20', photo: 'img/arena.jpg',  icon: '<path d="M12 5v14"/><path d="M5 12h14"/>', text: 'Egészségügyi ügyelet a rendezvény ideje alatt. Sürgős esetben szólj a legközelebbi teremőrnek.' },
-  baba:       { label: 'Baba-mama szoba', color: '#FCBF20', photo: 'img/arena.jpg',  icon: '<circle cx="12" cy="8" r="4"/><path d="M6 21a6 6 0 0 1 12 0"/>', text: 'Pelenkázó és szoptatóhelyiség, csendes, elkülönített térben.' },
-  lepcso:     { label: 'Lépcsőház',       color: '#FCBF20', photo: 'img/lepcso.jpg', icon: '<path d="M4 20h4v-4h4v-4h4V8h4"/>', text: 'Lépcsőház a szintek között. Vészhelyzet esetén ez a kijelölt menekülési útvonal.' },
-  szektor:    { label: 'Szektor',         color: '#FCBF20', photo: 'img/lelato.jpg', icon: '', text: 'Felső lelátó, 14 sor. A szektor bejárata a körüljáróról nyílik; a legközelebbi mosdó és bár a bejárat mellett található.' },
+  wc:         { label: 'Mosdó',           color: '#009EE2', ink: '#fff',    photo: 'img/arena.jpg',  icon: '<circle cx="6.5" cy="4" r="2"/><path d="M3.5 8h6v7H8v6H5v-6H3.5z"/><path d="M12 2v20"/><circle cx="17.5" cy="4" r="2"/><path d="M15.5 8h4l2 7h-2v6h-4v-6h-2z"/>', text: 'Női, férfi és akadálymentes mosdó. A mosdók a körüljáróról nyílnak, a szektorbejáratok közelében.' },
+  baba:       { label: 'Baba-mama szoba', color: '#009EE2', ink: '#fff',    photo: 'img/arena.jpg',  icon: '<circle cx="12" cy="8" r="4"/><path d="M6 21a6 6 0 0 1 12 0"/>', text: 'Pelenkázó és szoptatóhelyiség, csendes, elkülönített térben.' },
+  bar:        { label: 'Büfé, bár',       color: '#F79431', ink: '#101828', photo: 'img/pult.jpg',   icon: '<path d="M4 4h16l-6 8v6h-4v-6z"/><path d="M8 20h8"/>', text: 'Italok, snackek, kávé. Kártyás és mobilos fizetés. A rendezvény kezdete előtt egy órával nyit.' },
+  ruhatar:    { label: 'Ruhatár',         color: '#F9B701', ink: '#101828', photo: 'img/arena.jpg',  icon: '<path d="M12 4a2 2 0 1 0 0 4v2"/><path d="M12 10 3 16h18z"/>', text: 'Kabát- és táskamegőrzés a rendezvény teljes ideje alatt. A ruhatárjegyet őrizd meg.' },
+  lift:       { label: 'Lift',            color: '#038A8B', ink: '#fff',    photo: 'img/arena.jpg',  icon: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 11l3-3 3 3"/><path d="M9 14l3 3 3-3"/>', text: 'Akadálymentes közlekedés a szintek között. Kerekesszékkel és babakocsival is használható.' },
+  vip:        { label: 'VIP',             color: '#038A8B', ink: '#fff',    photo: 'img/arena.jpg',  icon: '<path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/>', text: 'VIP bejárat és fogadótér a páholyvendégeknek.' },
+  elsosegely: { label: 'Elsősegély',      color: '#E2384F', ink: '#fff',    photo: 'img/arena.jpg',  icon: '<path d="M12 5v14"/><path d="M5 12h14"/>', text: 'Egészségügyi ügyelet a rendezvény ideje alatt. Sürgős esetben szólj a legközelebbi teremőrnek.' },
+  info:       { label: 'Információ',      color: '#FCBF20', ink: '#101828', photo: 'img/arena.jpg',  icon: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 7.5v.01"/>', text: 'Információs pult: jegyügyek, elveszett tárgyak, segítség a tájékozódásban.' },
+  szektor:    { label: 'Szektor',         color: '#FCBF20', ink: '#101828', photo: 'img/lelato.jpg', icon: '', text: '' },
 };
-// Szűrés: null = minden szolgáltatás látszik; egy kategória = csak az látszik (sárgán, pulzálva). A szektorszámok külön kapcsolhatók.
+// Szűrés: null = minden szolgáltatás látszik; egy kategória = csak az látszik (pulzálva). A szektorszámok külön kapcsolhatók.
 let activeCat = null;
 let showSectors = true;
-const isVisible = (cat) => cat === 'szektor' ? showSectors : (activeCat ? cat === activeCat : cat !== 'lepcso');
+const isVisible = (cat) => cat === 'szektor' ? showSectors : (activeCat ? cat === activeCat : true);
 
 // ---------- DOM ----------
 const $ = (s) => document.querySelector(s);
@@ -40,11 +48,15 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPrefere
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 0.85;
+renderer.toneMappingExposure = 1.0;
+renderer.localClippingEnabled = true;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x141d2b);
-scene.fog = new THREE.Fog(0x141d2b, 300, 600);
+scene.fog = new THREE.Fog(0x141d2b, 320, 700);
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.35;
 
 const camera = new THREE.PerspectiveCamera(42, 1, 0.5, 2000);
 camera.position.set(190, 170, 250);
@@ -53,64 +65,84 @@ camera.position.set(190, 170, 250);
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
-controls.minDistance = 12;
-controls.maxDistance = 140;
+controls.minDistance = 8;
+controls.maxDistance = 160;
 controls.maxPolarAngle = Math.PI * 0.47;
-controls.minPolarAngle = Math.PI * 0.1;
+controls.minPolarAngle = Math.PI * 0.08;
 controls.enablePan = false;
 controls.enabled = false;
 
-// Fények: alap hangulat (a végleges verzióban ezt kisütött lightmap váltja ki)
-scene.add(new THREE.HemisphereLight(0x3bc3ee, 0x101828, 0.4));
-const key = new THREE.DirectionalLight(0xffe9d0, 0.7);
+// Fények: alap hangulat (a sütött fény egy későbbi lépés)
+scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x1b2333, 0.9));
+const key = new THREE.DirectionalLight(0xfff1e0, 1.5);
 key.position.set(120, 220, 80);
 scene.add(key);
-const rim = new THREE.DirectionalLight(0x5a6cff, 0.25);
+const rim = new THREE.DirectionalLight(0x8fa4ff, 0.35);
 rim.position.set(-150, 120, -120);
 scene.add(rim);
 
 const loader = new GLTFLoader();
 loader.setMeshoptDecoder(MeshoptDecoder);
 
-let current = null;          // { root, pois, markers, lights }
+let current = null;          // { key, root, anim, pois, markers, lights, data, path }
+const cache = {};            // betöltött szintek (gyors visszaváltás)
 
 // ---------- Anyag-hangolás ----------
-// A színek a Blender-fájlból jönnek. Itt két dolog történik:
-//  - a lelátó / székek / lépcsők / küzdőtér elsötétítése (darken = szorzó a Blender-színre), hogy a folyosó és a szolgáltatások kapják a hangsúlyt
-//  - a "világító" felületek (pult, feliratok, kiszolgálóterek) emissive-et kapnak
+// A színek a Blender-fájlból jönnek (sima anyagok). Itt csak: üveg ne írjon mélységet, a lelátó anyagai kapják a szektor-kiemelő shadert.
+const STAND = /^W_(Lelato|Szek|VIP_szek|Kuzdoter)/i;
+const HL = { on: { value: 0 }, a0: { value: 0 }, a1: { value: 0 }, r0: { value: 0 }, y0: { value: 0 }, y1: { value: 0 }, k: { value: 0 } };
+function addSectorShader(m) {
+  m.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, { uHlOn: HL.on, uHlA0: HL.a0, uHlA1: HL.a1, uHlR0: HL.r0, uHlY0: HL.y0, uHlY1: HL.y1, uHlK: HL.k });
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nuniform float uHlOn,uHlA0,uHlA1,uHlR0,uHlY0,uHlY1,uHlK;')
+      .replace('#include <dithering_fragment>', `#include <dithering_fragment>
+        if (uHlOn > 0.5) {
+          float a = atan(-vWPos.z, vWPos.x);
+          float d0 = mod(a - uHlA0 + 6.2831853, 6.2831853), w = mod(uHlA1 - uHlA0 + 6.2831853, 6.2831853);
+          float r = length(vWPos.xz);
+          if (d0 < w && r > uHlR0 && vWPos.y > uHlY0 && vWPos.y < uHlY1) gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(0.99, 0.75, 0.13), uHlK);
+        }`);
+  };
+  m.customProgramCacheKey = () => 'szektor-hl';
+}
+// Kézi felülírások (felhasználó, 2026-11-18): a lelátó sötét, ne fehér; a lelátó-bejáratok sötét számai (a fehér szektorszám
+// mellett „duplának” látszottak) rejtve
 const MAT = {
-  lelato_beton:       { darken: 0.22, roughness: 0.95 },
-  szekek:             { darken: 0.45, roughness: 0.95 },
-  korlat:             { darken: 0.5 },
-  'material.001':     { darken: 0.28, roughness: 0.95 },   // küzdőtér padlója
-  kiszolgalopult:     { roughness: 0.6, emissive: 0xfcbf20, emissiveIntensity: 0.25 },
-  kiszolgaloter_padlo:{ roughness: 0.8, emissive: 0xfcd97a, emissiveIntensity: 0.18 },
-  felirat:            { emissive: 0xffffff, emissiveIntensity: 0.6 },
+  W_Lelato_beton_vilagos: { color: 0x1d222b, roughness: 0.95 },
+  W_Lelato_beton:         { color: 0x232831, roughness: 0.95 },
+  W_Lelato_felirat_sotet: { hide: true },
+  // (a lobbyfájl duplán látszó Szektor_1xx szövegeit 2026-11-18-tól maga a modell rejti)
 };
 function tuneMaterials(root) {
   const done = new Set();
   root.traverse((o) => {
-    if (!o.isMesh || !o.material || done.has(o.material)) return;
-    done.add(o.material);
-    const m = o.material, n = (m.name || '').toLowerCase();
-    const k = Object.keys(MAT).find(k => n.includes(k));
-    if (!k) return;
-    const t = MAT[k];
-    if (t.darken !== undefined) m.color.multiplyScalar(t.darken);
-    if (t.roughness !== undefined) m.roughness = t.roughness;
-    if (t.metalness !== undefined) m.metalness = t.metalness;
-    if (t.emissive !== undefined) { m.emissive = new THREE.Color(t.emissive); m.emissiveIntensity = t.emissiveIntensity; }
+    if (!o.isMesh || !o.material) return;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    for (const m of mats) {
+      if (done.has(m)) continue; done.add(m);
+      if (m.transparent) { m.depthWrite = false; }
+      const t = Object.entries(MAT).find(([k]) => (m.name || '').startsWith(k))?.[1];
+      if (t) {
+        if (t.hide) { m.visible = false; continue; }
+        if (t.color !== undefined) m.color.setHex(t.color);
+        if (t.roughness !== undefined) m.roughness = t.roughness;
+      }
+      if (STAND.test(m.name || '')) addSectorShader(m);
+      if (m.emissive && m.emissiveIntensity > 0 && m.emissive.getHex() !== 0) m.emissiveIntensity = Math.min(m.emissiveIntensity, 2.5);
+    }
   });
 }
 
-// Fényfoltok a szolgáltatások fölé – kategóriánként más színű (az ikonok egységesen sárgák, a fények nem) (a végleges verzióban kisütött lightmap)
-const LIGHT = { bar: [0xfcbf20, 520], wc: [0x3bc3ee, 260], ruhatar: [0x3bc3ee, 200], lift: [0x3bc3ee, 150], elsosegely: [0xfcbf20, 150], baba: [0x3bc3ee, 150] };
+// Fényfoltok a szolgáltatások fölé – a pin színével (a végleges verzióban kisütött fény)
+const LIGHT = { bar: 300, wc: 160, ruhatar: 160, lift: 120, elsosegely: 120, baba: 100, vip: 140, info: 140 };
 function addPoiLights(pois) {
   const lights = [];
   for (const p of pois) {
-    const L = LIGHT[p.cat]; if (!L) continue;
-    const l = new THREE.PointLight(L[0], L[1], 30, 1.9);
-    l.position.set(p.x, p.z + 5, -p.y);
+    const I = LIGHT[p.cat]; if (!I) continue;
+    const l = new THREE.PointLight(CATS[p.cat].color, I, 22, 1.9);
+    l.position.set(p.x, p.z + 4, -p.y);
     scene.add(l); lights.push(l);
   }
   return lights;
@@ -126,14 +158,16 @@ function buildMarkers(pois) {
     const el = document.createElement('div');
     el.className = `mk ${p.cat}`;
     el.style.setProperty('--pin', CATS[p.cat].color);
+    el.style.setProperty('--ink', CATS[p.cat].ink);
     if (p.cat === 'szektor') {
       el.innerHTML = `<div class="pin">${p.name.replace('Szektor ', '')}</div>`;
     } else {
       el.innerHTML = `<div class="lbl">${p.name}</div><div class="pin">${ICON(p.cat)}</div><div class="stem"></div>`;
     }
     el.addEventListener('click', (e) => { e.stopPropagation(); selectPoi(p); });
+    el.addEventListener('dblclick', (e) => e.stopPropagation());
     markersEl.appendChild(el);
-    const world = poiWorld(p); world.y += p.cat === 'szektor' ? 1.5 : 0.6;
+    const world = poiWorld(p); world.y += p.cat === 'szektor' ? 1.5 : 1.2;
     return { p, el, world };
   });
 }
@@ -157,28 +191,46 @@ function updateMarkers() {
 }
 
 // ---------- Kamera: két mód ----------
-// 'tour'   – a kamera egy rögzített íven halad a folyosó fölött; húzással ugyanezen az íven lehet előre-hátra tekerni
+// 'tour'   – a kamera a Blenderben beállított showreel-kamera útján halad (S1–S3: körpálya a folyosó fölött, S0: ív a lobby előtt);
+//            húzással ugyanezen a pályán lehet előre-hátra tekerni, görgővel közelebb / távolabb
 // 'detail' – dupla kattintás / marker után egy horgonypont körül szabadon forgatható (OrbitControls)
-// speed negatív = balról jobbra halad; ta/tb kicsi = a kamera az aréna közepe felé néz, nem a folyosó mentén előre
-const TOUR = { a: 108, b: 120, h: 50, ta: 22, tb: 26, th: -4, lead: 0.4, speed: -(2 * Math.PI) / 110, idleMs: 12000 };
-const tour = { t: 0, lastNow: 0, zoom: 1, drag: null, vel: 0 };
+const TOUR = { loopSec: 95, arcSec: 34, idleMs: 14000 };
+const tour = { u: 0, dir: 1, lastNow: 0, zoom: 1, drag: null, vel: 0 };
 let mode = 'tour';
 let anim = null;
 let idleTimer = null;
+let hfov = 49.6;
 
-const tourPoint = (t, out) => out.set(TOUR.a * tour.zoom * Math.cos(t), TOUR.h * tour.zoom, TOUR.b * tour.zoom * Math.sin(t));
-const tourTarget = (t, out) => out.set(TOUR.ta * Math.cos(t + TOUR.lead), TOUR.th, TOUR.tb * Math.sin(t + TOUR.lead));
-
-function nearestTourAngle() {
-  return Math.atan2(camera.position.z / TOUR.b, camera.position.x / TOUR.a);
+const v3 = (a, i) => new THREE.Vector3(a[i], a[i + 2], -a[i + 1]);
+function buildPath(cam) {
+  const pts = cam.path;
+  const closed = !!cam.closed;
+  const P = pts.map((p) => v3(p, 0)), T = pts.map((p) => v3(p, 3));
+  if (closed && P.length > 2 && P[0].distanceTo(P[P.length - 1]) < 0.5) { P.pop(); T.pop(); }
+  return { pos: new THREE.CatmullRomCurve3(P, closed, 'centripetal'), tgt: new THREE.CatmullRomCurve3(T, closed, 'centripetal'), closed };
+}
+const _p = new THREE.Vector3(), _t = new THREE.Vector3();
+function pathAt(u, outP, outT) {
+  const path = current.path;
+  const uu = path.closed ? ((u % 1) + 1) % 1 : THREE.MathUtils.clamp(u, 0, 1);
+  path.pos.getPointAt(uu, outP); path.tgt.getPointAt(uu, outT);
+  outP.sub(outT).multiplyScalar(tour.zoom).add(outT);
+}
+function nearestU() {
+  let best = 0, bd = Infinity;
+  for (let i = 0; i <= 240; i++) {
+    const u = i / 240; pathAt(u, _p, _t);
+    const d = _p.distanceTo(camera.position); if (d < bd) { bd = d; best = u; }
+  }
+  return best;
 }
 function enterTour(dur = 1600) {
   mode = 'tour';
   controls.enabled = false;
   overviewBtn.classList.remove('show');
   clearTimeout(idleTimer);
-  tour.t = nearestTourAngle(); tour.vel = 0; tour.lastNow = 0;
-  const p = tourPoint(tour.t, new THREE.Vector3()), tg = tourTarget(tour.t, new THREE.Vector3());
+  tour.u = nearestU(); tour.vel = 0; tour.lastNow = 0;
+  const p = new THREE.Vector3(), tg = new THREE.Vector3(); pathAt(tour.u, p, tg);
   anim = { from: { p: camera.position.clone(), t: controls.target.clone() }, to: { p, t: tg }, t0: performance.now(), dur };
 }
 function enterDetail(anchor, distance = 34, height = 24) {
@@ -205,24 +257,29 @@ function stepAnim(now) {
   if (k >= 1) anim = null;
 }
 function stepTour(now) {
-  if (mode !== 'tour' || anim) { tour.lastNow = now; return; }
+  if (mode !== 'tour' || anim || !current) { tour.lastNow = now; return; }
   const dt = tour.lastNow ? Math.min(0.05, (now - tour.lastNow) / 1000) : 0;
   tour.lastNow = now;
+  const closed = current.path.closed;
   if (!tour.drag) {
-    // elengedés után a lendület kifut, majd folytatódik a lassú alapmozgás
+    // elengedés után a lendület kifut, majd folytatódik a lassú alapmozgás (az íven oda-vissza)
     tour.vel *= Math.pow(0.05, dt);
-    tour.t += (TOUR.speed + tour.vel) * dt;
+    const base = closed ? 1 / TOUR.loopSec : tour.dir / TOUR.arcSec;
+    tour.u += (base + tour.vel) * dt;
+    if (!closed) {
+      if (tour.u >= 1) { tour.u = 1; tour.dir = -1; tour.vel = 0; }
+      if (tour.u <= 0) { tour.u = 0; tour.dir = 1; tour.vel = 0; }
+    }
   }
-  tourPoint(tour.t, camera.position);
-  tourTarget(tour.t, controls.target);
+  pathAt(tour.u, camera.position, controls.target);
 }
 
-// Húzás körút-módban: csak az ív mentén (jobbra-balra), föl-le nem
-const DRAG_GAIN = 0.0042; // rad / px
+// Húzás körút-módban: csak a pálya mentén (jobbra-balra), föl-le nem
+const DRAG_GAIN = 0.00055; // pálya-hossz / px
 canvas.addEventListener('pointerdown', (e) => {
   hint.classList.add('hide');
   if (mode !== 'tour' || anim) return;
-  tour.drag = { x: e.clientX, t: tour.t, lastX: e.clientX, lastT: performance.now(), v: 0 };
+  tour.drag = { x: e.clientX, u: tour.u, lastX: e.clientX, lastT: performance.now(), v: 0 };
   canvas.setPointerCapture(e.pointerId);
 });
 canvas.addEventListener('pointermove', (e) => {
@@ -231,36 +288,55 @@ canvas.addEventListener('pointermove', (e) => {
   const dx = e.clientX - tour.drag.lastX, dt = Math.max(1, now - tour.drag.lastT) / 1000;
   tour.drag.v = (-dx * DRAG_GAIN) / dt;
   tour.drag.lastX = e.clientX; tour.drag.lastT = now;
-  tour.t = tour.drag.t - (e.clientX - tour.drag.x) * DRAG_GAIN;
+  tour.u = tour.drag.u - (e.clientX - tour.drag.x) * DRAG_GAIN;
+  if (current && !current.path.closed) tour.u = THREE.MathUtils.clamp(tour.u, 0, 1);
 });
-const endDrag = () => { if (!tour.drag) return; tour.vel = THREE.MathUtils.clamp(tour.drag.v, -1.2, 1.2); tour.drag = null; };
+const endDrag = () => { if (!tour.drag) return; tour.vel = THREE.MathUtils.clamp(tour.drag.v, -0.12, 0.12); if (tour.vel) tour.dir = Math.sign(tour.vel); tour.drag = null; };
 canvas.addEventListener('pointerup', endDrag);
 canvas.addEventListener('pointercancel', endDrag);
-// Görgetés körút-módban: közelebb / távolabb ugyanazon az íven
+// Görgetés körút-módban: közelebb / távolabb ugyanazon a pályán
 canvas.addEventListener('wheel', (e) => {
   if (mode !== 'tour') return;
-  tour.zoom = THREE.MathUtils.clamp(tour.zoom * (1 + Math.sign(e.deltaY) * 0.06), 0.62, 1.35);
+  tour.zoom = THREE.MathUtils.clamp(tour.zoom * (1 + Math.sign(e.deltaY) * 0.06), 0.55, 1.4);
 }, { passive: true });
 // Részletnézetben minden interakció újraindítja az üresjárati számlálót
 controls.addEventListener('start', () => { clearTimeout(idleTimer); });
 controls.addEventListener('end', armIdle);
 
-// Dupla kattintás: ha van szolgáltatás a közelben, azt választja ki; egyébként az adott pont körül forgatható
+// Dupla kattintás: szolgáltatás a közelben → azt választja ki; lelátóra → a legközelebbi szektor (sárgán kiemelve);
+// egyébként az adott pont körül szabadon forgatható
 const raycaster = new THREE.Raycaster();
 const ndc = new THREE.Vector2();
+const azim = (x, y) => Math.atan2(y, x);
+function sectorAt(point) {
+  const a = Math.atan2(-point.z, point.x);
+  let best = null, bd = Infinity;
+  for (const s of current.pois) {
+    if (s.cat !== 'szektor') continue;
+    let d = Math.abs(a - azim(s.x, s.y)); if (d > Math.PI) d = 2 * Math.PI - d;
+    if (d < bd) { bd = d; best = s; }
+  }
+  return best;
+}
 function dblAt(clientX, clientY) {
   if (!current) return;
   ndc.set((clientX / innerWidth) * 2 - 1, -(clientY / innerHeight) * 2 + 1);
   raycaster.setFromCamera(ndc, camera);
-  const hit = raycaster.intersectObject(current.root, true)[0];
+  const hit = raycaster.intersectObject(current.root, true).find((h) => !(h.object.material?.transparent));
   if (!hit) return;
-  let best = null, bd = 9;
+  let best = null, bd = 7;
   for (const p of current.pois) {
-    if (!isVisible(p.cat)) continue;
+    if (!isVisible(p.cat) || p.cat === 'szektor') continue;
     const d = poiWorld(p).distanceTo(hit.point);
     if (d < bd) { bd = d; best = p; }
   }
-  if (best) selectPoi(best); else { closePanel(false); enterDetail(hit.point); }
+  if (best) { selectPoi(best); return; }
+  const mat = hit.object.material;
+  if (mat && STAND.test(mat.name || '') && hit.point.length() > 25) {
+    const s = sectorAt(hit.point);
+    if (s) { selectPoi(s, hit.point); return; }
+  }
+  closePanel(false); enterDetail(hit.point);
 }
 canvas.addEventListener('dblclick', (e) => dblAt(e.clientX, e.clientY));
 let lastTap = 0;
@@ -274,7 +350,7 @@ overviewBtn.addEventListener('click', () => { closePanel(false); enterTour(); })
 // ---------- Kiválasztás / infópanel ----------
 let selectedEl = null;
 function side(p) {
-  const a = Math.atan2(p.y, p.x) * 180 / Math.PI; // Blender XY: +Y = észak (feltételezés, a helyszíni felmérés után pontosítandó)
+  const a = Math.atan2(p.y, p.x) * 180 / Math.PI; // Blender XY: +Y = észak (a lobby oldala), +X = kelet
   if (a >= 45 && a < 135) return 'Északi oldal';
   if (a >= 135 || a < -135) return 'Nyugati oldal';
   if (a >= -135 && a < -45) return 'Déli oldal';
@@ -285,18 +361,22 @@ function nearestSectors(p, pois) {
     .map(s => ({ s, d: Math.hypot(s.x - p.x, s.y - p.y) }))
     .sort((a, b) => a.d - b.d).slice(0, 2).map(o => o.s.name.replace('Szektor ', ''));
 }
-function selectPoi(p) {
+function selectPoi(p, anchor) {
   const m = current.markers.find(x => x.p === p);
   selectedEl?.classList.remove('sel'); selectedEl = m?.el || null; selectedEl?.classList.add('sel');
   const c = CATS[p.cat];
   $('#panelPhoto').style.backgroundImage = `url(${asset(c.photo)})`;
   $('#panelCat').textContent = `${side(p)} · ${c.label}`;
   $('#panelTitle').textContent = p.name;
-  $('#panelText').textContent = c.text;
-  $('#panelNear').innerHTML = p.cat === 'szektor' ? '' : `Legközelebbi szektorok: <b>${nearestSectors(p, current.pois).join(', ')}</b>`;
+  $('#panelText').textContent = p.cat === 'szektor'
+    ? `${LEVELS[current.level].tier}. A szektor bejárata a körüljáróról nyílik; a legközelebbi mosdó és büfé a bejárat közelében található.`
+    : c.text;
+  const near = nearestSectors(p, current.pois);
+  $('#panelNear').innerHTML = p.cat === 'szektor' || !near.length ? '' : `Legközelebbi szektorok: <b>${near.join(', ')}</b>`;
   panel.classList.add('show'); document.body.classList.add('panel-open');
-  enterDetail(poiWorld(p), p.cat === 'szektor' ? 60 : 34, p.cat === 'szektor' ? 42 : 24);
-  highlightSector(p.cat === 'szektor' ? p.id.split('_')[1] : null);
+  const at = anchor ? anchor.clone() : poiWorld(p);
+  enterDetail(at, p.cat === 'szektor' ? 46 : 30, p.cat === 'szektor' ? 30 : 20);
+  highlightSector(p.cat === 'szektor' ? p : null);
 }
 function closePanel(backToTour = true) {
   panel.classList.remove('show'); document.body.classList.remove('panel-open');
@@ -307,38 +387,22 @@ function closePanel(backToTour = true) {
 // Bezárásra azonnal vissza a körútra – onnan folytatja, ahol a kamera éppen áll
 $('#panelX').addEventListener('click', () => closePanel(true));
 
-// Szektor-kiemelés: a lelátó és a székek mesh-ei név alapján, pulzáló sárga
-let hlMeshes = [];
-function highlightSector(num) {
-  for (const m of hlMeshes) { m.material = m.userData.origMat; }
-  hlMeshes = [];
-  if (!num || !current) return;
-  current.root.traverse((o) => {
-    if (o.isMesh && o.name && o.name.includes(`Szektor_${num}`)) {
-      o.userData.origMat = o.material;
-      o.material = o.material.clone();
-      o.material.emissive = new THREE.Color(0xfcbf20);
-      o.material.emissiveIntensity = 0.6;
-      hlMeshes.push(o);
-    }
-  });
+// Szektor-kiemelés: a lelátó anyagain egy szögtartomány (a szomszéd szektorok felezőjéig) pulzál sárgán
+function highlightSector(s) {
+  if (!s || !current) { HL.on.value = 0; return; }
+  const secs = current.pois.filter(x => x.cat === 'szektor').map(x => ({ x, a: azim(x.x, x.y) })).sort((a, b) => a.a - b.a);
+  const i = secs.findIndex(o => o.x === s); const n = secs.length;
+  const a = secs[i].a, prev = secs[(i - 1 + n) % n].a, next = secs[(i + 1) % n].a;
+  const half = (b) => { let d = b - a; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d / 2; };
+  HL.a0.value = a + half(prev); HL.a1.value = a + half(next);
+  const r = Math.hypot(s.x, s.y);
+  HL.r0.value = r - 6; HL.y0.value = s.z - 9; HL.y1.value = s.z + 14; HL.on.value = 1;
 }
-
-// Szektor-kereső
-function goSector() {
-  const v = ($('#sec')?.value || '').trim();
-  const p = current?.pois.find(x => x.id === `szektor_${v}`);
-  if (!p) { showToast(`Nincs ${v || 'ilyen'} számú szektor ezen a szinten (301–320).`); return; }
-  showSectors = true; syncChips();
-  selectPoi(p);
-}
-$('#secBtn')?.addEventListener('click', goSector);
-$('#sec')?.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.keyCode === 13) goSector(); });
 
 // ---------- Szűrőpanel: egy kategória kiválasztása = csak az látszik; újra kattintva vissza az összes ----------
 const FILTER_COLUMNS = [
-  ['wc', 'bar', 'ruhatar', 'baba'],          // szolgáltatások
-  ['lift', 'lepcso', 'elsosegely', 'szektor'], // közlekedés, biztonság, tájékozódás
+  ['wc', 'baba', 'bar', 'ruhatar'],          // szolgáltatások
+  ['lift', 'elsosegely', 'info', 'szektor'], // közlekedés, biztonság, tájékozódás
 ];
 function buildFilters() {
   const f = $('#filters');
@@ -349,6 +413,7 @@ function buildFilters() {
       const b = document.createElement('button');
       b.className = 'chip';
       b.style.setProperty('--col', c.color);
+      b.style.setProperty('--ink', c.ink);
       if (k === 'szektor') {
         b.dataset.sectors = '1';
         b.innerHTML = `<span class="dot">#</span><span>Szektorszámok</span><span class="n" data-n="szektor"></span>`;
@@ -372,7 +437,29 @@ function syncChips() {
   if (sec) sec.classList.toggle('off', !showSectors);
 }
 function fillCounts(pois) {
-  document.querySelectorAll('[data-n]').forEach(el => { el.textContent = pois.filter(p => p.cat === el.dataset.n).length; });
+  document.querySelectorAll('[data-n]').forEach(el => {
+    const n = pois.filter(p => p.cat === el.dataset.n).length;
+    el.textContent = n;
+    el.closest('.chip').classList.toggle('none', n === 0);
+  });
+  if (activeCat && !pois.some(p => p.cat === activeCat)) { activeCat = null; syncChips(); }
+}
+
+// ---------- Lift-animáció (lobby): saját órán, folyamatos körben – a kamerától és a húzástól független ----------
+const clock = new THREE.Clock();
+function setupAnim(gltf, clipTop) {
+  const root = gltf.scene;
+  const planes = [new THREE.Plane(new THREE.Vector3(0, -1, 0), clipTop), new THREE.Plane(new THREE.Vector3(0, 1, 0), 0.6)];
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    o.frustumCulled = false;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    for (const m of mats) { m.clippingPlanes = planes; m.clipShadows = true; }
+  });
+  const mixer = new THREE.AnimationMixer(root);
+  const dur = Math.max(...gltf.animations.map(a => a.duration));
+  for (const clip of gltf.animations) { clip.duration = dur; mixer.clipAction(clip).setLoop(THREE.LoopRepeat).play(); }
+  return { root, mixer };
 }
 
 // ---------- Szintbetöltés ----------
@@ -382,33 +469,52 @@ function showLoader(name) {
   loaderEl.classList.remove('hide');
 }
 function setProgress(k) { const p = Math.round(k * 100); pctEl.textContent = `${p}%`; barEl.style.width = `${p}%`; }
+const loadGltf = (url, onProg) => new Promise((res, rej) => loader.load(asset(url), res, onProg, rej));
 
-async function loadLevel(key) {
-  const L = LEVELS[key];
-  if (!L.model) { showToast(`${L.name}: a modell a következő fázisban készül.`); return; }
-  showLoader(L.name);
-  closePanel(false);
-  if (current) {
-    scene.remove(current.root);
-    current.lights.forEach(l => scene.remove(l));
-    markersEl.innerHTML = '';
-    current = null;
-  }
-  const poiPromise = fetch(asset(L.poi)).then(r => r.json());
-  const gltf = await new Promise((res, rej) => loader.load(asset(L.model), res, (xhr) => {
-    const total = xhr.total || 4_500_000; setProgress(Math.min(0.98, xhr.loaded / total));
-  }, rej));
-  setProgress(1);
-  const root = gltf.scene;
-  tuneMaterials(root);
-  scene.add(root);
-  const { pois } = await poiPromise;
-  current = { root, pois, markers: buildMarkers(pois), lights: addPoiLights(pois) };
-  fillCounts(pois);
-  document.querySelectorAll('#levels button').forEach(b => b.classList.toggle('active', b.dataset.level === key));
-  renderer.compile(scene, camera);
-  setTimeout(() => loaderEl.classList.add('hide'), 250);
-  enterTour(1); // azonnal az íven indul, nincs berepülés
+let loading = false;
+async function loadLevel(level) {
+  if (loading || current?.level === level) return;
+  loading = true;
+  const L = LEVELS[level];
+  try {
+    closePanel(false);
+    let c = cache[level];
+    if (!c) {
+      const resp = await fetch(asset(L.data));
+      if (!resp.ok) { showToast(`${L.name}: a modell pár percen belül érkezik.`); if (!current) setTimeout(() => loadLevel('also'), 0); return; }
+      showLoader(L.name);
+      const data = await resp.json();
+      const gltf = await loadGltf(L.model, (xhr) => { if (xhr.total) setProgress(Math.min(0.97, xhr.loaded / xhr.total)); });
+      tuneMaterials(gltf.scene);
+      let animObj = null;
+      if (data.anim) {
+        try { animObj = setupAnim(await loadGltf(data.anim.model), data.anim.clip_top); } catch (e) { console.warn('animáció', e); }
+      }
+      c = cache[level] = { level, root: gltf.scene, anim: animObj, data, path: buildPath(data.camera) };
+      setProgress(1);
+    }
+    if (current) {
+      scene.remove(current.root); if (current.anim) scene.remove(current.anim.root);
+      current.lights.forEach(l => scene.remove(l));
+      markersEl.innerHTML = '';
+    }
+    scene.add(c.root); if (c.anim) scene.add(c.anim.root);
+    current = { ...c, pois: c.data.pois, markers: buildMarkers(c.data.pois), lights: addPoiLights(c.data.pois) };
+    hfov = 2 * Math.atan(c.data.camera.sensor / 2 / c.data.camera.lens) * 180 / Math.PI;
+    resize();
+    fillCounts(current.pois);
+    $('#lvlSub').textContent = L.name;
+    document.querySelectorAll('#levels button').forEach(b => b.classList.toggle('active', b.dataset.level === level));
+    renderer.compile(scene, camera);
+    setTimeout(() => { loaderEl.classList.add('hide'); if (SHOT) loaderEl.style.display = 'none'; }, 250);
+    tour.zoom = 1; tour.dir = 1;
+    tour.u = c.path.closed ? 0 : 0.5;
+    const p = new THREE.Vector3(), t = new THREE.Vector3(); pathAt(tour.u, p, t);
+    camera.position.copy(p); controls.target.copy(t);
+    mode = 'tour'; controls.enabled = false; overviewBtn.classList.remove('show'); anim = null;
+  } catch (e) {
+    console.error(e); lvlNameEl.textContent = 'Hiba a modell betöltésekor';
+  } finally { loading = false; }
 }
 
 document.querySelectorAll('#levels button').forEach(b => b.addEventListener('click', () => loadLevel(b.dataset.level)));
@@ -420,14 +526,20 @@ function showToast(msg) { toast.textContent = msg; toast.classList.add('show'); 
 function resize() {
   const w = innerWidth, h = innerHeight;
   renderer.setSize(w, h, false);
-  camera.aspect = w / h; camera.updateProjectionMatrix();
+  camera.aspect = w / h;
+  // a Blender-kamera vízszintes látószöge; álló képernyőn a függőleges látószög felső korláttal
+  const vf = 2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(hfov) / 2) / Math.max(camera.aspect, 0.75));
+  camera.fov = Math.min(THREE.MathUtils.radToDeg(vf), 80);
+  camera.updateProjectionMatrix();
 }
 addEventListener('resize', resize); resize();
 
 renderer.setAnimationLoop((now) => {
+  const dt = Math.min(clock.getDelta(), 0.1);
+  if (current?.anim) current.anim.mixer.update(dt);
   stepAnim(now);
   stepTour(now);
-  if (hlMeshes.length) { const k = 0.35 + 0.3 * Math.sin(now / 350); for (const m of hlMeshes) m.material.emissiveIntensity = k; }
+  if (HL.on.value) HL.k.value = 0.45 + 0.3 * Math.sin(now / 320);
   if (mode === 'detail' && !anim) controls.update(); else camera.lookAt(controls.target);
   renderer.render(scene, camera);
   updateMarkers();
@@ -435,6 +547,10 @@ renderer.setAnimationLoop((now) => {
 
 buildFilters();
 setTimeout(() => hint.classList.add('hide'), 9000);
-loadLevel('felso').catch((e) => { console.error(e); lvlNameEl.textContent = 'Hiba a modell betöltésekor'; });
+const start = QS.get('szint');
+loadLevel(LEVELS[start] ? start : 'felso').then(() => {
+  const sz = QS.get('szektor'); const p = sz && current?.pois.find(x => x.id === `szektor_${sz}`);
+  if (p) { anim = null; selectPoi(p); }
+});
 
-window.__mvm = { scene, camera, controls, THREE, get current() { return current; }, get mode() { return mode; } };
+window.__mvm = { scene, camera, controls, THREE, loadLevel, get current() { return current; }, get mode() { return mode; } };
