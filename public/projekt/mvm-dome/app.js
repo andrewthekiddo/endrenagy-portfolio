@@ -142,7 +142,7 @@ function addPoiLights(pois) {
   for (const p of pois) {
     const I = LIGHT[p.cat]; if (!I) continue;
     const l = new THREE.PointLight(CATS[p.cat].color, I, 22, 1.9);
-    l.position.set(p.x, p.z + 4, -p.y);
+    l.position.set(p.x, 2.2, -p.y);   // a padló fölött, a (lealacsonyított) felső sáv alatt – különben fényfolt a sáv tetején
     scene.add(l); lights.push(l);
   }
   return lights;
