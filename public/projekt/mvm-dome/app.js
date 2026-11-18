@@ -110,11 +110,11 @@ const HL = { on: { value: 0 }, a0: { value: 0 }, a1: { value: 0 }, rl: { value: 
 function addSectorShader(m) {
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, { uHlOn: HL.on, uHlA0: HL.a0, uHlA1: HL.a1, uHlRl: HL.rl, uHlK0: HL.k0, uHlK1: HL.k1, uHlB0: HL.b0, uHlB1: HL.b1 });
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nvarying vec3 vWNor;')
-      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvWNor = normalize(mat3(modelMatrix) * objectNormal);');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nvarying vec3 vWNor;\nuniform float uHlOn,uHlA0,uHlA1,uHlRl,uHlK0,uHlK1;\nuniform vec4 uHlB0,uHlB1;')
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nuniform float uHlOn,uHlA0,uHlA1,uHlRl,uHlK0,uHlK1;\nuniform vec4 uHlB0,uHlB1;')
       .replace('#include <dithering_fragment>', `#include <dithering_fragment>
-        if (uHlOn > 0.5 && vWNor.y > 0.6) {
+        if (uHlOn > 0.5 && normalize(cross(dFdx(vWPos), dFdy(vWPos))).y > 0.6) {   // felfelé néző lap (a normál a képernyő-deriváltakból)
           float a = atan(-vWPos.z, vWPos.x);
           float d0 = mod(a - uHlA0 + 6.2831853, 6.2831853), w = mod(uHlA1 - uHlA0 + 6.2831853, 6.2831853);
           if (d0 < w) {
@@ -126,7 +126,7 @@ function addSectorShader(m) {
           }
         }`);
   };
-  m.customProgramCacheKey = () => 'szektor-hl3';
+  m.customProgramCacheKey = () => 'szektor-hl4';
 }
 // Kézi felülírások (felhasználó, 2026-11-18): a lelátó sötét, ne fehér; a lelátó-bejáratok sötét számai (a fehér szektorszám
 // mellett „duplának” látszottak) rejtve
@@ -141,6 +141,39 @@ const MAT = {
 // elvágva, ahogy a többi szinten a modellben is a szint fölött ér véget
 const FACADE = /^W_(Kulso|Kulter)/;
 const FACADE_CUT = { S3: 5.1 };
+// Sütött fény (lobby, alsó körüljáró): a GLB második UV-rétege (uv1) a lightmap-atlasz; a sütött felületek megvilágítatlan (Basic)
+// anyagot kapnak: szín × lightmap × (π / skála) × erősítés. Sütetlen marad: üveg, világító felületek, a számok / feliratok rétege
+// ('W_nb_' anyagok) és az animált lift – ezeket a jelenet fényei világítják.
+const texLoader = new THREE.TextureLoader();
+async function loadLightmap(info) {
+  const tex = await texLoader.loadAsync(asset(info.file));
+  tex.flipY = false; tex.colorSpace = THREE.SRGBColorSpace; tex.channel = 1;
+  tex.generateMipmaps = false; tex.minFilter = THREE.LinearFilter; tex.magFilter = THREE.LinearFilter;
+  return tex;
+}
+function applyLightmap(root, tex, intensity) {
+  const conv = new Map();
+  root.traverse((o) => {
+    if (!o.isMesh || !o.material) return;
+    const hasUv1 = !!o.geometry.attributes.uv1;
+    const one = (m) => {
+      const ao = m.aoMap;                                       // az 1×1-es helykitöltő: csak a TEXCOORD_1 megtartásához kellett, de a
+      if (ao) { m.aoMap = null; m.needsUpdate = true; }         // gltfpack UV-kvantálásának visszaalakítása (offset / repeat) rajta van
+      if (!hasUv1 || m.transparent || (m.name || '').startsWith('W_nb_')) return m;
+      if (m.emissive && m.emissiveIntensity > 0 && m.emissive.getHex() !== 0) return m;
+      let b = conv.get(m);
+      if (!b) {
+        const t = tex.clone();                                  // anyagonként saját UV-transzformáció (a kép közös)
+        if (ao) { t.offset.copy(ao.offset); t.repeat.copy(ao.repeat); t.center.copy(ao.center); t.rotation = ao.rotation; t.matrixAutoUpdate = ao.matrixAutoUpdate; t.matrix.copy(ao.matrix); }
+        t.channel = 1; t.needsUpdate = true;
+        b = new THREE.MeshBasicMaterial({ name: m.name, color: m.color, map: m.map, lightMap: t, lightMapIntensity: intensity, side: m.side, visible: m.visible });
+        b.clippingPlanes = m.clippingPlanes; addSectorShader(b); conv.set(m, b);
+      }
+      return b;
+    };
+    o.material = Array.isArray(o.material) ? o.material.map(one) : one(o.material);
+  });
+}
 function tuneMaterials(root, key) {
   const cut = FACADE_CUT[key] ? [new THREE.Plane(new THREE.Vector3(0, -1, 0), FACADE_CUT[key])] : null;
   const done = new Set();
@@ -514,13 +547,18 @@ async function loadLevel(level) {
       if (!resp.ok) { showToast(`${L.name}: a modell pár percen belül érkezik.`); if (!current) setTimeout(() => loadLevel('also'), 0); return; }
       showLoader(L.name);
       const data = await resp.json();
+      let c_baked = false;
       const gltf = await loadGltf(L.model, (xhr) => { if (xhr.total) setProgress(Math.min(0.97, xhr.loaded / xhr.total)); });
       tuneMaterials(gltf.scene, L.key);
+      if (data.lightmap && !QS.has('nolm')) {
+        try { applyLightmap(gltf.scene, await loadLightmap(data.lightmap), Math.PI / data.lightmap.k * (Number(QS.get('lmg')) || data.lightmap.gain || 1)); c_baked = true; }
+        catch (e) { console.warn('lightmap', e); }
+      }
       let animObj = null;
       if (data.anim) {
         try { animObj = setupAnim(await loadGltf(data.anim.model), data.anim.clip_top); } catch (e) { console.warn('animáció', e); }
       }
-      c = cache[level] = { level, root: gltf.scene, anim: animObj, data, path: buildPath(data.camera) };
+      c = cache[level] = { level, baked: c_baked, root: gltf.scene, anim: animObj, data, path: buildPath(data.camera) };
       setProgress(1);
     }
     if (current) {
@@ -529,7 +567,7 @@ async function loadLevel(level) {
       markersEl.innerHTML = '';
     }
     scene.add(c.root); if (c.anim) scene.add(c.anim.root);
-    current = { ...c, pois: c.data.pois, markers: buildMarkers(c.data.pois), lights: addPoiLights(c.data.pois) };
+    current = { ...c, pois: c.data.pois, markers: buildMarkers(c.data.pois), lights: c.baked ? [] : addPoiLights(c.data.pois) };
     hfov = 2 * Math.atan(c.data.camera.sensor / 2 / c.data.camera.lens) * 180 / Math.PI;
     resize();
     fillCounts(current.pois);
