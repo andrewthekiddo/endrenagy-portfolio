@@ -51,7 +51,7 @@ const canvas = $('#c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMapping = THREE.AgXToneMapping;          // mint a Blender-fájl (AgX) – a sütött fény így a showreel képéhez hasonlít
 renderer.toneMappingExposure = 1.0;
 renderer.localClippingEnabled = true;
 renderer.debug.onShaderError = (gl, prog, vs, fs) => { document.title = 'SHADERERR ' + (gl.getShaderInfoLog(fs) || '') + ' || ' + (gl.getShaderInfoLog(vs) || ''); };
@@ -63,7 +63,7 @@ const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 scene.environmentIntensity = 0.35;
 
-const camera = new THREE.PerspectiveCamera(42, 1, 0.5, 2000);
+const camera = new THREE.PerspectiveCamera(42, 1, 1.0, 1200);   // szűkebb mélységtartomány → pontosabb mélységpuffer (kevesebb villogás)
 camera.position.set(190, 170, 250);
 
 // OrbitControls csak részletnézetben aktív (egy pont körül szabadon forgatható)
@@ -94,6 +94,7 @@ const cache = {};            // betöltött szintek (gyors visszaváltás)
 
 // ---------- Anyag-hangolás ----------
 // A színek a Blender-fájlból jönnek (sima anyagok). Itt csak: üveg ne írjon mélységet, a lelátó anyagai kapják a szektor-kiemelő shadert.
+const alapNev = (n) => (n || '').replace(/^W_(?:nb|f\d+)_/, 'W_');   // 'W_nb_…' (sütetlen réteg) és 'W_fNN_…' (sík árnyalás) előtag nélkül
 const STAND = /^W_(Lelato|TS_lelato|Szek|VIP_szek|Kuzdoter)/i;   // dupla kattintás: ezekre kattintva a szektort választja
 // Szektor-kiemelés (felhasználó, 2026-11-18): csak a lelátó lépcsőfokai (felfelé néző felületek) villognak, a szektor szögtartományában,
 // szintenként a saját blokkban: lobby = 1xx; alsó körüljáró = 2xx alsó + felső blokk (köztük a keresztjáró sötét marad, eltolt ütemben);
@@ -109,10 +110,12 @@ const HL = { on: { value: 0 }, a0: { value: 0 }, a1: { value: 0 }, rl: { value: 
              b0: { value: new THREE.Vector4(0, -1, 0, 0) }, b1: { value: new THREE.Vector4(0, -1, 0, 0) } };
 function addSectorShader(m) {
   m.onBeforeCompile = (sh) => {
-    Object.assign(sh.uniforms, { uHlOn: HL.on, uHlA0: HL.a0, uHlA1: HL.a1, uHlRl: HL.rl, uHlK0: HL.k0, uHlK1: HL.k1, uHlB0: HL.b0, uHlB1: HL.b1 });
+    Object.assign(sh.uniforms, { uLmGamma: LM.gamma, uLmGain: LM.gain, uHlOn: HL.on, uHlA0: HL.a0, uHlA1: HL.a1, uHlRl: HL.rl, uHlK0: HL.k0, uHlK1: HL.k1, uHlB0: HL.b0, uHlB1: HL.b1 });
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
       .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nuniform float uHlOn,uHlA0,uHlA1,uHlRl,uHlK0,uHlK1;\nuniform vec4 uHlB0,uHlB1;')
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nuniform float uLmGamma,uLmGain,uHlOn,uHlA0,uHlA1,uHlRl,uHlK0,uHlK1;\nuniform vec4 uHlB0,uHlB1;')
+      .replace('reflectedLight.indirectDiffuse += lightMapTexel.rgb * lightMapIntensity * RECIPROCAL_PI;',
+        'vec3 lmL = lightMapTexel.rgb * lightMapIntensity * RECIPROCAL_PI; lmL *= uLmGain * pow(max(dot(lmL, vec3(0.2126, 0.7152, 0.0722)), 1e-5), uLmGamma - 1.0); reflectedLight.indirectDiffuse += lmL;')
       .replace('#include <dithering_fragment>', `#include <dithering_fragment>
         if (uHlOn > 0.5 && normalize(cross(dFdx(vWPos), dFdy(vWPos))).y > 0.6) {   // felfelé néző lap (a normál a képernyő-deriváltakból)
           float a = atan(-vWPos.z, vWPos.x);
@@ -126,7 +129,7 @@ function addSectorShader(m) {
           }
         }`);
   };
-  m.customProgramCacheKey = () => 'szektor-hl4';
+  m.customProgramCacheKey = () => 'szektor-hl5';
 }
 // Kézi felülírások (felhasználó, 2026-11-18): a lelátó sötét, ne fehér; a lelátó-bejáratok sötét számai (a fehér szektorszám
 // mellett „duplának” látszottak) rejtve
@@ -146,11 +149,18 @@ const FACADE_CUT = { S3: 5.1 };
 // ('W_nb_' anyagok) és az animált lift – ezeket a jelenet fényei világítják.
 const texLoader = new THREE.TextureLoader();
 async function loadLightmap(info) {
-  const tex = await texLoader.loadAsync(asset(info.file));
+  // asztali gépen a nagy (8192 px) lightmap, mobilon / gyengébb gépen a felezett (4096 px)
+  const nagy = info.nagy && renderer.capabilities.maxTextureSize >= 8192 && !/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) && (navigator.deviceMemory || 8) >= 4 && !QS.has('lm4k');
+  const tex = await texLoader.loadAsync(asset(nagy ? info.nagy : info.file));
   tex.flipY = false; tex.colorSpace = THREE.SRGBColorSpace; tex.channel = 1;
   tex.generateMipmaps = false; tex.minFilter = THREE.LinearFilter; tex.magFilter = THREE.LinearFilter;
   return tex;
 }
+const SIK_GAIN = Number(QS.get('sikg')) || 1.0;
+const SIK_LELATO = Number(QS.get('lelato')) || 0.4;   // a sötét lelátó / küzdőtér (f100 osztály) fényessége – a Blender-képen szinte fekete
+// A sütött fény görbéje: fény' = erősítés × fény^gamma (a fényesség szerint, a színarány megtartásával). A Cycles-sütés árnyékai
+// mélyebbek, mint a Blender (EEVEE, árnyék nélküli lámpák) képe; a gamma < 1 megemeli az árnyékokat. Szintenként a data/<S>.json adja.
+const LM = { gamma: { value: 1.0 }, gain: { value: 1.0 } };
 function applyLightmap(root, tex, intensity) {
   const conv = new Map();
   root.traverse((o) => {
@@ -159,20 +169,38 @@ function applyLightmap(root, tex, intensity) {
     const one = (m) => {
       const ao = m.aoMap;                                       // az 1×1-es helykitöltő: csak a TEXCOORD_1 megtartásához kellett, de a
       if (ao) { m.aoMap = null; m.needsUpdate = true; }         // gltfpack UV-kvantálásának visszaalakítása (offset / repeat) rajta van
-      if (!hasUv1 || m.transparent || (m.name || '').startsWith('W_nb_')) return m;
+      if (m.transparent || (m.name || '').startsWith('W_nb_')) return m;
       if (m.emissive && m.emissiveIntensity > 0 && m.emissive.getHex() !== 0) return m;
       let b = conv.get(m);
+      const sik = /^W_f(\d+)_/.exec(m.name || '');      // az atlaszból kimaradó felület: szín × állandó tényező, lightmap nélkül
+      if (!b && sik) {
+        b = new THREE.MeshBasicMaterial({ name: m.name, color: m.color.clone().multiplyScalar((sik[1] === '100' ? SIK_LELATO : Number(sik[1]) / 100) * SIK_GAIN), map: m.map, side: m.side, visible: m.visible });
+        b.clippingPlanes = m.clippingPlanes; b.polygonOffset = m.polygonOffset; b.polygonOffsetFactor = m.polygonOffsetFactor; b.polygonOffsetUnits = m.polygonOffsetUnits;
+        addSectorShader(b); conv.set(m, b);
+      }
+      if (!b && !hasUv1) return m;
       if (!b) {
         const t = tex.clone();                                  // anyagonként saját UV-transzformáció (a kép közös)
         if (ao) { t.offset.copy(ao.offset); t.repeat.copy(ao.repeat); t.center.copy(ao.center); t.rotation = ao.rotation; t.matrixAutoUpdate = ao.matrixAutoUpdate; t.matrix.copy(ao.matrix); }
         t.channel = 1; t.needsUpdate = true;
         b = new THREE.MeshBasicMaterial({ name: m.name, color: m.color, map: m.map, lightMap: t, lightMapIntensity: intensity, side: m.side, visible: m.visible });
-        b.clippingPlanes = m.clippingPlanes; addSectorShader(b); conv.set(m, b);
+        b.clippingPlanes = m.clippingPlanes; b.polygonOffset = m.polygonOffset; b.polygonOffsetFactor = m.polygonOffsetFactor; b.polygonOffsetUnits = m.polygonOffsetUnits;
+        addSectorShader(b); conv.set(m, b);
       }
       return b;
     };
     o.material = Array.isArray(o.material) ? o.material.map(one) : one(o.material);
   });
+}
+// Rétegsorrend az egy síkba eső lapokra (villogás ellen): a képes / feliratos „matrica” lapok előre, a szerkezeti felületek
+// (padló, födém, fal, tömb) hátra kerülnek a mélységpufferben; a burkolatok, bútorok a kettő között maradnak.
+const RETEG_ELO = /tv_kep|TV_MVM|_foto|grafika|Logo_|felirat|Felirat|szam|Szam|szoveg|nyil|taktilis|szonyeg|szennyfogo|csik|kijelzo|kepernyo|LED/;
+const RETEG_PADLO = /padlo|Padlo|terrazzo|fodem|beton/;
+const RETEG_FAL = /fal_|_fal|belso_sotet|hullam|teto|Teto|sav|labazat|piller/;
+function reteg(m) {
+  const n = m.name || '';
+  const r = ((m.map && /tv_kep|TV_MVM|_foto|grafika|Logo_/.test(n)) || n.startsWith('W_nb_') || RETEG_ELO.test(n)) ? -2 : RETEG_PADLO.test(n) ? 2 : RETEG_FAL.test(n) ? 1 : 0;
+  if (r) { m.polygonOffset = true; m.polygonOffsetFactor = r; m.polygonOffsetUnits = r * 4; }
 }
 function tuneMaterials(root, key) {
   const cut = FACADE_CUT[key] ? [new THREE.Plane(new THREE.Vector3(0, -1, 0), FACADE_CUT[key])] : null;
@@ -183,8 +211,10 @@ function tuneMaterials(root, key) {
     for (const m of mats) {
       if (done.has(m)) continue; done.add(m);
       if (m.transparent) { m.depthWrite = false; }
-      if (cut && FACADE.test(m.name || '')) m.clippingPlanes = cut;
-      const t = Object.entries(MAT).find(([k]) => (m.name || '').startsWith(k))?.[1];
+      reteg(m);
+      if (m.map) m.map.anisotropy = 8;                 // csempézett anyagminták: lapos szögből se mosódjanak
+      if (cut && FACADE.test(alapNev(m.name))) m.clippingPlanes = cut;
+      const t = Object.entries(MAT).find(([k]) => alapNev(m.name).startsWith(k))?.[1];
       if (t) {
         if (t.hide) { m.visible = false; continue; }
         if (t.color !== undefined) m.color.setHex(t.color);
@@ -261,6 +291,7 @@ let mode = 'tour';
 let anim = null;
 let idleTimer = null;
 let hfov = 49.6;
+let camShift = [0, 0];   // a Blender-kamera lencse-eltolása (shift_x, shift_y; a kép nagyobbik oldalának arányában)
 
 const v3 = (a, i) => new THREE.Vector3(a[i], a[i + 2], -a[i + 1]);
 function buildPath(cam) {
@@ -393,7 +424,7 @@ function dblAt(clientX, clientY) {
   }
   if (best) { selectPoi(best); return; }
   const mat = hit.object.material;
-  if (mat && STAND.test(mat.name || '') && hit.point.length() > 25) {
+  if (mat && STAND.test(alapNev(mat.name)) && hit.point.length() > 25) {
     const s = sectorAt(hit.point);
     if (s) { selectPoi(s, hit.point); return; }
   }
@@ -551,7 +582,7 @@ async function loadLevel(level) {
       const gltf = await loadGltf(L.model, (xhr) => { if (xhr.total) setProgress(Math.min(0.97, xhr.loaded / xhr.total)); });
       tuneMaterials(gltf.scene, L.key);
       if (data.lightmap && !QS.has('nolm')) {
-        try { applyLightmap(gltf.scene, await loadLightmap(data.lightmap), Math.PI / data.lightmap.k * (Number(QS.get('lmg')) || data.lightmap.gain || 1)); c_baked = true; }
+        try { applyLightmap(gltf.scene, await loadLightmap(data.lightmap), Math.PI / data.lightmap.k); c_baked = true; }
         catch (e) { console.warn('lightmap', e); }
       }
       let animObj = null;
@@ -568,6 +599,8 @@ async function loadLevel(level) {
     }
     scene.add(c.root); if (c.anim) scene.add(c.anim.root);
     current = { ...c, pois: c.data.pois, markers: buildMarkers(c.data.pois), lights: c.baked ? [] : addPoiLights(c.data.pois) };
+    camShift = [c.data.camera.shift_x || 0, c.data.camera.shift_y || 0];
+    LM.gain.value = Number(QS.get('lmg')) || c.data.lightmap?.gain || 1; LM.gamma.value = Number(QS.get('lmgam')) || c.data.lightmap?.gamma || 1;
     hfov = 2 * Math.atan(c.data.camera.sensor / 2 / c.data.camera.lens) * 180 / Math.PI;
     resize();
     fillCounts(current.pois);
@@ -591,6 +624,13 @@ let toastT;
 function showToast(msg) { toast.textContent = msg; toast.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => toast.classList.remove('show'), 2600); }
 
 // ---------- Loop ----------
+// A lencse-eltolás csak körút-módban él (ott a Blender-kamera kivágását adja); részletnézetben 0-ra fut, hogy a forgáspont középen legyen
+let shiftK = 1;
+function applyShift() {
+  const w = innerWidth, h = innerHeight, M = Math.max(w, h);
+  if ((camShift[0] || camShift[1]) && shiftK > 0.001) camera.setViewOffset(w, h, camShift[0] * M * shiftK, -camShift[1] * M * shiftK, w, h);
+  else if (camera.view) camera.clearViewOffset();
+}
 function resize() {
   const w = innerWidth, h = innerHeight;
   renderer.setSize(w, h, false);
@@ -598,6 +638,7 @@ function resize() {
   // a Blender-kamera vízszintes látószöge; álló képernyőn a függőleges látószög felső korláttal
   const vf = 2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(hfov) / 2) / Math.max(camera.aspect, 0.75));
   camera.fov = Math.min(THREE.MathUtils.radToDeg(vf), 80);
+  applyShift();
   camera.updateProjectionMatrix();
 }
 addEventListener('resize', resize); resize();
@@ -608,6 +649,8 @@ renderer.setAnimationLoop((now) => {
   stepAnim(now);
   stepTour(now);
   if (HL.on.value) { HL.k0.value = 0.5 + 0.32 * Math.sin(now / 320); HL.k1.value = 0.5 + 0.32 * Math.sin(now / 320 + 2.2); }
+  const cel = mode === 'tour' ? 1 : 0;
+  if (Math.abs(cel - shiftK) > 0.001) { shiftK += (cel - shiftK) * (SHOT ? 1 : 0.08); applyShift(); camera.updateProjectionMatrix(); }
   if (mode === 'detail' && !anim) controls.update(); else camera.lookAt(controls.target);
   renderer.render(scene, camera);
   updateMarkers();
