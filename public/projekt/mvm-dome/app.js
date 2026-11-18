@@ -672,7 +672,8 @@ renderer.setAnimationLoop((now) => {
 buildFilters();
 setTimeout(() => hint.classList.add('hide'), 9000);
 const start = QS.get('szint');
-loadLevel(LEVELS[start] ? start : 'felso').then(() => {
+loadLevel(LEVELS[start] ? start : 'lobby')   // alapszint: lobby és küzdőtér (felhasználó, 2026-11-18)
+ .then(() => {
   const sz = QS.get('szektor'), pid = QS.get('poi');   // mély link: ?szektor=209 vagy ?poi=lift_01
   const p = current?.pois.find(x => (sz && x.id === `szektor_${sz}`) || (pid && x.id === pid));
   if (p) { anim = null; selectPoi(p); if (SHOT && anim) { camera.position.copy(anim.to.p); controls.target.copy(anim.to.t); anim = null; controls.update(); } }
