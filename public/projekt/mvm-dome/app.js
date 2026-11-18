@@ -137,7 +137,12 @@ const MAT = {
   W_Hatso_teto:           { color: 0xb9b3aa, roughness: 0.9 },   // lobby: a WC-k / hátsó helyiségek túlnyúló teteje világos, megvilágított (nem fekete)
   // (a lobbyfájl duplán látszó Szektor_1xx szövegeit 2026-11-18-tól maga a modell rejti)
 };
-function tuneMaterials(root) {
+// Felső körüljáró: a teljes homlokzat (+35 m-es perem, LED-kijelző) kívülről eltakarná a folyosót → a szint mennyezeténél (padló + 5,1 m)
+// elvágva, ahogy a többi szinten a modellben is a szint fölött ér véget
+const FACADE = /^W_(Kulso|Kulter)/;
+const FACADE_CUT = { S3: 5.1 };
+function tuneMaterials(root, key) {
+  const cut = FACADE_CUT[key] ? [new THREE.Plane(new THREE.Vector3(0, -1, 0), FACADE_CUT[key])] : null;
   const done = new Set();
   root.traverse((o) => {
     if (!o.isMesh || !o.material) return;
@@ -145,6 +150,7 @@ function tuneMaterials(root) {
     for (const m of mats) {
       if (done.has(m)) continue; done.add(m);
       if (m.transparent) { m.depthWrite = false; }
+      if (cut && FACADE.test(m.name || '')) m.clippingPlanes = cut;
       const t = Object.entries(MAT).find(([k]) => (m.name || '').startsWith(k))?.[1];
       if (t) {
         if (t.hide) { m.visible = false; continue; }
@@ -509,7 +515,7 @@ async function loadLevel(level) {
       showLoader(L.name);
       const data = await resp.json();
       const gltf = await loadGltf(L.model, (xhr) => { if (xhr.total) setProgress(Math.min(0.97, xhr.loaded / xhr.total)); });
-      tuneMaterials(gltf.scene);
+      tuneMaterials(gltf.scene, L.key);
       let animObj = null;
       if (data.anim) {
         try { animObj = setupAnim(await loadGltf(data.anim.model), data.anim.clip_top); } catch (e) { console.warn('animáció', e); }
