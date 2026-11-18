@@ -64,6 +64,10 @@
   .mk{position:absolute;left:0;top:0;transform:translate(-50%,-100%);pointer-events:auto;cursor:pointer;display:flex;flex-direction:column;align-items:center;transition:opacity .2s;will-change:transform}
   .mk .pin{width:32px;height:32px;border-radius:50%;background:var(--pin);display:grid;place-items:center;box-shadow:0 0 0 3px rgba(16,24,40,.6),0 6px 18px rgba(0,0,0,.45),0 0 18px var(--pin);transition:transform .15s,background .2s}
   .mk .pin svg{width:19px;height:19px;fill:none;stroke:var(--ink,var(--navy));stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+  .mk:not(.szektor) .pin{width:36px;height:36px;background:transparent;box-shadow:0 0 0 2.5px rgba(16,24,40,.75),0 6px 18px rgba(0,0,0,.45),0 0 16px var(--pin)}
+  .mk .pin .ik{width:36px;height:36px;display:block;border-radius:50%}
+  .chip .dot .ik{width:26px;height:26px;display:block;border-radius:50%}
+  .chip .dot:has(.ik){background:transparent}
   .mk .stem{width:2px;height:12px;background:var(--pin);opacity:.8}
     .mk.focus .pin{animation:pulse 2.6s ease-in-out infinite}
   @keyframes pulse{0%,100%{transform:scale(1);box-shadow:0 0 0 3px rgba(16,24,40,.6),0 6px 18px rgba(0,0,0,.45),0 0 12px var(--pin)}50%{transform:scale(1.05);box-shadow:0 0 0 6px rgba(252,252,253,.12),0 6px 18px rgba(0,0,0,.45),0 0 22px var(--pin)}}

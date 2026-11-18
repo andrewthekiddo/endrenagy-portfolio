@@ -8,7 +8,8 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 // önállóan (web/) és beágyazva (/projekt/mvm-dome) is működik.
 const asset = (rel) => new URL(rel, import.meta.url).href;
 const QS = new URLSearchParams(location.search);
-const SHOT = QS.has('shot');   // képernyőkép-mód (fej nélküli böngésző): a betöltő azonnal eltűnik
+const SHOT = QS.has('shot');
+if (SHOT) { addEventListener('error', (e) => { document.title = 'JSERR ' + e.message + ' @' + e.lineno; }); addEventListener('unhandledrejection', (e) => { document.title = 'JSREJ ' + (e.reason && e.reason.message); }); }   // képernyőkép-mód (fej nélküli böngésző): a betöltő azonnal eltűnik
 
 // ---------- konfiguráció ----------
 // 4 szint, mindegyik a saját padlóján (y = 0), az aréna középpontja az origó. A modellek a Blender showreel-fájlból
@@ -32,6 +33,9 @@ const CATS = {
   info:       { label: 'Információ',      color: '#FCBF20', ink: '#101828', photo: 'img/arena.jpg',  icon: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 7.5v.01"/>', text: 'Információs pult: jegyügyek, elveszett tárgyak, segítség a tájékozódásban.' },
   szektor:    { label: 'Szektor',         color: '#FCBF20', ink: '#101828', photo: 'img/lelato.jpg', icon: '', text: '' },
 };
+// A pinek és a szűrő piktogramjai a Blenderben használt v1-es ikonok (ALAPRAJZ/v1 → textures/ikonok → img/ikonok), változatlan színnel/formával
+const IKONFAJL = { wc: 'wc', baba: 'baba', bar: 'bufe', ruhatar: 'ruhatar', lift: 'lift', vip: 'vip', elsosegely: 'elsosegely', info: 'info' };
+const ikonUrl = (nev) => asset(`img/ikonok/ikon_${nev}.${nev === 'info' ? 'png' : 'svg'}`);
 // Szűrés: null = minden szolgáltatás látszik; egy kategória = csak az látszik (pulzálva). A szektorszámok külön kapcsolhatók.
 let activeCat = null;
 let showSectors = true;
@@ -50,6 +54,7 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
 renderer.localClippingEnabled = true;
+renderer.debug.onShaderError = (gl, prog, vs, fs) => { document.title = 'SHADERERR ' + (gl.getShaderInfoLog(fs) || '') + ' || ' + (gl.getShaderInfoLog(vs) || ''); };
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x141d2b);
@@ -89,23 +94,39 @@ const cache = {};            // betöltött szintek (gyors visszaváltás)
 
 // ---------- Anyag-hangolás ----------
 // A színek a Blender-fájlból jönnek (sima anyagok). Itt csak: üveg ne írjon mélységet, a lelátó anyagai kapják a szektor-kiemelő shadert.
-const STAND = /^W_(Lelato|Szek|VIP_szek|Kuzdoter)/i;
-const HL = { on: { value: 0 }, a0: { value: 0 }, a1: { value: 0 }, r0: { value: 0 }, y0: { value: 0 }, y1: { value: 0 }, k: { value: 0 } };
+const STAND = /^W_(Lelato|TS_lelato|Szek|VIP_szek|Kuzdoter)/i;   // dupla kattintás: ezekre kattintva a szektort választja
+// Szektor-kiemelés (felhasználó, 2026-11-18): csak a lelátó lépcsőfokai (felfelé néző felületek) villognak, a szektor szögtartományában,
+// szintenként a saját blokkban: lobby = 1xx; alsó körüljáró = 2xx alsó + felső blokk (köztük a keresztjáró sötét marad, eltolt ütemben);
+// VIP szint = csak a szektor előtti VIP-páholyrész; felső körüljáró = 3xx. Sávok: [z0, z1 (abszolút m), dr0, dr1 (a szektorszám sugarához képest)]
+// – a showreel-modellből mért profil (203-as / 103-as / 303-as szektor).
+const HLBANDS = {
+  S0: [[0.1, 6.0, -8.0, 8.0]],
+  S1: [[6.2, 7.95, -6.0, -1.0], [8.3, 10.6, -1.4, 4.5]],
+  S2: [[12.0, 14.5, 4.0, 16.5]],
+  S3: [[14.5, 25.0, -4.5, 9.5]],
+};
+const HL = { on: { value: 0 }, a0: { value: 0 }, a1: { value: 0 }, rl: { value: 0 }, k0: { value: 0 }, k1: { value: 0 },
+             b0: { value: new THREE.Vector4(0, -1, 0, 0) }, b1: { value: new THREE.Vector4(0, -1, 0, 0) } };
 function addSectorShader(m) {
   m.onBeforeCompile = (sh) => {
-    Object.assign(sh.uniforms, { uHlOn: HL.on, uHlA0: HL.a0, uHlA1: HL.a1, uHlR0: HL.r0, uHlY0: HL.y0, uHlY1: HL.y1, uHlK: HL.k });
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
-      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nuniform float uHlOn,uHlA0,uHlA1,uHlR0,uHlY0,uHlY1,uHlK;')
+    Object.assign(sh.uniforms, { uHlOn: HL.on, uHlA0: HL.a0, uHlA1: HL.a1, uHlRl: HL.rl, uHlK0: HL.k0, uHlK1: HL.k1, uHlB0: HL.b0, uHlB1: HL.b1 });
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nvarying vec3 vWNor;')
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvWNor = normalize(mat3(modelMatrix) * objectNormal);');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nvarying vec3 vWNor;\nuniform float uHlOn,uHlA0,uHlA1,uHlRl,uHlK0,uHlK1;\nuniform vec4 uHlB0,uHlB1;')
       .replace('#include <dithering_fragment>', `#include <dithering_fragment>
-        if (uHlOn > 0.5) {
+        if (uHlOn > 0.5 && vWNor.y > 0.6) {
           float a = atan(-vWPos.z, vWPos.x);
           float d0 = mod(a - uHlA0 + 6.2831853, 6.2831853), w = mod(uHlA1 - uHlA0 + 6.2831853, 6.2831853);
-          float r = length(vWPos.xz);
-          if (d0 < w && r > uHlR0 && vWPos.y > uHlY0 && vWPos.y < uHlY1) gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(0.99, 0.75, 0.13), uHlK);
+          if (d0 < w) {
+            float dr = length(vWPos.xz) - uHlRl, y = vWPos.y;
+            float k = 0.0;
+            if (y > uHlB0.x && y < uHlB0.y && dr > uHlB0.z && dr < uHlB0.w) k = uHlK0;
+            if (y > uHlB1.x && y < uHlB1.y && dr > uHlB1.z && dr < uHlB1.w) k = uHlK1;
+            gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(0.99, 0.75, 0.13), k);
+          }
         }`);
   };
-  m.customProgramCacheKey = () => 'szektor-hl';
+  m.customProgramCacheKey = () => 'szektor-hl3';
 }
 // Kézi felülírások (felhasználó, 2026-11-18): a lelátó sötét, ne fehér; a lelátó-bejáratok sötét számai (a fehér szektorszám
 // mellett „duplának” látszottak) rejtve
@@ -113,6 +134,7 @@ const MAT = {
   W_Lelato_beton_vilagos: { color: 0x1d222b, roughness: 0.95 },
   W_Lelato_beton:         { color: 0x232831, roughness: 0.95 },
   W_Lelato_felirat_sotet: { hide: true },
+  W_Hatso_teto:           { color: 0xb9b3aa, roughness: 0.9 },   // lobby: a WC-k / hátsó helyiségek túlnyúló teteje világos, megvilágított (nem fekete)
   // (a lobbyfájl duplán látszó Szektor_1xx szövegeit 2026-11-18-tól maga a modell rejti)
 };
 function tuneMaterials(root) {
@@ -129,7 +151,7 @@ function tuneMaterials(root) {
         if (t.color !== undefined) m.color.setHex(t.color);
         if (t.roughness !== undefined) m.roughness = t.roughness;
       }
-      if (STAND.test(m.name || '')) addSectorShader(m);
+      if (!m.transparent) addSectorShader(m);
       if (m.emissive && m.emissiveIntensity > 0 && m.emissive.getHex() !== 0) m.emissiveIntensity = Math.min(m.emissiveIntensity, 2.5);
     }
   });
@@ -149,7 +171,7 @@ function addPoiLights(pois) {
 }
 
 // ---------- Markerek ----------
-const ICON = (cat) => `<svg viewBox="0 0 24 24">${CATS[cat].icon}</svg>`;
+const ICON = (cat, nev) => `<img class="ik" src="${ikonUrl(nev || IKONFAJL[cat])}" alt="">`;
 const poiWorld = (p) => new THREE.Vector3(p.x, p.z, -p.y);
 
 function buildMarkers(pois) {
@@ -162,7 +184,7 @@ function buildMarkers(pois) {
     if (p.cat === 'szektor') {
       el.innerHTML = `<div class="pin">${p.name.replace('Szektor ', '')}</div>`;
     } else {
-      el.innerHTML = `<div class="lbl">${p.name}</div><div class="pin">${ICON(p.cat)}</div><div class="stem"></div>`;
+      el.innerHTML = `<div class="lbl">${p.name}</div><div class="pin">${ICON(p.cat, p.ikon)}</div><div class="stem"></div>`;
     }
     el.addEventListener('click', (e) => { e.stopPropagation(); selectPoi(p); });
     el.addEventListener('dblclick', (e) => e.stopPropagation());
@@ -264,7 +286,7 @@ function stepTour(now) {
   if (!tour.drag) {
     // elengedés után a lendület kifut, majd folytatódik a lassú alapmozgás (az íven oda-vissza)
     tour.vel *= Math.pow(0.05, dt);
-    const base = closed ? 1 / TOUR.loopSec : tour.dir / TOUR.arcSec;
+    const base = SHOT ? 0 : (closed ? 1 / TOUR.loopSec : tour.dir / TOUR.arcSec);   // képernyőkép-módban áll a kamera
     tour.u += (base + tour.vel) * dt;
     if (!closed) {
       if (tour.u >= 1) { tour.u = 1; tour.dir = -1; tour.vel = 0; }
@@ -394,9 +416,11 @@ function highlightSector(s) {
   const i = secs.findIndex(o => o.x === s); const n = secs.length;
   const a = secs[i].a, prev = secs[(i - 1 + n) % n].a, next = secs[(i + 1) % n].a;
   const half = (b) => { let d = b - a; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d / 2; };
-  HL.a0.value = a + half(prev); HL.a1.value = a + half(next);
-  const r = Math.hypot(s.x, s.y);
-  HL.r0.value = r - 6; HL.y0.value = s.z - 9; HL.y1.value = s.z + 14; HL.on.value = 1;
+  HL.a0.value = a + half(prev) * 0.96; HL.a1.value = a + half(next) * 0.96;
+  HL.rl.value = Math.hypot(s.x, s.y);
+  const fl = current.data.padlo || 0, bands = HLBANDS[current.data.szint] || [];
+  [HL.b0, HL.b1].forEach((u, j) => { const b = bands[j]; u.value.set(b ? b[0] - fl : 0, b ? b[1] - fl : -1, b ? b[2] : 0, b ? b[3] : 0); });
+  HL.on.value = 1;
 }
 
 // ---------- Szűrőpanel: egy kategória kiválasztása = csak az látszik; újra kattintva vissza az összes ----------
@@ -539,7 +563,7 @@ renderer.setAnimationLoop((now) => {
   if (current?.anim) current.anim.mixer.update(dt);
   stepAnim(now);
   stepTour(now);
-  if (HL.on.value) HL.k.value = 0.45 + 0.3 * Math.sin(now / 320);
+  if (HL.on.value) { HL.k0.value = 0.5 + 0.32 * Math.sin(now / 320); HL.k1.value = 0.5 + 0.32 * Math.sin(now / 320 + 2.2); }
   if (mode === 'detail' && !anim) controls.update(); else camera.lookAt(controls.target);
   renderer.render(scene, camera);
   updateMarkers();
@@ -549,8 +573,28 @@ buildFilters();
 setTimeout(() => hint.classList.add('hide'), 9000);
 const start = QS.get('szint');
 loadLevel(LEVELS[start] ? start : 'felso').then(() => {
-  const sz = QS.get('szektor'); const p = sz && current?.pois.find(x => x.id === `szektor_${sz}`);
-  if (p) { anim = null; selectPoi(p); }
+  const sz = QS.get('szektor'), pid = QS.get('poi');   // mély link: ?szektor=209 vagy ?poi=lift_01
+  const p = current?.pois.find(x => (sz && x.id === `szektor_${sz}`) || (pid && x.id === pid));
+  if (p) { anim = null; selectPoi(p); if (SHOT && anim) { camera.position.copy(anim.to.p); controls.target.copy(anim.to.t); anim = null; controls.update(); } }
+  // hibakeresés: ?pick=x,y,x,y… → a képpontok alatti anyagnevek a <title>-be (fej nélküli böngészőből olvasható)
+  const pk = QS.get('pick');
+  if (pk) {
+    const v = pk.split(',').map(Number), out = [];
+    camera.lookAt(controls.target); camera.updateMatrixWorld(true);
+    for (let i = 0; i < v.length; i += 2) {
+      ndc.set(v[i] * 2 - 1, -v[i + 1] * 2 + 1); raycaster.setFromCamera(ndc, camera);   // képernyő-arányok (0..1)
+      const h = raycaster.intersectObject(current.root, true)[0];
+      out.push(h ? `${h.object.material.name}@${h.point.toArray().map(x => x.toFixed(1)).join('/')}` : '-');
+    }
+    document.title = 'PICK ' + out.join(' | ');
+    out.push('CAM ' + camera.position.toArray().map(x => x.toFixed(1)).join('/') + ' T ' + controls.target.toArray().map(x => x.toFixed(1)).join('/') + ' fov ' + camera.fov.toFixed(1) + ' kids ' + current.root.children.length);
+    if (current.anim) { const bx = new THREE.Box3().setFromObject(current.anim.root); let n = 0; current.anim.root.traverse(o => { if (o.isMesh) n++; });
+      current.anim.root.updateMatrixWorld(true);
+      current.anim.root.traverse(o => { if (o.isMesh) { const b = new THREE.Box3().setFromObject(o); out.push(`${o.name || o.parent.name}:${o.material.name}:op${o.material.opacity.toFixed(2)}:${b.min.toArray().map(x => x.toFixed(1))}..${b.max.toArray().map(x => x.toFixed(1))}`); } });
+      out.push(`ANIM meshes ${n} box ${bx.min.toArray().map(x => x.toFixed(1))} .. ${bx.max.toArray().map(x => x.toFixed(1))}`); } else out.push('ANIM none');
+    document.title = 'PICK ' + out.join(' | ');
+    const d = document.createElement('pre'); d.id = 'pick'; d.textContent = out.join('\n'); document.body.appendChild(d);
+  }
 });
 
 window.__mvm = { scene, camera, controls, THREE, loadLevel, get current() { return current; }, get mode() { return mode; } };
