@@ -108,6 +108,8 @@ const HLBANDS = {
 };
 const HL = { on: { value: 0 }, a0: { value: 0 }, a1: { value: 0 }, rl: { value: 0 }, k0: { value: 0 }, k1: { value: 0 },
              b0: { value: new THREE.Vector4(0, -1, 0, 0) }, b1: { value: new THREE.Vector4(0, -1, 0, 0) } };
+// hátoldal-eltolás: csak kétoldalas, nem „matrica” anyagokra (a képek / feliratok lapja – akár fordított normállal – a fal előtt marad)
+const hatBias = (m) => !QS.has('nohb') && m.side === THREE.DoubleSide && !(m.polygonOffset && m.polygonOffsetFactor < 0);
 function addSectorShader(m) {
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, { uLmGamma: LM.gamma, uLmGain: LM.gain, uLmAmb: LM.amb, uHlOn: HL.on, uHlA0: HL.a0, uHlA1: HL.a1, uHlRl: HL.rl, uHlK0: HL.k0, uHlK1: HL.k1, uHlB0: HL.b0, uHlB1: HL.b1 });
@@ -127,9 +129,13 @@ function addSectorShader(m) {
             if (y > uHlB1.x && y < uHlB1.y && dr > uHlB1.z && dr < uHlB1.w) k = uHlK1;
             gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(0.99, 0.75, 0.13), k);
           }
-        }`);
+        }` + (hatBias(m) ? `
+        // Nulla vastagságú falak (pl. büfé-fülke belső hátfala = a tömb külső oldala, egy síkban, ellentétes normállal): mindkét lap
+        // mindkét oldalról rajzolódik → a hátoldal kicsit hátrébb kerül a mélységben, így mindig a néző felé forduló lap látszik (nincs villogás,
+        // és – a hátlap-eldobással szemben – fordított normálú lap se tűnik el).
+        gl_FragDepth = gl_FragCoord.z + (gl_FrontFacing ? 0.0 : 4e-7);` : ''));   // ~7 lépés a 24 bites mélységben: csak a pontosan egy síkba eső lapokra hat
   };
-  m.customProgramCacheKey = () => 'szektor-hl6';
+  m.customProgramCacheKey = () => 'szektor-hl8' + (hatBias(m) ? 'd' : 's');
 }
 // Kézi felülírások (felhasználó, 2026-11-18): a lelátó sötét, ne fehér; a lelátó-bejáratok sötét számai (a fehér szektorszám
 // mellett „duplának” látszottak) rejtve
