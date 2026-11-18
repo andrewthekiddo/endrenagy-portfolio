@@ -110,12 +110,12 @@ const HL = { on: { value: 0 }, a0: { value: 0 }, a1: { value: 0 }, rl: { value: 
              b0: { value: new THREE.Vector4(0, -1, 0, 0) }, b1: { value: new THREE.Vector4(0, -1, 0, 0) } };
 function addSectorShader(m) {
   m.onBeforeCompile = (sh) => {
-    Object.assign(sh.uniforms, { uLmGamma: LM.gamma, uLmGain: LM.gain, uHlOn: HL.on, uHlA0: HL.a0, uHlA1: HL.a1, uHlRl: HL.rl, uHlK0: HL.k0, uHlK1: HL.k1, uHlB0: HL.b0, uHlB1: HL.b1 });
+    Object.assign(sh.uniforms, { uLmGamma: LM.gamma, uLmGain: LM.gain, uLmAmb: LM.amb, uHlOn: HL.on, uHlA0: HL.a0, uHlA1: HL.a1, uHlRl: HL.rl, uHlK0: HL.k0, uHlK1: HL.k1, uHlB0: HL.b0, uHlB1: HL.b1 });
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
       .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nuniform float uLmGamma,uLmGain,uHlOn,uHlA0,uHlA1,uHlRl,uHlK0,uHlK1;\nuniform vec4 uHlB0,uHlB1;')
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nuniform vec3 uLmAmb;\nuniform float uLmGamma,uLmGain,uHlOn,uHlA0,uHlA1,uHlRl,uHlK0,uHlK1;\nuniform vec4 uHlB0,uHlB1;')
       .replace('reflectedLight.indirectDiffuse += lightMapTexel.rgb * lightMapIntensity * RECIPROCAL_PI;',
-        'vec3 lmL = lightMapTexel.rgb * lightMapIntensity * RECIPROCAL_PI; lmL *= uLmGain * pow(max(dot(lmL, vec3(0.2126, 0.7152, 0.0722)), 1e-5), uLmGamma - 1.0); reflectedLight.indirectDiffuse += lmL;')
+        'vec3 lmL = lightMapTexel.rgb * lightMapIntensity * RECIPROCAL_PI; lmL *= uLmGain * pow(max(dot(lmL, vec3(0.2126, 0.7152, 0.0722)), 1e-5), uLmGamma - 1.0); reflectedLight.indirectDiffuse += lmL + uLmAmb;')
       .replace('#include <dithering_fragment>', `#include <dithering_fragment>
         if (uHlOn > 0.5 && normalize(cross(dFdx(vWPos), dFdy(vWPos))).y > 0.6) {   // felfelé néző lap (a normál a képernyő-deriváltakból)
           float a = atan(-vWPos.z, vWPos.x);
@@ -129,7 +129,7 @@ function addSectorShader(m) {
           }
         }`);
   };
-  m.customProgramCacheKey = () => 'szektor-hl5';
+  m.customProgramCacheKey = () => 'szektor-hl6';
 }
 // Kézi felülírások (felhasználó, 2026-11-18): a lelátó sötét, ne fehér; a lelátó-bejáratok sötét számai (a fehér szektorszám
 // mellett „duplának” látszottak) rejtve
@@ -137,6 +137,7 @@ const MAT = {
   W_Lelato_beton_vilagos: { color: 0x1d222b, roughness: 0.95 },
   W_Lelato_beton:         { color: 0x232831, roughness: 0.95 },
   W_Lelato_felirat_sotet: { hide: true },
+  W_Lobby_fal:            { mul: 0.4, exact: true },   // fémes falburkolat (a Blenderben a sötét eget tükrözi): a sütéshez nem fémes → sötétebb, matt szürke (felhasználó: ne csupa fekete, de ne is világos)
   W_Hatso_teto:           { color: 0xb9b3aa, roughness: 0.9 },   // lobby: a WC-k / hátsó helyiségek túlnyúló teteje világos, megvilágított (nem fekete)
   // (a lobbyfájl duplán látszó Szektor_1xx szövegeit 2026-11-18-tól maga a modell rejti)
 };
@@ -156,11 +157,12 @@ async function loadLightmap(info) {
   tex.generateMipmaps = false; tex.minFilter = THREE.LinearFilter; tex.magFilter = THREE.LinearFilter;
   return tex;
 }
+const HOML = Number(QS.get('homl')) || 0.06;           // a külső homlokzat (f36 osztály) sötétítése
 const SIK_GAIN = Number(QS.get('sikg')) || 1.0;
 const SIK_LELATO = Number(QS.get('lelato')) || 0.4;   // a sötét lelátó / küzdőtér (f100 osztály) fényessége – a Blender-képen szinte fekete
 // A sütött fény görbéje: fény' = erősítés × fény^gamma (a fényesség szerint, a színarány megtartásával). A Cycles-sütés árnyékai
 // mélyebbek, mint a Blender (EEVEE, árnyék nélküli lámpák) képe; a gamma < 1 megemeli az árnyékokat. Szintenként a data/<S>.json adja.
-const LM = { gamma: { value: 1.0 }, gain: { value: 1.0 } };
+const LM = { gamma: { value: 1.0 }, gain: { value: 1.0 }, amb: { value: new THREE.Vector3(0.02, 0.024, 0.033).multiplyScalar(QS.has('amb') ? Number(QS.get('amb')) : 1) } };   // amb: kis alapfény, hogy az árnyék se legyen csupa fekete
 function applyLightmap(root, tex, intensity) {
   const conv = new Map();
   root.traverse((o) => {
@@ -171,6 +173,14 @@ function applyLightmap(root, tex, intensity) {
       if (ao) { m.aoMap = null; m.needsUpdate = true; }         // gltfpack UV-kvantálásának visszaalakítása (offset / repeat) rajta van
       if (m.transparent || (m.name || '').startsWith('W_nb_')) return m;
       if (m.emissive && m.emissiveIntensity > 0 && m.emissive.getHex() !== 0) return m;
+      if (/^W_f36_/.test(m.name || '')) {                // külső homlokzat: marad a jelenet fényeivel árnyalt anyag (formát ad), éjszakai tónusra sötétítve
+        if (!conv.has(m)) {
+          if (/szalag_feher/.test(m.name)) { m.emissive.setHex(0xfff0dc); m.emissiveIntensity = 1.6; }   // a kapuk fölötti LED-szalag világít
+          else { m.color.multiply(new THREE.Color(0.8 * HOML, 0.9 * HOML, 1.15 * HOML)); if (m.metalness !== undefined) { m.metalness = Math.min(m.metalness, 0.3); m.roughness = Math.max(m.roughness, 0.5); } }
+          conv.set(m, m);
+        }
+        return m;
+      }
       let b = conv.get(m);
       const sik = /^W_f(\d+)_/.exec(m.name || '');      // az atlaszból kimaradó felület: szín × állandó tényező, lightmap nélkül
       if (!b && sik) {
@@ -183,6 +193,7 @@ function applyLightmap(root, tex, intensity) {
         const t = tex.clone();                                  // anyagonként saját UV-transzformáció (a kép közös)
         if (ao) { t.offset.copy(ao.offset); t.repeat.copy(ao.repeat); t.center.copy(ao.center); t.rotation = ao.rotation; t.matrixAutoUpdate = ao.matrixAutoUpdate; t.matrix.copy(ao.matrix); }
         t.channel = 1; t.needsUpdate = true;
+        m.color.setRGB(Math.max(m.color.r, 0.04), Math.max(m.color.g, 0.042), Math.max(m.color.b, 0.05));   // a legsötétebb anyag se legyen csupa fekete (matt sötét, mint a WC-folyosó)
         b = new THREE.MeshBasicMaterial({ name: m.name, color: m.color, map: m.map, lightMap: t, lightMapIntensity: intensity, side: m.side, visible: m.visible });
         b.clippingPlanes = m.clippingPlanes; b.polygonOffset = m.polygonOffset; b.polygonOffsetFactor = m.polygonOffsetFactor; b.polygonOffsetUnits = m.polygonOffsetUnits;
         addSectorShader(b); conv.set(m, b);
@@ -214,10 +225,11 @@ function tuneMaterials(root, key) {
       reteg(m);
       if (m.map) m.map.anisotropy = 8;                 // csempézett anyagminták: lapos szögből se mosódjanak
       if (cut && FACADE.test(alapNev(m.name))) m.clippingPlanes = cut;
-      const t = Object.entries(MAT).find(([k]) => alapNev(m.name).startsWith(k))?.[1];
+      const t = Object.entries(MAT).find(([k, v]) => v.exact ? alapNev(m.name) === k : alapNev(m.name).startsWith(k))?.[1];
       if (t) {
         if (t.hide) { m.visible = false; continue; }
         if (t.color !== undefined) m.color.setHex(t.color);
+        if (t.mul !== undefined) m.color.multiplyScalar(t.mul);
         if (t.roughness !== undefined) m.roughness = t.roughness;
       }
       if (!m.transparent) addSectorShader(m);
@@ -625,7 +637,7 @@ function showToast(msg) { toast.textContent = msg; toast.classList.add('show'); 
 
 // ---------- Loop ----------
 // A lencse-eltolás csak körút-módban él (ott a Blender-kamera kivágását adja); részletnézetben 0-ra fut, hogy a forgáspont középen legyen
-let shiftK = 1;
+let shiftK = 1; let DBGFOV = 0;
 function applyShift() {
   const w = innerWidth, h = innerHeight, M = Math.max(w, h);
   if ((camShift[0] || camShift[1]) && shiftK > 0.001) camera.setViewOffset(w, h, camShift[0] * M * shiftK, -camShift[1] * M * shiftK, w, h);
@@ -652,6 +664,7 @@ renderer.setAnimationLoop((now) => {
   const cel = mode === 'tour' ? 1 : 0;
   if (Math.abs(cel - shiftK) > 0.001) { shiftK += (cel - shiftK) * (SHOT ? 1 : 0.08); applyShift(); camera.updateProjectionMatrix(); }
   if (mode === 'detail' && !anim) controls.update(); else camera.lookAt(controls.target);
+  if (DBGFOV && camera.fov !== DBGFOV) { camera.fov = DBGFOV; camera.updateProjectionMatrix(); }
   renderer.render(scene, camera);
   updateMarkers();
 });
@@ -663,6 +676,13 @@ loadLevel(LEVELS[start] ? start : 'felso').then(() => {
   const sz = QS.get('szektor'), pid = QS.get('poi');   // mély link: ?szektor=209 vagy ?poi=lift_01
   const p = current?.pois.find(x => (sz && x.id === `szektor_${sz}`) || (pid && x.id === pid));
   if (p) { anim = null; selectPoi(p); if (SHOT && anim) { camera.position.copy(anim.to.p); controls.target.copy(anim.to.t); anim = null; controls.update(); } }
+  // hibakeresés: ?cam=px,py,pz,tx,ty,tz[,fov] → rögzített kamera a szint Blender-koordinátáiban (összevetés a Blender-képpel)
+  const ck = QS.get('cam');
+  if (ck) {
+    const v = ck.split(',').map(Number);
+    mode = 'detail'; anim = null; camera.position.set(v[0], v[2], -v[1]); controls.target.set(v[3], v[5], -v[4]);
+    DBGFOV = v[6] || 40; camera.fov = DBGFOV; shiftK = 0; applyShift(); camera.updateProjectionMatrix(); controls.update();
+  }
   // hibakeresés: ?pick=x,y,x,y… → a képpontok alatti anyagnevek a <title>-be (fej nélküli böngészőből olvasható)
   const pk = QS.get('pick');
   if (pk) {
