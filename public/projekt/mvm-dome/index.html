@@ -62,13 +62,14 @@
   .search button{border:0;border-radius:8px;background:var(--yellow);color:var(--navy);font:700 13px Nunito,sans-serif;padding:0 14px;cursor:pointer}
 
   /* --- nézetgombok a sarokban (V2) --- */
-  .tools{position:fixed;top:18px;right:18px;z-index:10;display:flex;gap:4px;padding:5px;border-radius:12px;background:var(--panel);border:1px solid var(--panel-border);backdrop-filter:blur(14px);transition:transform .35s cubic-bezier(.2,.8,.2,1)}
+  .tools{position:fixed;top:18px;right:18px;z-index:10;display:flex;gap:4px;padding:5px;border-radius:12px;background:var(--panel);border:1px solid var(--panel-border);backdrop-filter:blur(14px);transition:transform .35s cubic-bezier(.2,.8,.2,1),opacity .2s}
   .tools button{display:flex;align-items:center;gap:6px;height:34px;padding:0 11px;border:0;border-radius:8px;background:transparent;color:var(--text);font:700 12.5px Nunito,sans-serif;cursor:pointer;white-space:nowrap}
   .tools button svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
   .tools button:hover{background:rgba(252,252,253,.07)}
   .tools button.kapcs{color:var(--muted)}
   .tools button.kapcs.on{color:var(--yellow)}
   body.panel-open .tools{transform:translateX(calc(-1 * min(400px,100vw)))}
+  @media (min-width:641px) and (max-width:1500px){body.panel-open .tools{opacity:0;pointer-events:none}}   /* keskenyebb ablakban a nyitott panel mellett nem fér el a logó mellett */
 
   /* --- markers --- */
   #markers{position:fixed;inset:0;pointer-events:none;z-index:5}
@@ -95,6 +96,10 @@
   .mk.szektor .pin{width:auto;height:22px;border-radius:6px;padding:0 7px;font-size:11px;font-weight:800;color:var(--yellow);background:var(--navy);border:1px solid rgba(252,191,32,.5);box-shadow:0 2px 8px rgba(0,0,0,.4);animation:none}
   .mk.szektor.sel .pin{background:var(--yellow);color:var(--navy)}
   .mk.szektor .stem{display:none}
+  /* közös mosdó-pin: a szár helyett elágazó vonal (svg) vezet az ajtókhoz */
+  .mk.agas .stem{display:none}
+  .agak{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+  .agak path{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:opacity .2s}
 
   /* --- jobb oldali infópanel (Ziggo-stílus) --- */
   .panel{position:fixed;top:0;right:0;bottom:0;width:min(400px,100vw);z-index:12;background:var(--navy);border-left:1px solid var(--panel-border);transform:translateX(100%);transition:transform .35s cubic-bezier(.2,.8,.2,1);display:flex;flex-direction:column;overflow:hidden}

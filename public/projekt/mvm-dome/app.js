@@ -277,8 +277,28 @@ function addPoiLights(pois) {
 const ICON = (cat, nev) => `<img class="ik" src="${ikonUrl(nev || IKONFAJL[cat])}" alt="">`;
 const poiWorld = (p) => new THREE.Vector3(p.x, p.z, -p.y);
 
+// Mosdók összevonása (felhasználó, V2, 2026-11-19): az egymás melletti férfi és női mosdó EGY közös pin (férfi-női piktogram),
+// amelynek a szára kétfelé ágazik, és az ágak az egyes ajtókhoz vezetnek le. Csak a nézőben történik – a data/S*.json érintetlen.
+// Az egy csoportba tartozó ajtók: 10,8 m-en belül láncolva; az akadálymentes mosdó külön pin marad.
+const WC_TAV = 10.8;
+function osszevonMosdo(pois) {
+  const w = pois.filter((p) => p.ikon === 'wc_ferfi' || p.ikon === 'wc_noi');
+  const szulo = w.map((_, i) => i), gy = (i) => { while (szulo[i] !== i) i = szulo[i]; return i; };
+  for (let i = 0; i < w.length; i++) for (let j = 0; j < i; j++) if (Math.hypot(w[i].x - w[j].x, w[i].y - w[j].y) < WC_TAV) szulo[gy(i)] = gy(j);
+  const csop = new Map(); w.forEach((p, i) => { const g = gy(i); if (!csop.has(g)) csop.set(g, []); csop.get(g).push(p); });
+  const ki = pois.filter((p) => !w.includes(p)); let n = 0;
+  for (const t of csop.values()) {
+    if (t.length < 2) { ki.push(t[0]); continue; }
+    const vegyes = t.some((p) => p.ikon === 'wc_ferfi') && t.some((p) => p.ikon === 'wc_noi'), k = (f) => t.reduce((a, p) => a + p[f], 0) / t.length;
+    n++;
+    ki.push({ id: `wc_${String(n).padStart(2, '0')}`, cat: 'wc', ikon: vegyes ? 'wc' : t[0].ikon, name: `${vegyes ? 'Mosdó' : t[0].ikon === 'wc_noi' ? 'Női mosdó' : 'Férfi mosdó'} ${n}`,
+      x: k('x'), y: k('y'), z: k('z'), ajtok: t, tagok: t.map((p) => p.id) });
+  }
+  return ki;
+}
+const AGAK = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); AGAK.setAttribute('class', 'agak');
 function buildMarkers(pois) {
-  markersEl.innerHTML = '';
+  markersEl.innerHTML = ''; AGAK.innerHTML = ''; markersEl.appendChild(AGAK);
   return pois.map((p) => {
     const el = document.createElement('div');
     el.className = `mk ${p.cat}`;
@@ -293,6 +313,11 @@ function buildMarkers(pois) {
     el.addEventListener('dblclick', (e) => e.stopPropagation());
     markersEl.appendChild(el);
     const world = poiWorld(p); world.y += p.cat === 'szektor' ? 1.5 : 1.2;
+    if (p.ajtok) {   // közös mosdó-pin: saját szár helyett elágazó vonal az ajtókig
+      el.classList.add('agas');
+      const ag = document.createElementNS('http://www.w3.org/2000/svg', 'path'); ag.style.stroke = CATS[p.cat].color; AGAK.appendChild(ag);
+      return { p, el, world, ag, ajtok: p.ajtok.map((a) => { const v = poiWorld(a); v.y += 1.2; return v; }) };
+    }
     return { p, el, world };
   });
 }
@@ -303,16 +328,29 @@ function updateMarkers() {
   const w = innerWidth, h = innerHeight;
   const camDist = camera.position.distanceTo(controls.target);
   for (const m of current.markers) {
-    if (!isVisible(m.p.cat)) { m.el.classList.add('hidden'); continue; }
+    if (!isVisible(m.p.cat)) { m.el.classList.add('hidden'); if (m.ag) m.ag.style.display = 'none'; continue; }
     m.el.classList.toggle('focus', activeCat !== null && m.p.cat === activeCat);
     m.el.classList.toggle('dim', activeCat !== null && m.p.cat !== activeCat && m.p.cat !== 'szektor');
     _v.copy(m.world).project(camera);
-    if (_v.z > 1) { m.el.classList.add('hidden'); continue; }
+    if (_v.z > 1) { m.el.classList.add('hidden'); if (m.ag) m.ag.style.display = 'none'; continue; }
     m.el.classList.remove('hidden');
     const x = (_v.x * 0.5 + 0.5) * w, y = (-_v.y * 0.5 + 0.5) * h;
     const focus = activeCat !== null && m.p.cat === activeCat;
     const szek = m.p.cat === 'szektor', halv = activeCat !== null && !focus && !szek;
     const s = THREE.MathUtils.clamp(95 / camDist + 0.28, 0.5, 1.1) * (szek ? 1.12 : 1.4) * (focus ? 1.35 : halv ? 0.72 : 1);   // V2: nagyobb pinek
+    if (m.ag) {
+      // az ajtók képernyőpontjai → vízszintes gerinc a legfelső ajtó fölött, onnan egy-egy függőleges ág le az ajtókhoz, a gerinc közepéről föl a pinhez
+      let x0 = Infinity, x1 = -Infinity, yg = Infinity, d = '', rejt = false;
+      const pt = m.ajtok.map((a) => { _v.copy(a).project(camera); if (_v.z > 1) rejt = true; return [(_v.x * 0.5 + 0.5) * w, (-_v.y * 0.5 + 0.5) * h]; });
+      for (const [ax, ay] of pt) { x0 = Math.min(x0, ax); x1 = Math.max(x1, ax); yg = Math.min(yg, ay); }
+      yg -= 13 * s; const xc = (x0 + x1) / 2, yp = yg - 11 * s;
+      for (const [ax, ay] of pt) d += `M${ax.toFixed(1)} ${yg.toFixed(1)}V${ay.toFixed(1)}`;
+      d += `M${x0.toFixed(1)} ${yg.toFixed(1)}H${x1.toFixed(1)}M${xc.toFixed(1)} ${yg.toFixed(1)}V${yp.toFixed(1)}`;
+      m.ag.setAttribute('d', d); m.ag.style.display = rejt ? 'none' : '';
+      m.ag.style.opacity = halv ? 0.3 : 0.9; m.ag.style.strokeWidth = focus ? 2.6 : 2;
+      m.el.style.transform = `translate(${xc}px,${yp}px) translate(-50%,-100%) scale(${s})`;
+      continue;
+    }
     m.el.style.transform = `translate(${x}px,${y}px) translate(-50%,-100%) scale(${s})`;
   }
 }
@@ -536,7 +574,7 @@ function nearestSectors(p, pois) {
 const FOTOK = await fetch(asset('data/fotok.json')).then((r) => r.json()).then((d) => d.szintek).catch(() => ({}));
 const SZINTNEV = Object.fromEntries(Object.values(LEVELS).map((l) => [l.key, l.name]));
 function setPhotos(p, c) {
-  const kulcs = LEVELS[current.level].key, f = (FOTOK[kulcs] || {})[p.cat === 'szektor' ? 'szektor' : (p.ikon || p.cat)];
+  const kulcs = LEVELS[current.level].key, F = FOTOK[kulcs] || {}, f = p.ikon === 'wc' ? (F.wc_noi || F.wc_ferfi) : F[p.cat === 'szektor' ? 'szektor' : (p.ikon || p.cat)];
   $('#panelPhoto').style.backgroundImage = `url(${asset(f ? 'img/fotok/' + f.f : c.photo)})`;
   $('#photoCap').textContent = !f ? '' : f.alt ? 'Kép a szintről' : (f.szint !== kulcs ? `A kép másik szinten készült: ${SZINTNEV[f.szint]}` : '');
 }
@@ -664,6 +702,7 @@ async function loadLevel(level) {
       if (!resp.ok) { showToast(`${L.name}: a modell pár percen belül érkezik.`); if (!current) setTimeout(() => loadLevel('lobby'), 0); return; }
       showLoader(L.name);
       const data = await resp.json();
+      if (!QS.has('kulonwc')) data.pois = osszevonMosdo(data.pois);   // férfi + női mosdó egy közös pin
       if (KAMERAK[L.key] && !QS.has('regikamera')) data.camera = KAMERAK[L.key];   // V2: tág áttekintő kamera (data/kamerak.json)
       let c_baked = false, c_lm = null;
       // a modell és a lightmap egyszerre töltődik (V2: gyorsabb betöltés), nem egymás után
@@ -769,7 +808,7 @@ loadLevel(LEVELS[start] && (start !== 'epulet' || VAN_EPULET) ? start : ALAP)
   const vv = QS.get('valt');                             // hibakeresés: ?valt=also → átvált arra a szintre, majd vissza (a lightmap kiürítés / újrafeltöltés próbája)
   if (vv && LEVELS[vv]) { await loadLevel(vv); await loadLevel(LEVELS[start] ? start : ALAP); }
   const sz = QS.get('szektor'), pid = QS.get('poi');   // mély link: ?szektor=209 vagy ?poi=lift_01
-  const p = current?.pois.find(x => (sz && x.id === `szektor_${sz}`) || (pid && x.id === pid));
+  const p = current?.pois.find(x => (sz && x.id === `szektor_${sz}`) || (pid && (x.id === pid || x.tagok?.includes(pid))));
   if (p) { anim = null; selectPoi(p); if (SHOT && anim) { camera.position.copy(anim.to.p); controls.target.copy(anim.to.t); anim = null; controls.update(); } }
   // hibakeresés: ?cam=px,py,pz,tx,ty,tz[,fov] → rögzített kamera a szint Blender-koordinátáiban (összevetés a Blender-képpel)
   // hibakeresés: ?kat=lift → szűrő bekapcsolva; ?nezet=felul → felülnézet; ?allo → forgás kikapcsolva
