@@ -41,7 +41,8 @@ const ikonUrl = (nev) => asset(`img/ikonok/ikon_${nev}.${nev === 'info' ? 'png' 
 // Szűrés: null = minden szolgáltatás látszik; egy kategória = csak az látszik (pulzálva). A szektorszámok külön kapcsolhatók.
 let activeCat = null;
 let showSectors = true;
-const isVisible = (cat) => cat === 'szektor' ? showSectors : (activeCat ? cat === activeCat : true);
+// Szűréskor a többi szolgáltatás NEM tűnik el, csak elhalványul; a kijelölt típus nagyobb és jobban világít (felhasználó, V2, 2026-11-19)
+const isVisible = (cat) => cat === 'szektor' ? showSectors : true;
 
 // ---------- DOM ----------
 const $ = (s) => document.querySelector(s);
@@ -169,7 +170,7 @@ const FACADE_CUT = { S3: 5.1 };
 const texLoader = new THREE.TextureLoader();
 async function loadLightmap(info) {
   // asztali gépen a nagy (8192 px) lightmap, mobilon / gyengébb gépen a felezett (4096 px)
-  const nagy = info.nagy && renderer.capabilities.maxTextureSize >= 8192 && !/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) && (navigator.deviceMemory || 8) >= 4 && !QS.has('lm4k');
+  const nagy = info.nagy && renderer.capabilities.maxTextureSize >= 8192 && !/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) && !(navigator.maxTouchPoints > 1) && (navigator.deviceMemory || 8) >= 4 && !QS.has('lm4k');
   const tex = await texLoader.loadAsync(asset(nagy ? info.nagy : info.file));
   tex.flipY = false; tex.colorSpace = THREE.SRGBColorSpace; tex.channel = 1;
   tex.generateMipmaps = false; tex.minFilter = THREE.LinearFilter; tex.magFilter = THREE.LinearFilter;
@@ -304,12 +305,14 @@ function updateMarkers() {
   for (const m of current.markers) {
     if (!isVisible(m.p.cat)) { m.el.classList.add('hidden'); continue; }
     m.el.classList.toggle('focus', activeCat !== null && m.p.cat === activeCat);
+    m.el.classList.toggle('dim', activeCat !== null && m.p.cat !== activeCat && m.p.cat !== 'szektor');
     _v.copy(m.world).project(camera);
     if (_v.z > 1) { m.el.classList.add('hidden'); continue; }
     m.el.classList.remove('hidden');
     const x = (_v.x * 0.5 + 0.5) * w, y = (-_v.y * 0.5 + 0.5) * h;
     const focus = activeCat !== null && m.p.cat === activeCat;
-    const s = THREE.MathUtils.clamp(95 / camDist + 0.28, 0.5, 1.1) * (focus ? 1.3 : 1);
+    const szek = m.p.cat === 'szektor', halv = activeCat !== null && !focus && !szek;
+    const s = THREE.MathUtils.clamp(95 / camDist + 0.28, 0.5, 1.1) * (szek ? 1.12 : 1.4) * (focus ? 1.35 : halv ? 0.72 : 1);   // V2: nagyobb pinek
     m.el.style.transform = `translate(${x}px,${y}px) translate(-50%,-100%) scale(${s})`;
   }
 }
@@ -321,6 +324,8 @@ function updateMarkers() {
 const TOUR = { loopSec: 95, arcSec: 34, idleMs: 14000 };
 const tour = { u: 0, dir: 1, lastNow: 0, zoom: 1, drag: null, vel: 0 };
 let mode = 'tour';
+let forog = true;      // a „Forgás” gomb: a körút lassú alapmozgása ki-be kapcsolható
+let nincsUresjarat = false;   // felülnézetben nem ugrik vissza magától a körútra
 let anim = null;
 let idleTimer = null;
 let hfov = 49.6;
@@ -359,7 +364,7 @@ function enterTour(dur = 1600) {
   anim = { from: { p: camera.position.clone(), t: controls.target.clone() }, to: { p, t: tg }, t0: performance.now(), dur };
 }
 function enterDetail(anchor, distance = 34, height = 24) {
-  mode = 'detail';
+  mode = 'detail'; nincsUresjarat = false; controls.maxDistance = 160; controls.minPolarAngle = Math.PI * 0.08;
   controls.enabled = true;
   overviewBtn.classList.add('show');
   const from = { p: camera.position.clone(), t: controls.target.clone() };
@@ -369,8 +374,32 @@ function enterDetail(anchor, distance = 34, height = 24) {
   anim = { from, to, t0: performance.now(), dur: 1100 };
   armIdle();
 }
+// Alapnézet: vissza a szint kezdőkamerájához (a körút eleje, eredeti távolság)
+function alapNezet() {
+  if (!current) return;
+  closePanel(false);
+  mode = 'tour'; controls.enabled = false; overviewBtn.classList.remove('show'); clearTimeout(idleTimer); nincsUresjarat = false;
+  tour.zoom = 1; tour.dir = 1; tour.vel = 0; tour.lastNow = 0; tour.u = current.path.closed ? 0 : 0.5;
+  const p = new THREE.Vector3(), t = new THREE.Vector3(); pathAt(tour.u, p, t);
+  anim = { from: { p: camera.position.clone(), t: controls.target.clone() }, to: { p, t }, t0: performance.now(), dur: 1400 };
+}
+// Felülnézet: az egész szint egyből felülről, észak fölfelé; szabadon forgatható / nagyítható, és nem ugrik vissza magától
+const _box = new THREE.Box3(), _bs = new THREE.Vector3(), _bc = new THREE.Vector3();
+function felulNezet() {
+  if (!current) return;
+  closePanel(false);
+  _box.setFromObject(current.root); _box.getSize(_bs); _box.getCenter(_bc);
+  const padlo = current.data.padlo ?? _box.min.y;
+  const vf = THREE.MathUtils.degToRad(camera.fov) / 2, R = Math.max(_bs.z, _bs.x / camera.aspect) / 2;
+  const H = Math.min(R / Math.tan(vf) * 1.08, 900);
+  const t = new THREE.Vector3(_bc.x, padlo, _bc.z), p = new THREE.Vector3(_bc.x, padlo + H, _bc.z + H * 0.012);
+  mode = 'detail'; controls.enabled = true; overviewBtn.classList.add('show'); clearTimeout(idleTimer); nincsUresjarat = true;
+  controls.maxDistance = Math.max(160, H * 1.3); controls.minPolarAngle = 0;   // felülről, az egész szint belefér
+  anim = { from: { p: camera.position.clone(), t: controls.target.clone() }, to: { p, t }, t0: performance.now(), dur: 1400 };
+}
 function armIdle() {
   clearTimeout(idleTimer);
+  if (nincsUresjarat) return;
   idleTimer = setTimeout(() => { if (mode === 'detail' && !panel.classList.contains('show')) enterTour(); }, TOUR.idleMs);
 }
 function stepAnim(now) {
@@ -389,7 +418,7 @@ function stepTour(now) {
   if (!tour.drag) {
     // elengedés után a lendület kifut, majd folytatódik a lassú alapmozgás (az íven oda-vissza)
     tour.vel *= Math.pow(0.05, dt);
-    const base = SHOT ? 0 : (closed ? 1 / TOUR.loopSec : tour.dir / TOUR.arcSec);   // képernyőkép-módban áll a kamera
+    const base = SHOT || !forog ? 0 : (closed ? 1 / TOUR.loopSec : tour.dir / TOUR.arcSec);   // képernyőkép-módban áll a kamera
     tour.u += (base + tour.vel) * dt;
     if (!closed) {
       if (tour.u >= 1) { tour.u = 1; tour.dir = -1; tour.vel = 0; }
@@ -582,6 +611,8 @@ function syncChips() {
   });
   const sec = document.querySelector('.chip[data-sectors]');
   if (sec) sec.classList.toggle('off', !showSectors);
+  $('#tSzektor')?.classList.toggle('on', showSectors);
+  $('#tForgas')?.classList.toggle('on', forog);
 }
 function fillCounts(pois) {
   document.querySelectorAll('[data-n]').forEach(el => {
@@ -633,10 +664,13 @@ async function loadLevel(level) {
       showLoader(L.name);
       const data = await resp.json();
       let c_baked = false, c_lm = null;
+      // a modell és a lightmap egyszerre töltődik (V2: gyorsabb betöltés), nem egymás után
+      const lmP = data.lightmap && !QS.has('nolm') ? loadLightmap(data.lightmap).catch((e) => { console.warn('lightmap', e); return null; }) : null;
       const gltf = await loadGltf(L.model, (xhr) => { if (xhr.total) setProgress(Math.min(0.97, xhr.loaded / xhr.total)); });
       tuneMaterials(gltf.scene, L.key);
-      if (data.lightmap && !QS.has('nolm')) {
-        try { c_lm = applyLightmap(gltf.scene, await loadLightmap(data.lightmap), Math.PI / data.lightmap.k); c_baked = true; }
+      const lmTex = lmP && await lmP;
+      if (lmTex) {
+        try { c_lm = applyLightmap(gltf.scene, lmTex, Math.PI / data.lightmap.k); c_baked = true; }
         catch (e) { console.warn('lightmap', e); }
       }
       let animObj = null;
@@ -714,7 +748,13 @@ renderer.setAnimationLoop((now) => {
 });
 
 buildFilters();
-if (QS.has('tiszta')) ['#filters', '#levels', '#panel', '#hint', '#overviewBtn', '#toast'].forEach((q) => { const e = $(q); if (e) e.style.display = 'none'; });   // hibakeresés: kezelőfelület nélküli kép
+// Nézetgombok a sarokban (felhasználó, V2): Alapnézet, Felülnézet, Szektorszámok, Forgás
+$('#tAlap').addEventListener('click', alapNezet);
+$('#tFelul').addEventListener('click', felulNezet);
+$('#tSzektor').addEventListener('click', () => { showSectors = !showSectors; syncChips(); });
+$('#tForgas').addEventListener('click', () => { forog = !forog; syncChips(); });
+syncChips();
+if (QS.has('tiszta')) ['#filters', '#levels', '#tools', '#panel', '#hint', '#overviewBtn', '#toast'].forEach((q) => { const e = $(q); if (e) e.style.display = 'none'; });   // hibakeresés: kezelőfelület nélküli kép
 setTimeout(() => hint.classList.add('hide'), 9000);
 const start = QS.get('szint');
 // A teljes épület (S4) a kezdőnézet és a szintváltó legalsó gombja (felhasználó, 2026-11-19) – de csak ha a fájljai már kint vannak;
@@ -730,6 +770,10 @@ loadLevel(LEVELS[start] && (start !== 'epulet' || VAN_EPULET) ? start : ALAP)
   const p = current?.pois.find(x => (sz && x.id === `szektor_${sz}`) || (pid && x.id === pid));
   if (p) { anim = null; selectPoi(p); if (SHOT && anim) { camera.position.copy(anim.to.p); controls.target.copy(anim.to.t); anim = null; controls.update(); } }
   // hibakeresés: ?cam=px,py,pz,tx,ty,tz[,fov] → rögzített kamera a szint Blender-koordinátáiban (összevetés a Blender-képpel)
+  // hibakeresés: ?kat=lift → szűrő bekapcsolva; ?nezet=felul → felülnézet; ?allo → forgás kikapcsolva
+  const kat = QS.get('kat'); if (kat && CATS[kat]) { activeCat = kat; syncChips(); }
+  if (QS.has('allo')) { forog = false; syncChips(); }
+  if (QS.get('nezet') === 'felul') { felulNezet(); if (SHOT && anim) { camera.position.copy(anim.to.p); controls.target.copy(anim.to.t); anim = null; controls.update(); } }
   const ck = QS.get('cam');
   if (ck) {
     const v = ck.split(',').map(Number);

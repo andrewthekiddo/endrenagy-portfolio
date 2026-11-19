@@ -61,6 +61,15 @@
   .search input::placeholder{color:var(--muted)}
   .search button{border:0;border-radius:8px;background:var(--yellow);color:var(--navy);font:700 13px Nunito,sans-serif;padding:0 14px;cursor:pointer}
 
+  /* --- nézetgombok a sarokban (V2) --- */
+  .tools{position:fixed;top:18px;right:18px;z-index:10;display:flex;gap:4px;padding:5px;border-radius:12px;background:var(--panel);border:1px solid var(--panel-border);backdrop-filter:blur(14px);transition:transform .35s cubic-bezier(.2,.8,.2,1)}
+  .tools button{display:flex;align-items:center;gap:6px;height:34px;padding:0 11px;border:0;border-radius:8px;background:transparent;color:var(--text);font:700 12.5px Nunito,sans-serif;cursor:pointer;white-space:nowrap}
+  .tools button svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+  .tools button:hover{background:rgba(252,252,253,.07)}
+  .tools button.kapcs{color:var(--muted)}
+  .tools button.kapcs.on{color:var(--yellow)}
+  body.panel-open .tools{transform:translateX(calc(-1 * min(400px,100vw)))}
+
   /* --- markers --- */
   #markers{position:fixed;inset:0;pointer-events:none;z-index:5}
   .mk{position:absolute;left:0;top:0;transform:translate(-50%,-100%);pointer-events:auto;cursor:pointer;display:flex;flex-direction:column;align-items:center;transition:opacity .2s;will-change:transform}
@@ -77,6 +86,12 @@
   .mk .lbl{position:absolute;bottom:calc(100% + 6px);white-space:nowrap;background:var(--navy);border:1px solid var(--panel-border);padding:5px 9px;border-radius:7px;font-size:12px;font-weight:500;opacity:0;transition:.15s;pointer-events:none}
   .mk:hover .lbl{opacity:1}
   .mk.hidden{opacity:0;pointer-events:none}
+  /* szűréskor: a többi halvány, a kijelölt típus kiemelkedik (V2) */
+  .mk.dim{opacity:.32;filter:saturate(.35);z-index:0}
+  .mk.dim .pin{box-shadow:0 0 0 2px rgba(16,24,40,.6)}
+  .mk.focus{z-index:2}
+  .mk.focus:not(.szektor) .pin{box-shadow:0 0 0 3px rgba(252,252,253,.85),0 6px 18px rgba(0,0,0,.45),0 0 30px 6px var(--pin)}
+  .mk.sel{z-index:3}
   .mk.szektor .pin{width:auto;height:22px;border-radius:6px;padding:0 7px;font-size:11px;font-weight:800;color:var(--yellow);background:var(--navy);border:1px solid rgba(252,191,32,.5);box-shadow:0 2px 8px rgba(0,0,0,.4);animation:none}
   .mk.szektor.sel .pin{background:var(--yellow);color:var(--navy)}
   .mk.szektor .stem{display:none}
@@ -142,6 +157,10 @@
     .overview{top:auto;bottom:140px}
     .brand img{height:24px}.brand h1{font-size:12px}
     .hint{display:none}
+    .tools{top:62px;left:12px;right:12px;justify-content:space-between;padding:4px;gap:0}
+    .tools button{padding:0 7px;font-size:11.5px;gap:4px;height:32px}
+    .tools button svg{width:15px;height:15px}
+    body.panel-open .tools{transform:none}
   }
 </style>
 </head>
@@ -181,6 +200,12 @@
     <a class="more" id="panelMore" href="https://mvm-dome.hu/hu/szolgaltatasok" target="_blank" rel="noopener">Bővebben <span>›</span></a>
   </div>
 </aside>
+<div class="tools" id="tools">
+  <button id="tAlap" title="Vissza a szint kezdőnézetéhez"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>Alapnézet</button>
+  <button id="tFelul" title="Az egész szint felülről"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M12 8v8M8 12h8"/></svg>Felülnézet</button>
+  <button id="tSzektor" class="kapcs on" title="Szektorszámok ki / be"><svg viewBox="0 0 24 24"><path d="M9 4L7 20M17 4l-2 16M4 9h16M3 15h16"/></svg>Szektorszámok</button>
+  <button id="tForgas" class="kapcs on" title="A kamera forgása ki / be"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/></svg>Forgás</button>
+</div>
 <button class="overview" id="overviewBtn">‹ Vissza az áttekintéshez</button>
 
 <div class="loader" id="loader">
