@@ -374,6 +374,7 @@ function updateMarkers() {
   const w = innerWidth, h = innerHeight;
   const camDist = camera.position.distanceTo(controls.target);
   const kep = THREE.MathUtils.clamp(Math.min(w, h) / 720, 0.62, 1);   // kis képernyőn (telefon) arányosan kisebb pinek és szektorszámok (felhasználó, 2026-11-19)
+  const pinSor = [];
   for (const m of current.markers) {
     if (!isVisible(m.p.cat)) { m.el.classList.add('hidden'); if (m.ag) m.ag.style.display = 'none'; continue; }
     m.el.classList.toggle('focus', activeCat !== null && m.p.cat === activeCat);
@@ -388,13 +389,38 @@ function updateMarkers() {
     if (m.ag) {
       // a 3D-s váz pontjai képernyőre vetítve: a gerinc így a folyosó falának irányát követi, nem a képernyő vízszintesét
       let rejt = false;
-      const q = m.vaz.map((a) => { _v.copy(a).project(camera); if (_v.z > 1) rejt = true; return `${((_v.x * 0.5 + 0.5) * w).toFixed(1)} ${((-_v.y * 0.5 + 0.5) * h).toFixed(1)}`; });
-      m.ag.setAttribute('d', q.length === 2 ? `M${q[0]}L${q[1]}` : `M${q[0]}L${q[1]}L${q[2]}L${q[3]}M${q[4]}L${q[5]}`); m.ag.style.display = rejt ? 'none' : '';
-      m.ag.style.opacity = halv ? 0.3 : 0.9; m.ag.style.strokeWidth = focus ? 2.6 : 2;
-      m.el.style.transform = `translate(${q[q.length - 1].replace(' ', 'px,')}px) translate(-50%,-100%) scale(${s})`;
+      const q = m.vaz.map((a) => { _v.copy(a).project(camera); if (_v.z > 1) rejt = true; return [(_v.x * 0.5 + 0.5) * w, (-_v.y * 0.5 + 0.5) * h]; });
+      const t = q[q.length - 1];
+      pinSor.push({ m, q, s, rejt, halv, focus, x: t[0], y: t[1] - 18 * s, r: 18 * s + 2 });   // x, y: a pin-kör közepe; r: sugara képpontban
       continue;
     }
     m.el.style.transform = `translate(${x}px,${y}px) translate(-50%,-100%) scale(${s})`;
+  }
+  // A pinek ne fedjék egymást (felhasználó, 2026-11-20): az átfedő köröket széttoljuk – főleg vízszintesen, hogy egymás mellé, sorba kerüljenek –,
+  // a száruk pedig megtörve követi őket az eredeti helyükről. Az eltolás képkockánként puhán követi a célt, hogy forgás közben ne ugráljanak.
+  const el = pinSor.filter((a) => !a.rejt).sort((a, b) => a.x - b.x || a.y - b.y);
+  for (const a of el) { a.cx = a.x; a.cy = a.y; }
+  for (let kor = 0; kor < 8; kor++) {
+    let volt = false;
+    for (let i = 0; i < el.length; i++) for (let j = i + 1; j < el.length; j++) {
+      const a = el[i], b = el[j], min = a.r + b.r;
+      if (b.cx - a.cx > min) break;                                   // x szerint rendezve: a távolabbiak már nem érnek össze
+      let dx = b.cx - a.cx, dy = (b.cy - a.cy) * 0.35;                // a függőleges irány kisebb súllyal → inkább egymás mellé kerülnek
+      const d = Math.hypot(b.cx - a.cx, b.cy - a.cy); if (d >= min) continue;
+      let n = Math.hypot(dx, dy); if (n < 0.01) { dx = 1; dy = 0; n = 1; }
+      const tol = (min - d) / 2 + 0.5; a.cx -= dx / n * tol; a.cy -= dy / n * tol; b.cx += dx / n * tol; b.cy += dy / n * tol; volt = true;
+    }
+    if (!volt) break;
+    el.sort((a, b) => a.cx - b.cx);
+  }
+  for (const a of pinSor) {
+    const m = a.m, q = a.q, f = (p) => `${p[0].toFixed(1)} ${p[1].toFixed(1)}`;
+    const celX = a.rejt ? 0 : a.cx - a.x, celY = a.rejt ? 0 : a.cy - a.y;
+    m.ox = (m.ox ?? celX) + (celX - (m.ox ?? celX)) * (SHOT ? 1 : 0.25); m.oy = (m.oy ?? celY) + (celY - (m.oy ?? celY)) * (SHOT ? 1 : 0.25);
+    const t = q[q.length - 1], px = t[0] + m.ox, py = t[1] + m.oy, tort = Math.hypot(m.ox, m.oy) > 1 ? `L${px.toFixed(1)} ${py.toFixed(1)}` : '';
+    m.ag.setAttribute('d', (q.length === 2 ? `M${f(q[0])}L${f(q[1])}` : `M${f(q[0])}L${f(q[1])}L${f(q[2])}L${f(q[3])}M${f(q[4])}L${f(q[5])}`) + tort); m.ag.style.display = a.rejt ? 'none' : '';
+    m.ag.style.opacity = a.halv ? 0.3 : 0.9; m.ag.style.strokeWidth = a.focus ? 2.6 : 2;
+    m.el.style.transform = `translate(${px}px,${py}px) translate(-50%,-100%) scale(${a.s})`;
   }
 }
 
