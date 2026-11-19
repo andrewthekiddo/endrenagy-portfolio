@@ -17,9 +17,9 @@ if (SHOT) { addEventListener('error', (e) => { document.title = 'JSERR ' + e.mes
 // 4 szint + a teljes épület, mindegyik a saját padlóján (y = 0), az aréna középpontja az origó. A modellek a Blender showreel-fájlból
 // (00_Teljes_epulet/…_showreel_v01.blend) jönnek: _Blender_Projects/00_Web_export/scripts/export_web.py + web_adat.py
 const LEVELS = {
-  felso:  { key: 'S3', name: 'Felső körüljáró szint', model: 'models/S3.glb', meret: 6998296, data: 'data/S3.json', tier: 'Felső lelátó (3xx)' },
+  felso:  { key: 'S3', name: 'Felső körüljáró szint', model: 'models/S3.glb', meret: 6967060, data: 'data/S3.json', tier: 'Felső lelátó (3xx)' },
   paholy: { key: 'S2', name: 'Páholy szint (VIP)', model: 'models/S2.glb', meret: 7249368, data: 'data/S2.json', tier: 'Alsó lelátó (2xx)' },
-  also:   { key: 'S1', name: 'Alsó körüljáró szint', model: 'models/S1.glb', meret: 5175100, data: 'data/S1.json', tier: 'Alsó lelátó (2xx)' },
+  also:   { key: 'S1', name: 'Alsó körüljáró szint', model: 'models/S1.glb', meret: 5183396, data: 'data/S1.json', tier: 'Alsó lelátó (2xx)' },
   lobby:  { key: 'S0', name: 'Lobby – Bejárati szint', model: 'models/S0.glb', meret: 2486588, data: 'data/S0.json', tier: 'Küzdőtéri lelátó (1xx)' },
   // a teljes, megépített épület kívülről (homlokzat bekapcsolva, nyitott tető): a kezdőnézet, ha a fájljai megvannak (lásd VAN_EPULET)
   epulet: { key: 'S4', name: 'MVM Dome', model: 'models/S4.glb', meret: 7308800, data: 'data/S4.json', tier: 'Lelátó' },
@@ -508,6 +508,7 @@ function stepTour(now) {
       if (tour.u <= 0) { tour.u = 0; tour.dir = 1; tour.vel = 0; }
     }
   }
+  if (zoomCel !== null) { tour.zoom += (zoomCel - tour.zoom) * Math.min(1, dt * 8); if (Math.abs(zoomCel - tour.zoom) < 0.002) { tour.zoom = zoomCel; zoomCel = null; } }
   pathAt(tour.u, camera.position, controls.target);
 }
 
@@ -532,10 +533,35 @@ const endDrag = () => { if (!tour.drag) return; tour.vel = THREE.MathUtils.clamp
 canvas.addEventListener('pointerup', endDrag);
 canvas.addEventListener('pointercancel', endDrag);
 // Görgetés körút-módban: közelebb / távolabb ugyanazon a pályán
+// Nagyítás körút-módban (felhasználó, 2026-11-19): a kezdőnézet a LEGTÁGABB, onnan befelé lehet nagyítani a kép közepe (a kamera célpontja) felé –
+// egérgörgővel, két ujjas csípéssel és a + / − gombbal. A pálya (a körbeforgás) közben megmarad.
+const ZOOM_MIN = 0.2;
+const zoomAllit = (z) => { tour.zoom = THREE.MathUtils.clamp(z, ZOOM_MIN, alapZoom()); };
+let zoomCel = null;   // a + / − gomb puha átmenete
 canvas.addEventListener('wheel', (e) => {
   if (mode !== 'tour') return;
-  tour.zoom = THREE.MathUtils.clamp(tour.zoom * (1 + Math.sign(e.deltaY) * 0.06), 0.55, 1.4);
+  zoomCel = null; zoomAllit(tour.zoom * (1 + Math.sign(e.deltaY) * 0.08));
 }, { passive: true });
+const ujjak = new Map(); let csip = null;
+const ujjTav = () => { const [a, b] = [...ujjak.values()]; return Math.hypot(a.x - b.x, a.y - b.y) || 1; };
+canvas.addEventListener('pointerdown', (e) => {
+  if (e.pointerType !== 'touch') return;
+  ujjak.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (ujjak.size === 2 && mode === 'tour') { tour.drag = null; tour.vel = 0; zoomCel = null; csip = { d0: ujjTav(), z0: tour.zoom }; }
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (!ujjak.has(e.pointerId)) return;
+  ujjak.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (csip && ujjak.size === 2 && mode === 'tour') { tour.drag = null; zoomAllit(csip.z0 * csip.d0 / ujjTav()); }
+});
+const ujjFel = (e) => { ujjak.delete(e.pointerId); if (ujjak.size < 2) csip = null; };
+canvas.addEventListener('pointerup', ujjFel); canvas.addEventListener('pointercancel', ujjFel);
+// + / − gomb: körút-módban a pálya menti nagyítás, részletnézetben a kamera–célpont távolság
+function zoomGomb(k) {
+  if (mode === 'tour') { zoomCel = THREE.MathUtils.clamp((zoomCel ?? tour.zoom) * k, ZOOM_MIN, alapZoom()); return; }
+  const v = camera.position.clone().sub(controls.target); const d = THREE.MathUtils.clamp(v.length() * k, controls.minDistance, controls.maxDistance);
+  camera.position.copy(controls.target).add(v.setLength(d)); armIdle();
+}
 // Részletnézetben minden interakció újraindítja az üresjárati számlálót
 controls.addEventListener('start', () => { clearTimeout(idleTimer); });
 controls.addEventListener('end', armIdle);
@@ -592,7 +618,10 @@ function dblAt(clientX, clientY) {
 }
 canvas.addEventListener('dblclick', (e) => dblAt(e.clientX, e.clientY));
 let lastTap = 0;
+let tobbUjj = false;   // két ujjas csípés után az ujjak felemelése NEM dupla koppintás
+canvas.addEventListener('touchstart', (e) => { if (e.touches.length > 1) tobbUjj = true; }, { passive: true });
 canvas.addEventListener('touchend', (e) => {
+  if (tobbUjj) { if (e.touches.length === 0) tobbUjj = false; lastTap = 0; return; }
   const now = performance.now();
   if (now - lastTap < 320 && e.changedTouches.length === 1) { const t = e.changedTouches[0]; dblAt(t.clientX, t.clientY); }
   lastTap = now;
@@ -878,6 +907,8 @@ $('#tAlap').addEventListener('click', alapNezet);
 $('#tFelul').addEventListener('click', felulNezet);
 $('#tSzektor').addEventListener('click', () => { showSectors = !showSectors; syncChips(); });
 $('#tForgas').addEventListener('click', () => { forog = !forog; syncChips(); });
+$('#tPlusz').addEventListener('click', () => zoomGomb(0.75));
+$('#tMinusz').addEventListener('click', () => zoomGomb(1 / 0.75));
 syncChips();
 if (QS.has('tiszta')) ['#filters', '#levels', '#tools', '#panel', '#hint', '#overviewBtn', '#toast'].forEach((q) => { const e = $(q); if (e) e.style.display = 'none'; });   // hibakeresés: kezelőfelület nélküli kép
 setTimeout(() => hint.classList.add('hide'), 9000);
