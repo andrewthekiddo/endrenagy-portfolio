@@ -170,7 +170,7 @@ const SIK_LELATO = Number(QS.get('lelato')) || 0.4;   // a sötét lelátó / k�
 // mélyebbek, mint a Blender (EEVEE, árnyék nélküli lámpák) képe; a gamma < 1 megemeli az árnyékokat. Szintenként a data/<S>.json adja.
 const LM = { gamma: { value: 1.0 }, gain: { value: 1.0 }, amb: { value: new THREE.Vector3(0.02, 0.024, 0.033).multiplyScalar(QS.has('amb') ? Number(QS.get('amb')) : 1) } };   // amb: kis alapfény, hogy az árnyék se legyen csupa fekete
 function applyLightmap(root, tex, intensity) {
-  const conv = new Map();
+  const conv = new Map(), klonok = [tex];              // a lightmap példányai (anyagonként egy) – szintváltáskor a videómemóriából kiürítve
   root.traverse((o) => {
     if (!o.isMesh || !o.material) return;
     const hasUv1 = !!o.geometry.attributes.uv1;
@@ -198,7 +198,7 @@ function applyLightmap(root, tex, intensity) {
       if (!b) {
         const t = tex.clone();                                  // anyagonként saját UV-transzformáció (a kép közös)
         if (ao) { t.offset.copy(ao.offset); t.repeat.copy(ao.repeat); t.center.copy(ao.center); t.rotation = ao.rotation; t.matrixAutoUpdate = ao.matrixAutoUpdate; t.matrix.copy(ao.matrix); }
-        t.channel = 1; t.needsUpdate = true;
+        t.channel = 1; t.needsUpdate = true; klonok.push(t);
         m.color.setRGB(Math.max(m.color.r, 0.04), Math.max(m.color.g, 0.042), Math.max(m.color.b, 0.05));   // a legsötétebb anyag se legyen csupa fekete (matt sötét, mint a WC-folyosó)
         b = new THREE.MeshBasicMaterial({ name: m.name, color: m.color, map: m.map, lightMap: t, lightMapIntensity: intensity, side: m.side, visible: m.visible });
         b.clippingPlanes = m.clippingPlanes; b.polygonOffset = m.polygonOffset; b.polygonOffsetFactor = m.polygonOffsetFactor; b.polygonOffsetUnits = m.polygonOffsetUnits;
@@ -208,6 +208,7 @@ function applyLightmap(root, tex, intensity) {
     };
     o.material = Array.isArray(o.material) ? o.material.map(one) : one(o.material);
   });
+  return klonok;
 }
 // Rétegsorrend az egy síkba eső lapokra (villogás ellen): a képes / feliratos „matrica” lapok előre, a szerkezeti felületek
 // (padló, födém, fal, tömb) hátra kerülnek a mélységpufferben; a burkolatok, bútorok a kettő között maradnak.
@@ -596,22 +597,23 @@ async function loadLevel(level) {
       if (!resp.ok) { showToast(`${L.name}: a modell pár percen belül érkezik.`); if (!current) setTimeout(() => loadLevel('also'), 0); return; }
       showLoader(L.name);
       const data = await resp.json();
-      let c_baked = false;
+      let c_baked = false, c_lm = null;
       const gltf = await loadGltf(L.model, (xhr) => { if (xhr.total) setProgress(Math.min(0.97, xhr.loaded / xhr.total)); });
       tuneMaterials(gltf.scene, L.key);
       if (data.lightmap && !QS.has('nolm')) {
-        try { applyLightmap(gltf.scene, await loadLightmap(data.lightmap), Math.PI / data.lightmap.k); c_baked = true; }
+        try { c_lm = applyLightmap(gltf.scene, await loadLightmap(data.lightmap), Math.PI / data.lightmap.k); c_baked = true; }
         catch (e) { console.warn('lightmap', e); }
       }
       let animObj = null;
       if (data.anim) {
         try { animObj = setupAnim(await loadGltf(data.anim.model), data.anim.clip_top); } catch (e) { console.warn('animáció', e); }
       }
-      c = cache[level] = { level, baked: c_baked, root: gltf.scene, anim: animObj, data, path: buildPath(data.camera) };
+      c = cache[level] = { level, baked: c_baked, lm: c_lm, root: gltf.scene, anim: animObj, data, path: buildPath(data.camera) };
       setProgress(1);
     }
     if (current) {
       scene.remove(current.root); if (current.anim) scene.remove(current.anim.root);
+      if (current.lm && current.level !== level) current.lm.forEach(t => t.dispose());   // a 8192 px-es lightmap ~256 MB videómemória: csak az aktuális szinté marad fent (visszaváltáskor újra feltöltődik)
       current.lights.forEach(l => scene.remove(l));
       markersEl.innerHTML = '';
     }
@@ -679,7 +681,9 @@ buildFilters();
 setTimeout(() => hint.classList.add('hide'), 9000);
 const start = QS.get('szint');
 loadLevel(LEVELS[start] ? start : 'lobby')   // alapszint: lobby és küzdőtér (felhasználó, 2026-11-18)
- .then(() => {
+ .then(async () => {
+  const vv = QS.get('valt');                             // hibakeresés: ?valt=also → átvált arra a szintre, majd vissza (a lightmap kiürítés / újrafeltöltés próbája)
+  if (vv && LEVELS[vv]) { await loadLevel(vv); await loadLevel(LEVELS[start] ? start : 'lobby'); }
   const sz = QS.get('szektor'), pid = QS.get('poi');   // mély link: ?szektor=209 vagy ?poi=lift_01
   const p = current?.pois.find(x => (sz && x.id === `szektor_${sz}`) || (pid && x.id === pid));
   if (p) { anim = null; selectPoi(p); if (SHOT && anim) { camera.position.copy(anim.to.p); controls.target.copy(anim.to.t); anim = null; controls.update(); } }
@@ -700,6 +704,8 @@ loadLevel(LEVELS[start] ? start : 'lobby')   // alapszint: lobby és küzdőtér
       const h = raycaster.intersectObject(current.root, true)[0];
       out.push(h ? `${h.object.material.name}@${h.point.toArray().map(x => x.toFixed(1)).join('/')}` : '-');
     }
+    renderer.render(scene, camera); let nl = 0; scene.traverse(o => { if (o.isPointLight) nl++; });
+    out.push(`INFO rajzolas ${renderer.info.render.calls} haromszog ${renderer.info.render.triangles} pontfeny ${nl}`);
     document.title = 'PICK ' + out.join(' | ');
     out.push('CAM ' + camera.position.toArray().map(x => x.toFixed(1)).join('/') + ' T ' + controls.target.toArray().map(x => x.toFixed(1)).join('/') + ' fov ' + camera.fov.toFixed(1) + ' kids ' + current.root.children.length);
     if (current.anim) { const bx = new THREE.Box3().setFromObject(current.anim.root); let n = 0; current.anim.root.traverse(o => { if (o.isMesh) n++; });
