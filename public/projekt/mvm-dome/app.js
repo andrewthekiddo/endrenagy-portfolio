@@ -17,12 +17,12 @@ if (SHOT) { addEventListener('error', (e) => { document.title = 'JSERR ' + e.mes
 // 4 szint + a teljes épület, mindegyik a saját padlóján (y = 0), az aréna középpontja az origó. A modellek a Blender showreel-fájlból
 // (00_Teljes_epulet/…_showreel_v01.blend) jönnek: _Blender_Projects/00_Web_export/scripts/export_web.py + web_adat.py
 const LEVELS = {
-  felso:  { key: 'S3', name: 'Felső körüljáró szint', model: 'models/S3.glb', data: 'data/S3.json', tier: 'Felső lelátó (3xx)' },
-  paholy: { key: 'S2', name: 'Páholy szint (VIP)', model: 'models/S2.glb', data: 'data/S2.json', tier: 'Alsó lelátó (2xx)' },
-  also:   { key: 'S1', name: 'Alsó körüljáró szint', model: 'models/S1.glb', data: 'data/S1.json', tier: 'Alsó lelátó (2xx)' },
-  lobby:  { key: 'S0', name: 'Lobby – Bejárati szint', model: 'models/S0.glb', data: 'data/S0.json', tier: 'Küzdőtéri lelátó (1xx)' },
+  felso:  { key: 'S3', name: 'Felső körüljáró szint', model: 'models/S3.glb', meret: 6998296, data: 'data/S3.json', tier: 'Felső lelátó (3xx)' },
+  paholy: { key: 'S2', name: 'Páholy szint (VIP)', model: 'models/S2.glb', meret: 7249368, data: 'data/S2.json', tier: 'Alsó lelátó (2xx)' },
+  also:   { key: 'S1', name: 'Alsó körüljáró szint', model: 'models/S1.glb', meret: 5175100, data: 'data/S1.json', tier: 'Alsó lelátó (2xx)' },
+  lobby:  { key: 'S0', name: 'Lobby – Bejárati szint', model: 'models/S0.glb', meret: 3098200, data: 'data/S0.json', tier: 'Küzdőtéri lelátó (1xx)' },
   // a teljes, megépített épület kívülről (homlokzat bekapcsolva, nyitott tető): a kezdőnézet, ha a fájljai megvannak (lásd VAN_EPULET)
-  epulet: { key: 'S4', name: 'MVM Dome', model: 'models/S4.glb', data: 'data/S4.json', tier: 'Lelátó' },
+  epulet: { key: 'S4', name: 'MVM Dome', model: 'models/S4.glb', meret: 9625688, data: 'data/S4.json', tier: 'Lelátó' },
 };
 
 // Pinek: funkciónként színes (a térkép-stílus palettája), az ikon fehér vagy sötét a jobb olvashatóságért
@@ -303,6 +303,17 @@ function osszevonMosdo(pois) {
     ki.push({ id: `wc_${String(n).padStart(2, '0')}`, cat: 'wc', ikon: vegyes ? 'wc' : t[0].ikon, name: `${vegyes ? 'Mosdó' : t[0].ikon === 'wc_noi' ? 'Női mosdó' : 'Férfi mosdó'} ${n}`,
       x: kp('x'), y: kp('y'), z: kp('z'), ajtok: par, tagok: t.map((p) => p.id) });
   }
+  // Szomszédos liftek (6 m-en belül, pl. a felső szint liftpárjai): elég egy pin (felhasználó, V2)
+  const li = ki.filter((p) => p.cat === 'lift'), kesz = new Set();
+  for (const a of li) {
+    if (kesz.has(a)) continue;
+    const t = li.filter((b) => !kesz.has(b) && Math.hypot(a.x - b.x, a.y - b.y) < 6);
+    if (t.length < 2) continue;
+    t.forEach((b) => kesz.add(b));
+    const k = (f) => t.reduce((s, b) => s + b[f], 0) / t.length;
+    ki[ki.indexOf(a)] = { ...a, x: k('x'), y: k('y'), z: k('z'), tagok: t.map((b) => b.id) };
+    for (const b of t.slice(1)) ki.splice(ki.indexOf(b), 1);
+  }
   return ki;
 }
 const AGAK = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); AGAK.setAttribute('class', 'agak');
@@ -322,11 +333,13 @@ function buildMarkers(pois) {
     el.addEventListener('dblclick', (e) => e.stopPropagation());
     markersEl.appendChild(el);
     const world = poiWorld(p); world.y += p.cat === 'szektor' ? 1.5 : 1.2;
-    if (p.ajtok) {   // közös mosdó-pin: saját szár helyett elágazó vonal az ajtókig
+    if (p.cat !== 'szektor') {   // minden szolgáltatás-pin EGY magasságban (felhasználó, V2): a padlótól 5,7 m-rel följebb, 3D-s szárral; a közös mosdó szára elágazik
       el.classList.add('agas');
       const ag = document.createElementNS('http://www.w3.org/2000/svg', 'path'); ag.style.stroke = CATS[p.cat].color; AGAK.appendChild(ag);
       // 3D-s váz (világkoordináta): ajtó alja → ajtó fölött (gerinc vége) … gerinc a fal vonalában … → másik ajtó alja; a gerinc közepéről föl a pinhez
-      const [a, b] = p.ajtok.map(poiWorld), G = 3.3, P = 2.4;
+      const G = 3.3, P = 2.4;
+      if (!p.ajtok) { const al = poiWorld(p); return { p, el, world, ag, vaz: [al.clone().setY(al.y + 0.15), al.clone().setY(al.y + G + P)] }; }
+      const [a, b] = p.ajtok.map(poiWorld);
       const fa = a.clone().setY(a.y + G), fb = b.clone().setY(b.y + G), kz = fa.clone().lerp(fb, 0.5), tet = kz.clone().setY(kz.y + P);
       return { p, el, world, ag, vaz: [a.clone().setY(a.y + 0.15), fa, fb, b.clone().setY(b.y + 0.15), kz, tet] };
     }
@@ -354,9 +367,9 @@ function updateMarkers() {
       // a 3D-s váz pontjai képernyőre vetítve: a gerinc így a folyosó falának irányát követi, nem a képernyő vízszintesét
       let rejt = false;
       const q = m.vaz.map((a) => { _v.copy(a).project(camera); if (_v.z > 1) rejt = true; return `${((_v.x * 0.5 + 0.5) * w).toFixed(1)} ${((-_v.y * 0.5 + 0.5) * h).toFixed(1)}`; });
-      m.ag.setAttribute('d', `M${q[0]}L${q[1]}L${q[2]}L${q[3]}M${q[4]}L${q[5]}`); m.ag.style.display = rejt ? 'none' : '';
+      m.ag.setAttribute('d', q.length === 2 ? `M${q[0]}L${q[1]}` : `M${q[0]}L${q[1]}L${q[2]}L${q[3]}M${q[4]}L${q[5]}`); m.ag.style.display = rejt ? 'none' : '';
       m.ag.style.opacity = halv ? 0.3 : 0.9; m.ag.style.strokeWidth = focus ? 2.6 : 2;
-      m.el.style.transform = `translate(${q[5].replace(' ', 'px,')}px) translate(-50%,-100%) scale(${s})`;
+      m.el.style.transform = `translate(${q[q.length - 1].replace(' ', 'px,')}px) translate(-50%,-100%) scale(${s})`;
       continue;
     }
     m.el.style.transform = `translate(${x}px,${y}px) translate(-50%,-100%) scale(${s})`;
@@ -689,10 +702,23 @@ function setupAnim(gltf, clipTop) {
 // ---------- Szintbetöltés ----------
 function showLoader(name) {
   lvlNameEl.textContent = `${name} betöltése`;
-  pctEl.textContent = '0%'; barEl.style.width = '0%';
-  loaderEl.classList.remove('hide');
+  loaderEl.classList.remove('hide'); setProgress(0);
 }
-function setProgress(k) { const p = Math.round(k * 100); pctEl.textContent = `${p}%`; barEl.style.width = `${p}%`; }
+// A százalék folyamatosan számol föl (felhasználó, V2): a cél a tényleges letöltés, a kiírt szám egyesével követi – nem ugrik 0-ról 100-ra
+let pctCel = 0, pctMost = 0, pctFut = false, pctT = 0;
+function pctRajz() { const p = Math.round(pctMost * 100); pctEl.textContent = `${p}%`; barEl.style.width = `${p}%`; }
+function pctLep(now) {
+  const dt = Math.min(0.1, (now - pctT) / 1000); pctT = now;
+  // letöltés közben lassan előre is kúszik (hogy akkor is mozogjon, ha a böngésző ritkán jelent), a cél fölé legfeljebb 3%-kal
+  const cel = pctCel >= 1 ? 1 : Math.min(0.97, Math.max(pctCel, Math.min(pctMost + dt * 0.02, pctCel + 0.03)));
+  pctMost = Math.min(cel, pctMost + dt * (pctCel >= 1 ? Math.max(2.5, (1 - pctMost) / 0.25) : 0.9)); pctRajz();   // a végén kb. negyed másodperc alatt kifut 100-ig
+  if (pctMost < 1) requestAnimationFrame(pctLep); else pctFut = false;
+}
+function setProgress(k) {
+  if (k === 0) { pctCel = pctMost = 0; pctRajz(); } else pctCel = Math.max(pctCel, k);
+  if (SHOT) { pctMost = pctCel; pctRajz(); return; }
+  if (!pctFut) { pctFut = true; pctT = performance.now(); requestAnimationFrame(pctLep); }
+}
 const loadGltf = (url, onProg) => new Promise((res, rej) => loader.load(asset(url), res, onProg, rej));
 
 const KAMERAK = await ELO.kamerak.then((r) => r.json()).catch(() => ({}));
@@ -715,7 +741,7 @@ async function loadLevel(level) {
       let c_baked = false, c_lm = null;
       // a modell és a lightmap egyszerre töltődik (V2: gyorsabb betöltés), nem egymás után
       const lmP = data.lightmap && !QS.has('nolm') ? loadLightmap(data.lightmap).catch((e) => { console.warn('lightmap', e); return null; }) : null;
-      const gltf = await loadGltf(L.model, (xhr) => { if (xhr.total) setProgress(Math.min(0.97, xhr.loaded / xhr.total)); });
+      const gltf = await loadGltf(L.model, (xhr) => { const ossz = xhr.total || L.meret; if (ossz) setProgress(Math.min(0.95, 0.95 * xhr.loaded / ossz)); });   // a tömörítve küldött fájlnál a böngésző nem tudja a teljes méretet → a szint ismert mérete (LEVELS.meret)
       tuneMaterials(gltf.scene, L.key);
       const lmTex = lmP && await lmP;
       if (lmTex) {
@@ -746,7 +772,7 @@ async function loadLevel(level) {
     $('#lvlSub').textContent = L.name;
     document.querySelectorAll('#levels button').forEach(b => b.classList.toggle('active', b.dataset.level === level));
     renderer.compile(scene, camera);
-    setTimeout(() => { loaderEl.classList.add('hide'); if (SHOT) loaderEl.style.display = 'none'; }, 250);
+    setTimeout(() => { loaderEl.classList.add('hide'); if (SHOT) loaderEl.style.display = 'none'; }, SHOT ? 250 : 450);   // a számláló még kifut 100-ig
     tour.zoom = 1; tour.dir = 1;
     tour.u = c.path.closed ? 0 : 0.5;
     const p = new THREE.Vector3(), t = new THREE.Vector3(); pathAt(tour.u, p, t);
