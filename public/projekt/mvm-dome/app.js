@@ -20,7 +20,7 @@ const LEVELS = {
   felso:  { key: 'S3', name: 'Felső körüljáró szint', model: 'models/S3.glb', meret: 6998296, data: 'data/S3.json', tier: 'Felső lelátó (3xx)' },
   paholy: { key: 'S2', name: 'Páholy szint (VIP)', model: 'models/S2.glb', meret: 7249368, data: 'data/S2.json', tier: 'Alsó lelátó (2xx)' },
   also:   { key: 'S1', name: 'Alsó körüljáró szint', model: 'models/S1.glb', meret: 5175100, data: 'data/S1.json', tier: 'Alsó lelátó (2xx)' },
-  lobby:  { key: 'S0', name: 'Lobby – Bejárati szint', model: 'models/S0.glb', meret: 2481568, data: 'data/S0.json', tier: 'Küzdőtéri lelátó (1xx)' },
+  lobby:  { key: 'S0', name: 'Lobby – Bejárati szint', model: 'models/S0.glb', meret: 2486588, data: 'data/S0.json', tier: 'Küzdőtéri lelátó (1xx)' },
   // a teljes, megépített épület kívülről (homlokzat bekapcsolva, nyitott tető): a kezdőnézet, ha a fájljai megvannak (lásd VAN_EPULET)
   epulet: { key: 'S4', name: 'MVM Dome', model: 'models/S4.glb', meret: 7308800, data: 'data/S4.json', tier: 'Lelátó' },
 };
@@ -238,6 +238,21 @@ function reteg(m) {
   if (r) { m.polygonOffset = true; m.polygonOffsetFactor = r; m.polygonOffsetUnits = r * 4; }
 }
 const UVEG_FEL = /^W_(TS_uveg_L2_uveg|VIP_uvegmellved)/;
+// A lobby kék mosdó-kiemelése (UJ_zona_wc_teto) egybefüggő mennyezeti lap; a felhasználó kérésére (2026-11-19) a falak törésvonalánál
+// rés vágja blokkokra – csak a nézőben (a fragmens eldobásával), a modell és a sütés érintetlen. hely: a rések világ-X helye (m), fel: a rés félszélessége.
+const ZONA_VAGAS = {};   // 2026-11-19 23:30: a lobby kék lapját a modell már 5 blokkra vágva adja (a faltöréseknél) → a nézőbeli vágás kikapcsolva; minta: { S0: { minta: /UJ_zona_wc_teto/, hely: [-12.1, 12.1], fel: 0.55 } }
+function zonaVag(m, v) {
+  const elozo = m.onBeforeCompile, kulcs = m.customProgramCacheKey?.bind(m);
+  m.onBeforeCompile = (sh, r) => {
+    elozo?.call(m, sh, r);
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying float vZonaX;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\nvZonaX = (modelMatrix * vec4(transformed, 1.0)).x;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vZonaX;')
+      .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n' + v.hely.map((x) => `if (abs(vZonaX - (${x.toFixed(3)})) < ${v.fel.toFixed(3)}) discard;`).join('\n'));
+  };
+  m.customProgramCacheKey = () => (kulcs ? kulcs() : '') + '|zonavag' + v.hely.join('_');
+  m.needsUpdate = true;
+}
 function tuneMaterials(root, key) {
   const cut = FACADE_CUT[key] ? [new THREE.Plane(new THREE.Vector3(0, -1, 0), FACADE_CUT[key])] : null;
   const done = new Set();
@@ -250,6 +265,7 @@ function tuneMaterials(root, key) {
       if (m.transparent && UVEG_FEL.test(alapNev(m.name))) m.opacity *= Number(QS.get('uveg')) || 0.5;   // (&uveg=1: eredeti) VIP-szint belső üvegei (Gold VIP üvegfront, mellvéd): fele ennyire fedjenek (felhasználó, 2026-11-19)
       reteg(m);
       // színes szolgáltatás-jelölők (UJ_zona_<bar|ruhatar|merch|wc>_teto / _szegely / _betu): matt, ne tükrözzön (felhasználó, V2)
+      if (ZONA_VAGAS[key]?.minta.test(m.name) && !QS.has('novag')) zonaVag(m, ZONA_VAGAS[key]);
       if (/UJ_zona_/.test(m.name)) { if ('roughness' in m) m.roughness = 1; if ('metalness' in m) m.metalness = 0; if ('envMapIntensity' in m) m.envMapIntensity = 0; if ('specularIntensity' in m) m.specularIntensity = 0; }
       if (m.map) m.map.anisotropy = 8;                 // csempézett anyagminták: lapos szögből se mosódjanak
       if (cut && FACADE.test(alapNev(m.name))) m.clippingPlanes = cut;
