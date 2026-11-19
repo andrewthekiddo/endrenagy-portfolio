@@ -649,6 +649,7 @@ function showLoader(name) {
 function setProgress(k) { const p = Math.round(k * 100); pctEl.textContent = `${p}%`; barEl.style.width = `${p}%`; }
 const loadGltf = (url, onProg) => new Promise((res, rej) => loader.load(asset(url), res, onProg, rej));
 
+const KAMERAK = await fetch(asset('data/kamerak.json')).then((r) => r.json()).catch(() => ({}));
 let loading = false;
 async function loadLevel(level) {
   if (loading || current?.level === level) return;
@@ -663,6 +664,7 @@ async function loadLevel(level) {
       if (!resp.ok) { showToast(`${L.name}: a modell pár percen belül érkezik.`); if (!current) setTimeout(() => loadLevel('lobby'), 0); return; }
       showLoader(L.name);
       const data = await resp.json();
+      if (KAMERAK[L.key] && !QS.has('regikamera')) data.camera = KAMERAK[L.key];   // V2: tág áttekintő kamera (data/kamerak.json)
       let c_baked = false, c_lm = null;
       // a modell és a lightmap egyszerre töltődik (V2: gyorsabb betöltés), nem egymás után
       const lmP = data.lightmap && !QS.has('nolm') ? loadLightmap(data.lightmap).catch((e) => { console.warn('lightmap', e); return null; }) : null;
