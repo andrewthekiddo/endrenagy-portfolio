@@ -87,6 +87,9 @@
   .panel .photo{aspect-ratio:16/10;background:#1D2939 center/cover no-repeat;flex:none;position:relative}
   .panel .photo::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(16,24,40,0) 55%,var(--navy) 100%)}
   .panel .x{position:absolute;top:14px;right:14px;z-index:2;width:36px;height:36px;border-radius:50%;border:0;background:rgba(16,24,40,.75);color:var(--text);font-size:20px;cursor:pointer;line-height:1;backdrop-filter:blur(8px)}
+  .panel .photo{transition:background-image .25s}
+  .panel .photo .cap{position:absolute;left:12px;top:14px;z-index:2;max-width:70%;padding:4px 9px;border-radius:7px;background:rgba(16,24,40,.7);color:var(--text);font-size:11px;font-weight:600;backdrop-filter:blur(8px)}
+  .panel .photo .cap:empty{display:none}
   .panel .body{padding:22px 26px 26px;overflow:auto}
   .panel .cat{font-size:13px;font-weight:800;color:var(--yellow);letter-spacing:.02em}
   .panel h2{margin:6px 0 12px;font-size:28px;font-weight:800;letter-spacing:-.01em;line-height:1.15}
@@ -168,7 +171,8 @@
 </div>
 
 <aside class="panel" id="panel">
-  <div class="photo" id="panelPhoto"><button class="x" id="panelX" aria-label="Bezárás">×</button></div>
+  <div class="photo" id="panelPhoto"><button class="x" id="panelX" aria-label="Bezárás">×</button>
+    <div class="cap" id="photoCap"></div></div>
   <div class="body">
     <div class="cat" id="panelCat"></div>
     <h2 id="panelTitle"></h2>

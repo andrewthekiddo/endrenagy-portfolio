@@ -502,11 +502,20 @@ function nearestSectors(p, pois) {
     .map(s => ({ s, d: Math.hypot(s.x - p.x, s.y - p.y) }))
     .sort((a, b) => a.d - b.d).slice(0, 2).map(o => o.s.name.replace('Szektor ', ''));
 }
+// A panel képe: ikononként EGY profi fotó, szintenként válogatva (data/fotok.json, képek: img/fotok/) – nem lapozható (felhasználó, 2026-11-19).
+// Ha az adott szinten a típusról nincs fotó, egy másik szint ugyanilyen helyiségének képe jön, felirattal; ha sehol sincs, a szint általános képe.
+const FOTOK = await fetch(asset('data/fotok.json')).then((r) => r.json()).then((d) => d.szintek).catch(() => ({}));
+const SZINTNEV = Object.fromEntries(Object.values(LEVELS).map((l) => [l.key, l.name]));
+function setPhotos(p, c) {
+  const kulcs = LEVELS[current.level].key, f = (FOTOK[kulcs] || {})[p.cat === 'szektor' ? 'szektor' : (p.ikon || p.cat)];
+  $('#panelPhoto').style.backgroundImage = `url(${asset(f ? 'img/fotok/' + f.f : c.photo)})`;
+  $('#photoCap').textContent = !f ? '' : f.alt ? 'Kép a szintről' : (f.szint !== kulcs ? `A kép másik szinten készült: ${SZINTNEV[f.szint]}` : '');
+}
 function selectPoi(p, anchor) {
   const m = current.markers.find(x => x.p === p);
   selectedEl?.classList.remove('sel'); selectedEl = m?.el || null; selectedEl?.classList.add('sel');
   const c = CATS[p.cat];
-  $('#panelPhoto').style.backgroundImage = `url(${asset(c.photo)})`;
+  setPhotos(p, c);
   $('#panelCat').textContent = `${side(p)} · ${c.label}`;
   $('#panelTitle').textContent = p.name;
   $('#panelText').textContent = p.cat === 'szektor'

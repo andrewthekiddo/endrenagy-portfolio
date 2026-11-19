@@ -1,0 +1,188 @@
+{
+ "megj": "Profi fotók (2026-10-14) válogatása a panelhez: szint → ikon → EGY kép; szint = melyik szinten készült; alt = általános kép a szintről (a típusról nincs fotó). Forrás: _Photoshoot/_SELECT_*",
+ "szintek": {
+  "S0": {
+   "info": {
+    "f": "DSC09512.jpg",
+    "szint": "S0"
+   },
+   "ruhatar": {
+    "f": "DSC09354.jpg",
+    "szint": "S0"
+   },
+   "bufe": {
+    "f": "DSC09534.jpg",
+    "szint": "S0"
+   },
+   "lift": {
+    "f": "DSC09523.jpg",
+    "szint": "S0"
+   },
+   "wc_ferfi": {
+    "f": "DSC09180.jpg",
+    "szint": "S0"
+   },
+   "wc_noi": {
+    "f": "DSC09558.jpg",
+    "szint": "S0"
+   },
+   "akadalymentes": {
+    "f": "DSC09185.jpg",
+    "szint": "S0"
+   },
+   "elsosegely": {
+    "f": "DSC09993.jpg",
+    "szint": "S1"
+   },
+   "vip": {
+    "f": "DSC00597.jpg",
+    "szint": "S2"
+   },
+   "szektor": {
+    "f": "DSC00740.jpg",
+    "szint": "S0"
+   }
+  },
+  "S1": {
+   "info": {
+    "f": "DSC09512.jpg",
+    "szint": "S0"
+   },
+   "ruhatar": {
+    "f": "DSC00044.jpg",
+    "szint": "S1"
+   },
+   "bufe": {
+    "f": "DSC09805.jpg",
+    "szint": "S1"
+   },
+   "lift": {
+    "f": "DSC09523.jpg",
+    "szint": "S0"
+   },
+   "wc_ferfi": {
+    "f": "DSC09180.jpg",
+    "szint": "S0"
+   },
+   "wc_noi": {
+    "f": "DSC09558.jpg",
+    "szint": "S0"
+   },
+   "akadalymentes": {
+    "f": "DSC09185.jpg",
+    "szint": "S0"
+   },
+   "elsosegely": {
+    "f": "DSC09993.jpg",
+    "szint": "S1"
+   },
+   "baba": {
+    "f": "DSC00116.jpg",
+    "szint": "S1",
+    "alt": 1
+   },
+   "vip": {
+    "f": "DSC00597.jpg",
+    "szint": "S2"
+   },
+   "szektor": {
+    "f": "DSC09943.jpg",
+    "szint": "S1"
+   }
+  },
+  "S2": {
+   "info": {
+    "f": "DSC09512.jpg",
+    "szint": "S0"
+   },
+   "ruhatar": {
+    "f": "DSC00044.jpg",
+    "szint": "S1"
+   },
+   "bufe": {
+    "f": "DSC00550.jpg",
+    "szint": "S2"
+   },
+   "lift": {
+    "f": "DSC00590.jpg",
+    "szint": "S2"
+   },
+   "wc_ferfi": {
+    "f": "DSC00481.jpg",
+    "szint": "S2"
+   },
+   "wc_noi": {
+    "f": "DSC00491.jpg",
+    "szint": "S2"
+   },
+   "akadalymentes": {
+    "f": "DSC00484.jpg",
+    "szint": "S2"
+   },
+   "elsosegely": {
+    "f": "DSC09993.jpg",
+    "szint": "S1"
+   },
+   "baba": {
+    "f": "DSC00599.jpg",
+    "szint": "S2",
+    "alt": 1
+   },
+   "vip": {
+    "f": "DSC00597.jpg",
+    "szint": "S2"
+   },
+   "szektor": {
+    "f": "DSC00370.jpg",
+    "szint": "S2"
+   }
+  },
+  "S3": {
+   "info": {
+    "f": "DSC09512.jpg",
+    "szint": "S0"
+   },
+   "ruhatar": {
+    "f": "DSC00183.jpg",
+    "szint": "S3"
+   },
+   "bufe": {
+    "f": "DSC00159.jpg",
+    "szint": "S3"
+   },
+   "lift": {
+    "f": "DSC09523.jpg",
+    "szint": "S0"
+   },
+   "wc_ferfi": {
+    "f": "DSC09180.jpg",
+    "szint": "S0"
+   },
+   "wc_noi": {
+    "f": "DSC09558.jpg",
+    "szint": "S0"
+   },
+   "akadalymentes": {
+    "f": "DSC09185.jpg",
+    "szint": "S0"
+   },
+   "elsosegely": {
+    "f": "DSC09993.jpg",
+    "szint": "S1"
+   },
+   "baba": {
+    "f": "DSC00156.jpg",
+    "szint": "S3",
+    "alt": 1
+   },
+   "vip": {
+    "f": "DSC00597.jpg",
+    "szint": "S2"
+   },
+   "szektor": {
+    "f": "DSC00206.jpg",
+    "szint": "S3"
+   }
+  }
+ }
+}
