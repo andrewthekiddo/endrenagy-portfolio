@@ -175,7 +175,7 @@ const texLoader = new THREE.TextureLoader();
 async function loadLightmap(info) {
   // V2 (gyors betöltés): mindenhol a 4096 px-es lightmap az alap (64 MB videómemória); a 8192 px-es (256 MB) csak külön kérésre: ?lm8k
   const nagy = info.nagy && QS.has('lm8k') && renderer.capabilities.maxTextureSize >= 8192;
-  const tex = await texLoader.loadAsync(asset(nagy ? info.nagy : info.file));
+  const tex = await texLoader.loadAsync(await forras(nagy ? info.nagy : info.file));
   tex.flipY = false; tex.colorSpace = THREE.SRGBColorSpace; tex.channel = 1;
   tex.generateMipmaps = false; tex.minFilter = THREE.LinearFilter; tex.magFilter = THREE.LinearFilter;
   return tex;
@@ -356,6 +356,7 @@ function updateMarkers() {
   if (!current) return;
   const w = innerWidth, h = innerHeight;
   const camDist = camera.position.distanceTo(controls.target);
+  const kep = THREE.MathUtils.clamp(Math.min(w, h) / 720, 0.62, 1);   // kis képernyőn (telefon) arányosan kisebb pinek és szektorszámok (felhasználó, 2026-11-19)
   for (const m of current.markers) {
     if (!isVisible(m.p.cat)) { m.el.classList.add('hidden'); if (m.ag) m.ag.style.display = 'none'; continue; }
     m.el.classList.toggle('focus', activeCat !== null && m.p.cat === activeCat);
@@ -366,7 +367,7 @@ function updateMarkers() {
     const x = (_v.x * 0.5 + 0.5) * w, y = (-_v.y * 0.5 + 0.5) * h;
     const focus = activeCat !== null && m.p.cat === activeCat;
     const szek = m.p.cat === 'szektor', halv = activeCat !== null && !focus && !szek;
-    const s = THREE.MathUtils.clamp(95 / camDist + 0.28, 0.5, 1.1) * (szek ? 1.12 : 1.4) * (focus ? 1.35 : halv ? 0.72 : 1);   // V2: nagyobb pinek
+    const s = THREE.MathUtils.clamp(95 / camDist + 0.28, 0.5, 1.1) * (szek ? 1.12 : 1.4) * kep * (focus ? 1.35 : halv ? 0.72 : 1);   // V2: nagyobb pinek
     if (m.ag) {
       // a 3D-s váz pontjai képernyőre vetítve: a gerinc így a folyosó falának irányát követi, nem a képernyő vízszintesét
       let rejt = false;
@@ -725,7 +726,32 @@ function setProgress(k) {
   if (SHOT) { pctMost = pctCel; pctRajz(); return; }
   if (!pctFut) { pctFut = true; pctT = performance.now(); requestAnimationFrame(pctLep); }
 }
-const loadGltf = (url, onProg) => new Promise((res, rej) => loader.load(asset(url), res, onProg, rej));
+// Háttér-előtöltés (felhasználó: „elég lassan töltenek be a szintek”): az első szint megjelenése után a többi szint fájljai
+// sorban, csendben letöltődnek (memóriában tartott blob), így szintváltáskor már nem kell a hálózatra várni – csak a feldolgozás marad.
+// Adatforgalom-kímélő módban (Save-Data) nem fut. ELO_URL: eredeti útvonal → { p: ígéret a blob-címre, url: kész blob-cím }
+const ELO_URL = {};
+const forras = async (url) => { const e = ELO_URL[url]; return e ? (e.url || await e.p.catch(() => null) || asset(url)) : asset(url); };
+function elotolt(url) {
+  if (ELO_URL[url]) return ELO_URL[url].p;
+  const e = ELO_URL[url] = {};
+  e.p = fetch(asset(url), { priority: 'low' }).then((r) => { if (!r.ok) throw 0; return r.blob(); }).then((b) => (e.url = URL.createObjectURL(b)));
+  e.p.catch(() => { delete ELO_URL[url]; });
+  return e.p;
+}
+let eloFut = false;
+async function elotoltTobbi() {
+  if (eloFut || SHOT || QS.has('noelo') || navigator.connection?.saveData) return;
+  eloFut = true;
+  for (const k of ['lobby', 'also', 'paholy', 'felso', 'epulet']) {
+    const L = LEVELS[k]; if (cache[k] || (k === 'epulet' && !VAN_EPULET)) continue;
+    try {
+      const d = await fetch(asset(L.data)).then((r) => r.json());
+      if (cache[k]) continue;
+      await elotolt(L.model); if (d.lightmap) await elotolt(d.lightmap.file); if (d.anim) await elotolt(d.anim.model);
+    } catch (e) { /* nem baj: szintváltáskor rendesen letölti */ }
+  }
+}
+const loadGltf = async (url, onProg) => { const f = await forras(url); return new Promise((res, rej) => loader.load(f, res, onProg, rej)); };
 
 const KAMERAK = await ELO.kamerak.then((r) => r.json()).catch(() => ({}));
 let loading = false;
@@ -846,6 +872,7 @@ if (!VAN_EPULET) { const b = document.querySelector('#levels button[data-level="
 const ALAP = VAN_EPULET ? 'epulet' : 'lobby';
 loadLevel(LEVELS[start] && (start !== 'epulet' || VAN_EPULET) ? start : ALAP)
  .then(async () => {
+  setTimeout(elotoltTobbi, 1200);                         // az első szint megjelent → a többi letöltése a háttérben
   const vv = QS.get('valt');                             // hibakeresés: ?valt=also → átvált arra a szintre, majd vissza (a lightmap kiürítés / újrafeltöltés próbája)
   if (vv && LEVELS[vv]) { await loadLevel(vv); await loadLevel(LEVELS[start] ? start : ALAP); }
   const sz = QS.get('szektor'), pid = QS.get('poi');   // mély link: ?szektor=209 vagy ?poi=lift_01
