@@ -9,6 +9,8 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 const asset = (rel) => new URL(rel, import.meta.url).href;
 const QS = new URLSearchParams(location.search);
 const SHOT = QS.has('shot');
+// Gyors indulás (V2): a kis adatfájlok kérése azonnal, egyszerre elindul – a kód lejjebb csak megvárja őket
+const ELO = { fotok: fetch(asset('data/fotok.json')), kamerak: fetch(asset('data/kamerak.json')), epulet: fetch(asset('data/S4.json'), { method: 'HEAD' }) };
 if (SHOT) { addEventListener('error', (e) => { document.title = 'JSERR ' + e.message + ' @' + e.lineno; }); addEventListener('unhandledrejection', (e) => { document.title = 'JSREJ ' + (e.reason && e.reason.message); }); }   // képernyőkép-mód (fej nélküli böngésző): a betöltő azonnal eltűnik
 
 // ---------- konfiguráció ----------
@@ -169,8 +171,8 @@ const FACADE_CUT = { S3: 5.1 };
 // ('W_nb_' anyagok) és az animált lift – ezeket a jelenet fényei világítják.
 const texLoader = new THREE.TextureLoader();
 async function loadLightmap(info) {
-  // asztali gépen a nagy (8192 px) lightmap, mobilon / gyengébb gépen a felezett (4096 px)
-  const nagy = info.nagy && renderer.capabilities.maxTextureSize >= 8192 && !/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) && !(navigator.maxTouchPoints > 1) && (navigator.deviceMemory || 8) >= 4 && !QS.has('lm4k');
+  // V2 (gyors betöltés): mindenhol a 4096 px-es lightmap az alap (64 MB videómemória); a 8192 px-es (256 MB) csak külön kérésre: ?lm8k
+  const nagy = info.nagy && QS.has('lm8k') && renderer.capabilities.maxTextureSize >= 8192;
   const tex = await texLoader.loadAsync(asset(nagy ? info.nagy : info.file));
   tex.flipY = false; tex.colorSpace = THREE.SRGBColorSpace; tex.channel = 1;
   tex.generateMipmaps = false; tex.minFilter = THREE.LinearFilter; tex.magFilter = THREE.LinearFilter;
@@ -577,7 +579,7 @@ function nearestSectors(p, pois) {
 }
 // A panel képe: ikononként EGY profi fotó, szintenként válogatva (data/fotok.json, képek: img/fotok/) – nem lapozható (felhasználó, 2026-11-19).
 // Ha az adott szinten a típusról nincs fotó, egy másik szint ugyanilyen helyiségének képe jön, felirattal; ha sehol sincs, a szint általános képe.
-const FOTOK = await fetch(asset('data/fotok.json')).then((r) => r.json()).then((d) => d.szintek).catch(() => ({}));
+const FOTOK = await ELO.fotok.then((r) => r.json()).then((d) => d.szintek).catch(() => ({}));
 const SZINTNEV = Object.fromEntries(Object.values(LEVELS).map((l) => [l.key, l.name]));
 function setPhotos(p, c) {
   const kulcs = LEVELS[current.level].key, F = FOTOK[kulcs] || {}, f = p.ikon === 'wc' ? (F.wc_noi || F.wc_ferfi) : F[p.cat === 'szektor' ? 'szektor' : (p.ikon || p.cat)];
@@ -693,7 +695,7 @@ function showLoader(name) {
 function setProgress(k) { const p = Math.round(k * 100); pctEl.textContent = `${p}%`; barEl.style.width = `${p}%`; }
 const loadGltf = (url, onProg) => new Promise((res, rej) => loader.load(asset(url), res, onProg, rej));
 
-const KAMERAK = await fetch(asset('data/kamerak.json')).then((r) => r.json()).catch(() => ({}));
+const KAMERAK = await ELO.kamerak.then((r) => r.json()).catch(() => ({}));
 let loading = false;
 async function loadLevel(level) {
   if (loading || current?.level === level) return;
@@ -806,7 +808,7 @@ setTimeout(() => hint.classList.add('hide'), 9000);
 const start = QS.get('szint');
 // A teljes épület (S4) a kezdőnézet és a szintváltó legalsó gombja (felhasználó, 2026-11-19) – de csak ha a fájljai már kint vannak;
 // addig a gomb rejtve marad, és a lobby az alapszint (felhasználó, 2026-11-18).
-const VAN_EPULET = await fetch(asset(LEVELS.epulet.data), { method: 'HEAD' }).then((r) => r.ok && !/html/.test(r.headers.get('content-type') || '')).catch(() => false);
+const VAN_EPULET = await ELO.epulet.then((r) => r.ok && !/html/.test(r.headers.get('content-type') || '')).catch(() => false);
 if (!VAN_EPULET) { const b = document.querySelector('#levels button[data-level="epulet"]'); if (b) b.style.display = 'none'; }
 const ALAP = VAN_EPULET ? 'epulet' : 'lobby';
 loadLevel(LEVELS[start] && (start !== 'epulet' || VAN_EPULET) ? start : ALAP)
