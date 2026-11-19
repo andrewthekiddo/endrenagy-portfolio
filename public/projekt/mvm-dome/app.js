@@ -289,10 +289,17 @@ function osszevonMosdo(pois) {
   const ki = pois.filter((p) => !w.includes(p)); let n = 0;
   for (const t of csop.values()) {
     if (t.length < 2) { ki.push(t[0]); continue; }
-    const vegyes = t.some((p) => p.ikon === 'wc_ferfi') && t.some((p) => p.ikon === 'wc_noi'), k = (f) => t.reduce((a, p) => a + p[f], 0) / t.length;
+    const vegyes = t.some((p) => p.ikon === 'wc_ferfi') && t.some((p) => p.ikon === 'wc_noi');
+    // csak KÉT ág (felhasználó): vegyes csoportban a legközelebbi férfi–női ajtópár, egynemű csoportban a két legközelebbi ajtó
+    let par = null, pd = Infinity;
+    for (const a of t) for (const b of t) {
+      if (a === b || (vegyes && !(a.ikon === 'wc_ferfi' && b.ikon === 'wc_noi'))) continue;
+      const d = Math.hypot(a.x - b.x, a.y - b.y); if (d < pd) { pd = d; par = [a, b]; }
+    }
+    const kp = (f) => (par[0][f] + par[1][f]) / 2;
     n++;
     ki.push({ id: `wc_${String(n).padStart(2, '0')}`, cat: 'wc', ikon: vegyes ? 'wc' : t[0].ikon, name: `${vegyes ? 'Mosdó' : t[0].ikon === 'wc_noi' ? 'Női mosdó' : 'Férfi mosdó'} ${n}`,
-      x: k('x'), y: k('y'), z: k('z'), ajtok: t, tagok: t.map((p) => p.id) });
+      x: kp('x'), y: kp('y'), z: kp('z'), ajtok: par, tagok: t.map((p) => p.id) });
   }
   return ki;
 }
@@ -316,7 +323,10 @@ function buildMarkers(pois) {
     if (p.ajtok) {   // közös mosdó-pin: saját szár helyett elágazó vonal az ajtókig
       el.classList.add('agas');
       const ag = document.createElementNS('http://www.w3.org/2000/svg', 'path'); ag.style.stroke = CATS[p.cat].color; AGAK.appendChild(ag);
-      return { p, el, world, ag, ajtok: p.ajtok.map((a) => { const v = poiWorld(a); v.y += 1.2; return v; }) };
+      // 3D-s váz (világkoordináta): ajtó alja → ajtó fölött (gerinc vége) … gerinc a fal vonalában … → másik ajtó alja; a gerinc közepéről föl a pinhez
+      const [a, b] = p.ajtok.map(poiWorld), G = 3.3, P = 2.4;
+      const fa = a.clone().setY(a.y + G), fb = b.clone().setY(b.y + G), kz = fa.clone().lerp(fb, 0.5), tet = kz.clone().setY(kz.y + P);
+      return { p, el, world, ag, vaz: [a.clone().setY(a.y + 0.15), fa, fb, b.clone().setY(b.y + 0.15), kz, tet] };
     }
     return { p, el, world };
   });
@@ -339,16 +349,12 @@ function updateMarkers() {
     const szek = m.p.cat === 'szektor', halv = activeCat !== null && !focus && !szek;
     const s = THREE.MathUtils.clamp(95 / camDist + 0.28, 0.5, 1.1) * (szek ? 1.12 : 1.4) * (focus ? 1.35 : halv ? 0.72 : 1);   // V2: nagyobb pinek
     if (m.ag) {
-      // az ajtók képernyőpontjai → vízszintes gerinc a legfelső ajtó fölött, onnan egy-egy függőleges ág le az ajtókhoz, a gerinc közepéről föl a pinhez
-      let x0 = Infinity, x1 = -Infinity, yg = Infinity, d = '', rejt = false;
-      const pt = m.ajtok.map((a) => { _v.copy(a).project(camera); if (_v.z > 1) rejt = true; return [(_v.x * 0.5 + 0.5) * w, (-_v.y * 0.5 + 0.5) * h]; });
-      for (const [ax, ay] of pt) { x0 = Math.min(x0, ax); x1 = Math.max(x1, ax); yg = Math.min(yg, ay); }
-      yg -= 13 * s; const xc = (x0 + x1) / 2, yp = yg - 11 * s;
-      for (const [ax, ay] of pt) d += `M${ax.toFixed(1)} ${yg.toFixed(1)}V${ay.toFixed(1)}`;
-      d += `M${x0.toFixed(1)} ${yg.toFixed(1)}H${x1.toFixed(1)}M${xc.toFixed(1)} ${yg.toFixed(1)}V${yp.toFixed(1)}`;
-      m.ag.setAttribute('d', d); m.ag.style.display = rejt ? 'none' : '';
+      // a 3D-s váz pontjai képernyőre vetítve: a gerinc így a folyosó falának irányát követi, nem a képernyő vízszintesét
+      let rejt = false;
+      const q = m.vaz.map((a) => { _v.copy(a).project(camera); if (_v.z > 1) rejt = true; return `${((_v.x * 0.5 + 0.5) * w).toFixed(1)} ${((-_v.y * 0.5 + 0.5) * h).toFixed(1)}`; });
+      m.ag.setAttribute('d', `M${q[0]}L${q[1]}L${q[2]}L${q[3]}M${q[4]}L${q[5]}`); m.ag.style.display = rejt ? 'none' : '';
       m.ag.style.opacity = halv ? 0.3 : 0.9; m.ag.style.strokeWidth = focus ? 2.6 : 2;
-      m.el.style.transform = `translate(${xc}px,${yp}px) translate(-50%,-100%) scale(${s})`;
+      m.el.style.transform = `translate(${q[5].replace(' ', 'px,')}px) translate(-50%,-100%) scale(${s})`;
       continue;
     }
     m.el.style.transform = `translate(${x}px,${y}px) translate(-50%,-100%) scale(${s})`;
