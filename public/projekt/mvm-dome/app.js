@@ -96,38 +96,48 @@ const cache = {};            // betöltött szintek (gyors visszaváltás)
 // A színek a Blender-fájlból jönnek (sima anyagok). Itt csak: üveg ne írjon mélységet, a lelátó anyagai kapják a szektor-kiemelő shadert.
 const alapNev = (n) => (n || '').replace(/^W_(?:nb|f\d+)_/, 'W_');   // 'W_nb_…' (sütetlen réteg) és 'W_fNN_…' (sík árnyalás) előtag nélkül
 const STAND = /^W_(Lelato|TS_lelato|Szek|VIP_szek|Kuzdoter)/i;   // dupla kattintás: ezekre kattintva a szektort választja
-// Szektor-kiemelés (felhasználó, 2026-11-18): csak a lelátó lépcsőfokai (felfelé néző felületek) villognak, a szektor szögtartományában,
-// szintenként a saját blokkban: lobby = 1xx; alsó körüljáró = 2xx alsó + felső blokk (köztük a keresztjáró sötét marad, eltolt ütemben);
-// VIP szint = csak a szektor előtti VIP-páholyrész; felső körüljáró = 3xx. Sávok: [z0, z1 (abszolút m), dr0, dr1 (a szektorszám sugarához képest)]
-// – a showreel-modellből mért profil (203-as / 103-as / 303-as szektor).
-const HLBANDS = {
-  S0: [[0.1, 6.0, -8.0, 8.0]],
-  S1: [[6.2, 7.95, -6.0, -1.0], [8.3, 10.6, -1.4, 4.5]],
-  S2: [[12.0, 14.5, 4.0, 16.5]],
-  S3: [[14.5, 25.0, -4.5, 9.5]],
-};
-const HL = { on: { value: 0 }, a0: { value: 0 }, a1: { value: 0 }, rl: { value: 0 }, k0: { value: 0 }, k1: { value: 0 },
-             b0: { value: new THREE.Vector4(0, -1, 0, 0) }, b1: { value: new THREE.Vector4(0, -1, 0, 0) } };
+// Szektor-kiemelés (felhasználó, 2026-11-19): a lelátó adott része villog, pontosan a szektor alakjában. A lelátó a modellben 16 egyenes
+// oldalú sokszög, a közlekedőlépcsők az oldalra merőlegesek → egy szektor = néhány téglalap az oldal saját koordinátáiban
+// (oldal, t0..t1 az oldal mentén, r0..r1 az oldaltól kifelé, z0 / z1 = az első / utolsó sor szintje). Adat: data/szektorok.json – a modell székeiből
+// készül (00_Web_export/scripts/szektorok_gen.py). A shader a képpont alaprajzi helyéből kiszámolja az oldalt, r-t, t-t, és
+// csak a felfelé néző lapokat színezi. A kattintás (sectorAt) ugyanebből az adatból keres.
+const SZ_MAX = 12;                                   // téglalap / szektor (most legfeljebb 10)
+let SZEKTOR = null;                                  // { oldalak: [[nx, ny, d] × 16], szektorok: { '203': [[oldal, t0, t1, r0, r1, z0, z1], …] } }
+const HL = { on: { value: 0 }, k: { value: 0 }, n: { value: 0 }, padlo: { value: 0 },
+             F: { value: Array.from({ length: 16 }, () => new THREE.Vector3(1, 0, 1e6)) },
+             R: { value: Array.from({ length: SZ_MAX }, () => new THREE.Vector4()) },
+             Q: { value: Array.from({ length: SZ_MAX }, () => new THREE.Vector3()) } };
+const SZEKTOR_KESZ = fetch(asset('data/szektorok.json')).then((r) => r.json()).then((d) => {
+  d.oldalak.forEach((o, i) => HL.F.value[i].set(o[0], o[1], o[2])); SZEKTOR = d;
+}).catch((e) => console.warn('szektorok.json', e));
+// világ-pont → [oldal, r, t, z] a lelátó sokszögében (Blender: x = világ x, y = −világ z; z abszolút = világ y + a szint padlója)
+function lelatoHely(p) {
+  const x = p.x, y = -p.z; let bf = 0, br = -1e9;
+  SZEKTOR.oldalak.forEach((o, i) => { const r = o[0] * x + o[1] * y - o[2]; if (r > br) { br = r; bf = i; } });
+  const o = SZEKTOR.oldalak[bf];
+  return [bf, br, -o[1] * x + o[0] * y, p.y + (current?.data.padlo || 0)];
+}
 // hátoldal-eltolás: csak kétoldalas, nem „matrica” anyagokra (a képek / feliratok lapja – akár fordított normállal – a fal előtt marad)
 const hatBias = (m) => !QS.has('nohb') && m.side === THREE.DoubleSide && !(m.polygonOffset && m.polygonOffsetFactor < 0);
 function addSectorShader(m) {
   m.onBeforeCompile = (sh) => {
-    Object.assign(sh.uniforms, { uLmGamma: LM.gamma, uLmGain: LM.gain, uLmAmb: LM.amb, uHlOn: HL.on, uHlA0: HL.a0, uHlA1: HL.a1, uHlRl: HL.rl, uHlK0: HL.k0, uHlK1: HL.k1, uHlB0: HL.b0, uHlB1: HL.b1 });
+    Object.assign(sh.uniforms, { uLmGamma: LM.gamma, uLmGain: LM.gain, uLmAmb: LM.amb, uHlOn: HL.on, uHlK: HL.k, uSzN: HL.n, uSzPadlo: HL.padlo, uSzF: HL.F, uSzR: HL.R, uSzQ: HL.Q });
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
       .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nuniform vec3 uLmAmb;\nuniform float uLmGamma,uLmGain,uHlOn,uHlA0,uHlA1,uHlRl,uHlK0,uHlK1;\nuniform vec4 uHlB0,uHlB1;')
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nuniform vec3 uLmAmb;\nuniform float uLmGamma,uLmGain,uHlOn,uHlK,uSzN,uSzPadlo;\nuniform vec3 uSzF[16];\nuniform vec4 uSzR[' + SZ_MAX + '];\nuniform vec3 uSzQ[' + SZ_MAX + '];')
       .replace('reflectedLight.indirectDiffuse += lightMapTexel.rgb * lightMapIntensity * RECIPROCAL_PI;',
         'vec3 lmL = lightMapTexel.rgb * lightMapIntensity * RECIPROCAL_PI; lmL *= uLmGain * pow(max(dot(lmL, vec3(0.2126, 0.7152, 0.0722)), 1e-5), uLmGamma - 1.0); reflectedLight.indirectDiffuse += lmL + uLmAmb;')
       .replace('#include <dithering_fragment>', `#include <dithering_fragment>
         if (uHlOn > 0.5 && normalize(cross(dFdx(vWPos), dFdy(vWPos))).y > 0.6) {   // felfelé néző lap (a normál a képernyő-deriváltakból)
-          float a = atan(-vWPos.z, vWPos.x);
-          float d0 = mod(a - uHlA0 + 6.2831853, 6.2831853), w = mod(uHlA1 - uHlA0 + 6.2831853, 6.2831853);
-          if (d0 < w) {
-            float dr = length(vWPos.xz) - uHlRl, y = vWPos.y;
-            float k = 0.0;
-            if (y > uHlB0.x && y < uHlB0.y && dr > uHlB0.z && dr < uHlB0.w) k = uHlK0;
-            if (y > uHlB1.x && y < uHlB1.y && dr > uHlB1.z && dr < uHlB1.w) k = uHlK1;
-            gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(0.99, 0.75, 0.13), k);
+          vec2 hp = vec2(vWPos.x, -vWPos.z);
+          float hr = -1e9, ht = 0.0; int hf = 0;
+          for (int i = 0; i < 16; i++) { vec3 f = uSzF[i]; float r = dot(f.xy, hp) - f.z; if (r > hr) { hr = r; hf = i; ht = dot(vec2(-f.y, f.x), hp); } }
+          float hz = vWPos.y + uSzPadlo;
+          for (int i = 0; i < ${SZ_MAX}; i++) {
+            if (float(i) >= uSzN) break;
+            vec4 q = uSzR[i]; vec3 e = uSzQ[i];
+            float dz = hz - mix(e.y, e.z, clamp((hr - q.z) / (q.w - q.z), 0.0, 1.0));   // magasság a sorok lejtőjéhez képest (alatta a körüljáró padlója sötét marad)
+            if (int(e.x + 0.5) == hf && ht > q.x && ht < q.y && hr > q.z && hr < q.w && dz > -0.5 && dz < 1.2) { gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(0.99, 0.75, 0.13), uHlK); break; }
           }
         }` + (hatBias(m) ? `
         // Nulla vastagságú falak (pl. büfé-fülke belső hátfala = a tömb külső oldala, egy síkban, ellentétes normállal): mindkét lap
@@ -135,7 +145,7 @@ function addSectorShader(m) {
         // és – a hátlap-eldobással szemben – fordított normálú lap se tűnik el).
         gl_FragDepth = gl_FragCoord.z + (gl_FrontFacing ? 0.0 : 4e-7);` : ''));   // ~7 lépés a 24 bites mélységben: csak a pontosan egy síkba eső lapokra hat
   };
-  m.customProgramCacheKey = () => 'szektor-hl8' + (hatBias(m) ? 'd' : 's');
+  m.customProgramCacheKey = () => 'szektor-hl9' + (hatBias(m) ? 'd' : 's');
 }
 // Kézi felülírások (felhasználó, 2026-11-18): a lelátó sötét, ne fehér; a lelátó-bejáratok sötét számai (a fehér szektorszám
 // mellett „duplának” látszottak) rejtve
@@ -419,11 +429,26 @@ controls.addEventListener('end', armIdle);
 const raycaster = new THREE.Raycaster();
 const ndc = new THREE.Vector2();
 const azim = (x, y) => Math.atan2(y, x);
-function sectorAt(point) {
+// A pont szektora a szektor-alaprajzokból (csak a szint saját szektorai közül). pontos = csak akkor ad találatot, ha a pont
+// benne van egy szektor téglalapjában; különben a legközelebbi szektort adja (lépcsőre, mellvédre kattintva).
+function sectorAt(point, pontos = false) {
+  const secs = current.pois.filter((s) => s.cat === 'szektor');
+  if (SZEKTOR) {
+    const [f, r, t, z] = lelatoHely(point);
+    let best = null, bd = Infinity;
+    for (const s of secs) {
+      for (const q of SZEKTOR.szektorok[s.id.slice(8)] || []) {
+        if (q[0] !== f) continue;
+        const dt = Math.max(q[1] - t, t - q[2], 0), dr = Math.max(q[3] - r, r - q[4], 0), zc = q[5] + (q[6] - q[5]) * Math.min(1, Math.max(0, (r - q[3]) / (q[4] - q[3]))), dz = Math.max(zc - 0.5 - z, z - zc - 1.2, 0);
+        const d = Math.hypot(dt, dr) + 4 * dz;
+        if (d < bd) { bd = d; best = s; }
+      }
+    }
+    return best && (bd === 0 || (!pontos && bd < 4)) ? best : null;   // 4 m-en belül: határlépcső, mellvéd, kapu
+  }
   const a = Math.atan2(-point.z, point.x);
   let best = null, bd = Infinity;
-  for (const s of current.pois) {
-    if (s.cat !== 'szektor') continue;
+  for (const s of secs) {
     let d = Math.abs(a - azim(s.x, s.y)); if (d > Math.PI) d = 2 * Math.PI - d;
     if (d < bd) { bd = d; best = s; }
   }
@@ -441,12 +466,12 @@ function dblAt(clientX, clientY) {
     const d = poiWorld(p).distanceTo(hit.point);
     if (d < bd) { bd = d; best = p; }
   }
+  const mat = hit.object.material, lelato = mat && STAND.test(alapNev(mat.name));
+  const pontos = lelato ? sectorAt(hit.point, true) : null;      // a lelátón a szektor az első (ne a 7 m-en belüli szolgáltatás vigye el)
+  if (pontos) { selectPoi(pontos, hit.point); return; }
   if (best) { selectPoi(best); return; }
-  const mat = hit.object.material;
-  if (mat && STAND.test(alapNev(mat.name)) && hit.point.length() > 25) {
-    const s = sectorAt(hit.point);
-    if (s) { selectPoi(s, hit.point); return; }
-  }
+  const s = sectorAt(hit.point, true) || (lelato ? sectorAt(hit.point) : null);
+  if (s) { selectPoi(s, hit.point); return; }
   closePanel(false); enterDetail(hit.point);
 }
 canvas.addEventListener('dblclick', (e) => dblAt(e.clientX, e.clientY));
@@ -498,17 +523,12 @@ function closePanel(backToTour = true) {
 // Bezárásra azonnal vissza a körútra – onnan folytatja, ahol a kamera éppen áll
 $('#panelX').addEventListener('click', () => closePanel(true));
 
-// Szektor-kiemelés: a lelátó anyagain egy szögtartomány (a szomszéd szektorok felezőjéig) pulzál sárgán
+// Szektor-kiemelés: a kiválasztott szektor téglalapjai a shader uniformjaiba (alak: data/szektorok.json)
 function highlightSector(s) {
-  if (!s || !current) { HL.on.value = 0; return; }
-  const secs = current.pois.filter(x => x.cat === 'szektor').map(x => ({ x, a: azim(x.x, x.y) })).sort((a, b) => a.a - b.a);
-  const i = secs.findIndex(o => o.x === s); const n = secs.length;
-  const a = secs[i].a, prev = secs[(i - 1 + n) % n].a, next = secs[(i + 1) % n].a;
-  const half = (b) => { let d = b - a; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d / 2; };
-  HL.a0.value = a + half(prev) * 0.96; HL.a1.value = a + half(next) * 0.96;
-  HL.rl.value = Math.hypot(s.x, s.y);
-  const fl = current.data.padlo || 0, bands = HLBANDS[current.data.szint] || [];
-  [HL.b0, HL.b1].forEach((u, j) => { const b = bands[j]; u.value.set(b ? b[0] - fl : 0, b ? b[1] - fl : -1, b ? b[2] : 0, b ? b[3] : 0); });
+  const rects = s && current && SZEKTOR ? SZEKTOR.szektorok[s.id.slice(8)] : null;
+  if (!rects) { HL.on.value = 0; return; }
+  rects.slice(0, SZ_MAX).forEach((q, i) => { HL.R.value[i].set(q[1], q[2], q[3], q[4]); HL.Q.value[i].set(q[0], q[5], q[6]); });
+  HL.n.value = Math.min(rects.length, SZ_MAX); HL.padlo.value = current.data.padlo || 0;
   HL.on.value = 1;
 }
 
@@ -591,6 +611,7 @@ async function loadLevel(level) {
   const L = LEVELS[level];
   try {
     closePanel(false);
+    await SZEKTOR_KESZ;
     let c = cache[level];
     if (!c) {
       const resp = await fetch(asset(L.data));
@@ -668,7 +689,7 @@ renderer.setAnimationLoop((now) => {
   if (current?.anim) current.anim.mixer.update(dt);
   stepAnim(now);
   stepTour(now);
-  if (HL.on.value) { HL.k0.value = 0.5 + 0.32 * Math.sin(now / 320); HL.k1.value = 0.5 + 0.32 * Math.sin(now / 320 + 2.2); }
+  if (HL.on.value) HL.k.value = QS.has('hlk') ? Number(QS.get('hlk')) : 0.5 + 0.32 * Math.sin(now / 320);
   const cel = mode === 'tour' ? 1 : 0;
   if (Math.abs(cel - shiftK) > 0.001) { shiftK += (cel - shiftK) * (SHOT ? 1 : 0.08); applyShift(); camera.updateProjectionMatrix(); }
   if (mode === 'detail' && !anim) controls.update(); else camera.lookAt(controls.target);
@@ -678,6 +699,7 @@ renderer.setAnimationLoop((now) => {
 });
 
 buildFilters();
+if (QS.has('tiszta')) ['#filters', '#levels', '#panel', '#hint', '#overviewBtn', '#toast'].forEach((q) => { const e = $(q); if (e) e.style.display = 'none'; });   // hibakeresés: kezelőfelület nélküli kép
 setTimeout(() => hint.classList.add('hide'), 9000);
 const start = QS.get('szint');
 loadLevel(LEVELS[start] ? start : 'lobby')   // alapszint: lobby és küzdőtér (felhasználó, 2026-11-18)
