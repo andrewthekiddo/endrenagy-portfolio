@@ -33,6 +33,8 @@
   .levels button.active .chev{display:block}
   .levels button .tip{position:absolute;right:48px;top:50%;transform:translateY(-50%);white-space:nowrap;background:var(--navy);border:1px solid var(--panel-border);color:var(--text);font-size:12px;font-weight:600;padding:6px 10px;border-radius:8px;opacity:0;pointer-events:none;transition:.15s}
   .levels button:hover .tip{opacity:1}
+  .levels button .kis{font-size:9.5px;font-weight:800;line-height:1.1;letter-spacing:.01em;margin-top:-2px}
+  .levels button .kis.nagyobb{font-size:10.5px;margin-top:0}
 
   /* --- filter panel --- */
   .filters{position:fixed;left:18px;bottom:24px;z-index:10;display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;padding:12px;border-radius:18px;background:var(--panel);border:1px solid var(--panel-border);backdrop-filter:blur(14px);width:min(420px,calc(100vw - 36px))}
@@ -147,7 +149,7 @@
 <div class="brand">
   <img src="/projekt/mvm-dome/logo.svg" alt="MVM Dome">
   <div class="sep"></div>
-  <div><h1>Interaktív térkép</h1><small id="lvlSub">Bejárati szint</small></div>
+  <div><h1>Interaktív térkép</h1><small id="lvlSub">Lobby – Bejárati szint</small></div>
 </div>
 
 <div class="hint" id="hint" hidden></div>
@@ -158,11 +160,11 @@
 </div>
 
 <div class="levels" id="levels">
+  <button data-level="epulet"><span class="tip">MVM Dome – a teljes épület</span><svg class="chev" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg><span class="kis nagyobb">MVM<br>Dome</span></button>
   <button data-level="felso"><span class="tip">Felső körüljáró szint</span><svg class="chev" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg>F</button>
-  <button data-level="paholy"><span class="tip">Páholy szint</span><svg class="chev" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg>P</button>
+  <button data-level="paholy"><span class="tip">Páholy szint (VIP)</span><svg class="chev" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg>P<span class="kis">(VIP)</span></button>
   <button data-level="also"><span class="tip">Alsó körüljáró szint</span><svg class="chev" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg>A</button>
-  <button data-level="lobby" class="active"><span class="tip">Bejárati szint</span><svg class="chev" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg>B</button>
-  <button data-level="epulet"><span class="tip">Teljes épület</span><svg class="chev" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg>É</button>
+  <button data-level="lobby" class="active"><span class="tip">Lobby – Bejárati szint</span><svg class="chev" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg>L</button>
 </div>
 
 <aside class="panel" id="panel">
