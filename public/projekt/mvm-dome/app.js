@@ -15,10 +15,10 @@ if (SHOT) { addEventListener('error', (e) => { document.title = 'JSERR ' + e.mes
 // 4 szint + a teljes épület, mindegyik a saját padlóján (y = 0), az aréna középpontja az origó. A modellek a Blender showreel-fájlból
 // (00_Teljes_epulet/…_showreel_v01.blend) jönnek: _Blender_Projects/00_Web_export/scripts/export_web.py + web_adat.py
 const LEVELS = {
-  felso:  { key: 'S3', name: 'Felső körüljáró', model: 'models/S3.glb', data: 'data/S3.json', tier: 'Felső lelátó (3xx)' },
-  paholy: { key: 'S2', name: 'VIP páholy szint', model: 'models/S2.glb', data: 'data/S2.json', tier: 'Alsó lelátó (2xx)' },
-  also:   { key: 'S1', name: 'Alsó körüljáró', model: 'models/S1.glb', data: 'data/S1.json', tier: 'Alsó lelátó (2xx)' },
-  lobby:  { key: 'S0', name: 'Lobby és küzdőtér', model: 'models/S0.glb', data: 'data/S0.json', tier: 'Küzdőtéri lelátó (1xx)' },
+  felso:  { key: 'S3', name: 'Felső körüljáró szint', model: 'models/S3.glb', data: 'data/S3.json', tier: 'Felső lelátó (3xx)' },
+  paholy: { key: 'S2', name: 'Páholy szint', model: 'models/S2.glb', data: 'data/S2.json', tier: 'Alsó lelátó (2xx)' },
+  also:   { key: 'S1', name: 'Alsó körüljáró szint', model: 'models/S1.glb', data: 'data/S1.json', tier: 'Alsó lelátó (2xx)' },
+  lobby:  { key: 'S0', name: 'Bejárati szint', model: 'models/S0.glb', data: 'data/S0.json', tier: 'Küzdőtéri lelátó (1xx)' },
   // a teljes, megépített épület kívülről (homlokzat bekapcsolva, nyitott tető): a kezdőnézet, ha a fájljai megvannak (lásd VAN_EPULET)
   epulet: { key: 'S4', name: 'Teljes épület', model: 'models/S4.glb', data: 'data/S4.json', tier: 'Lelátó' },
 };
@@ -232,6 +232,7 @@ function reteg(m) {
   const r = ((m.map && /tv_kep|TV_MVM|_foto|grafika|Logo_/.test(n)) || n.startsWith('W_nb_') || RETEG_ELO.test(n)) ? -2 : RETEG_PADLO.test(n) ? 2 : RETEG_FAL.test(n) ? 1 : 0;
   if (r) { m.polygonOffset = true; m.polygonOffsetFactor = r; m.polygonOffsetUnits = r * 4; }
 }
+const UVEG_FEL = /^W_(TS_uveg_L2_uveg|VIP_uvegmellved)/;
 function tuneMaterials(root, key) {
   const cut = FACADE_CUT[key] ? [new THREE.Plane(new THREE.Vector3(0, -1, 0), FACADE_CUT[key])] : null;
   const done = new Set();
@@ -241,6 +242,7 @@ function tuneMaterials(root, key) {
     for (const m of mats) {
       if (done.has(m)) continue; done.add(m);
       if (m.transparent) { m.depthWrite = false; }
+      if (m.transparent && UVEG_FEL.test(alapNev(m.name))) m.opacity *= Number(QS.get('uveg')) || 0.5;   // (&uveg=1: eredeti) VIP-szint belső üvegei (Gold VIP üvegfront, mellvéd): fele ennyire fedjenek (felhasználó, 2026-11-19)
       reteg(m);
       if (m.map) m.map.anisotropy = 8;                 // csempézett anyagminták: lapos szögből se mosódjanak
       if (cut && FACADE.test(alapNev(m.name))) m.clippingPlanes = cut;
