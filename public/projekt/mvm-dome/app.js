@@ -385,7 +385,7 @@ function updateMarkers() {
     const x = (_v.x * 0.5 + 0.5) * w, y = (-_v.y * 0.5 + 0.5) * h;
     const focus = activeCat !== null && m.p.cat === activeCat;
     const szek = m.p.cat === 'szektor', halv = activeCat !== null && !focus && !szek;
-    const s = THREE.MathUtils.clamp(95 / camDist + 0.28, 0.5, 1.1) * (szek ? 1.12 : 1.4) * kep * (focus ? 1.35 : halv ? 0.72 : 1);   // V2: nagyobb pinek
+    const s = THREE.MathUtils.clamp(95 / camDist + 0.28, 0.5, 1.1) * (szek ? 1.12 : 1.0) * kep * (focus ? 1.35 : halv ? 0.72 : 1);   // a pinek kisebbek (felhasználó, 2026-11-20: inkább kisebb buborékok, mint egymás elé toltak) – korábban 1,4
     if (m.ag) {
       // a 3D-s váz pontjai képernyőre vetítve: a gerinc így a folyosó falának irányát követi, nem a képernyő vízszintesét
       let rejt = false;
