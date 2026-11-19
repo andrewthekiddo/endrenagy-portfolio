@@ -347,9 +347,9 @@ function buildMarkers(pois) {
     if (p.cat === 'szektor') {
       el.innerHTML = `<div class="pin">${p.name.replace('Szektor ', '')}</div>`;
     } else {
-      el.innerHTML = `<div class="lbl">${p.name}</div><div class="pin">${ICON(p.cat, p.ikon)}</div><div class="stem"></div>`;
+      el.innerHTML = `<div class="lbl">${p.name}</div><div class="pin">${ICON(p.cat, p.ikon)}<span class="db"></span></div><div class="stem"></div>`;
     }
-    el.addEventListener('click', (e) => { e.stopPropagation(); selectPoi(p); });
+    el.addEventListener('click', (e) => { e.stopPropagation(); const mk = current.markers.find((x) => x.el === el); if (mk?.csopN > 1) csoportKozelit(mk); else selectPoi(p); });
     el.addEventListener('dblclick', (e) => e.stopPropagation());
     markersEl.appendChild(el);
     const world = poiWorld(p); world.y += p.cat === 'szektor' ? 1.5 : 1.2;
@@ -396,32 +396,75 @@ function updateMarkers() {
     }
     m.el.style.transform = `translate(${x}px,${y}px) translate(-50%,-100%) scale(${s})`;
   }
-  // A pinek ne fedjék egymást (felhasználó, 2026-11-20): az átfedő köröket széttoljuk – főleg vízszintesen, hogy egymás mellé, sorba kerüljenek –,
-  // a száruk pedig megtörve követi őket az eredeti helyükről. Az eltolás képkockánként puhán követi a célt, hogy forgás közben ne ugráljanak.
-  const el = pinSor.filter((a) => !a.rejt).sort((a, b) => a.x - b.x || a.y - b.y);
-  for (const a of el) { a.cx = a.x; a.cy = a.y; }
+  // ZSÚFOLTSÁG (felhasználó, 2026-11-20): távolról az egymáshoz közeli, AZONOS típusú pinek egyetlen pinné olvadnak össze, rajta a darabszámmal
+  // („2 ruhatár helyett csak egyet mutat”); közelebb menve szétválnak és a helyükre kerülnek. A csoportosítás képernyő-távolság szerint megy,
+  // ezért magától követi a nagyítást. Ami ezután is fedné egymást (különböző típusok), azt széttoljuk egymás mellé.
+  const lathato = pinSor.filter((a) => !a.rejt).sort((a, b) => a.x - b.x || a.y - b.y);
+  // az összevonás sugara a távolsággal nő: közelről csak az egymást fedők olvadnak össze (1,15 × a két sugár), távolról kb. két pin-átmérőn belül (2,3 ×)
+  const csopK = THREE.MathUtils.clamp(1.15 + (camDist - 90) / 130 * 1.15, 1.15, 2.3);
+  const csoportok = [];
+  for (const a of lathato) a.kesz = false;
+  for (const a of lathato) {
+    if (a.kesz) continue;
+    a.kesz = true;
+    const g = { fo: a, tagok: [a] }, tip = a.m.p.ikon || a.m.p.cat, kijelolt = a.m.el === selectedEl;
+    if (!kijelolt) for (const b of lathato) {
+      if (b.kesz || (b.m.p.ikon || b.m.p.cat) !== tip || b.m.el === selectedEl) continue;
+      // összevonás, ha a két kör összeérne (kis ráhagyással); ami az előző képkockán már együtt volt, az kicsit tovább marad együtt (ne villogjon)
+      const hatar = (a.r + b.r) * csopK * (b.m.elozoFo === a.m ? 1.2 : 1);
+      if (Math.hypot(b.x - a.x, b.y - a.y) < hatar) { b.kesz = true; g.tagok.push(b); }
+    }
+    const n = g.tagok.length;
+    g.x = g.tagok.reduce((t, b) => t + b.x, 0) / n; g.y = g.tagok.reduce((t, b) => t + b.y, 0) / n; g.r = a.r * (n > 1 ? 1.1 : 1);
+    g.cx = g.x; g.cy = g.y;
+    csoportok.push(g);
+  }
+  csoportok.sort((a, b) => a.cx - b.cx);
   for (let kor = 0; kor < 8; kor++) {
     let volt = false;
-    for (let i = 0; i < el.length; i++) for (let j = i + 1; j < el.length; j++) {
-      const a = el[i], b = el[j], min = a.r + b.r;
+    for (let i = 0; i < csoportok.length; i++) for (let j = i + 1; j < csoportok.length; j++) {
+      const a = csoportok[i], b = csoportok[j], min = a.r + b.r;
       if (b.cx - a.cx > min) break;                                   // x szerint rendezve: a távolabbiak már nem érnek össze
-      let dx = b.cx - a.cx, dy = (b.cy - a.cy) * 0.35;                // a függőleges irány kisebb súllyal → inkább egymás mellé kerülnek
       const d = Math.hypot(b.cx - a.cx, b.cy - a.cy); if (d >= min) continue;
-      let n = Math.hypot(dx, dy); if (n < 0.01) { dx = 1; dy = 0; n = 1; }
-      const tol = (min - d) / 2 + 0.5; a.cx -= dx / n * tol; a.cy -= dy / n * tol; b.cx += dx / n * tol; b.cy += dy / n * tol; volt = true;
+      let dx = b.cx - a.cx, dy = (b.cy - a.cy) * 0.35;                // a függőleges irány kisebb súllyal → inkább egymás mellé kerülnek
+      let nn = Math.hypot(dx, dy); if (nn < 0.01) { dx = 1; dy = 0; nn = 1; }
+      const tol = (min - d) / 2 + 0.5; a.cx -= dx / nn * tol; a.cy -= dy / nn * tol; b.cx += dx / nn * tol; b.cy += dy / nn * tol; volt = true;
     }
     if (!volt) break;
-    el.sort((a, b) => a.cx - b.cx);
+    csoportok.sort((a, b) => a.cx - b.cx);
   }
-  for (const a of pinSor) {
-    const m = a.m, q = a.q, f = (p) => `${p[0].toFixed(1)} ${p[1].toFixed(1)}`;
-    const celX = a.rejt ? 0 : a.cx - a.x, celY = a.rejt ? 0 : a.cy - a.y;
-    m.ox = (m.ox ?? celX) + (celX - (m.ox ?? celX)) * (SHOT ? 1 : 0.25); m.oy = (m.oy ?? celY) + (celY - (m.oy ?? celY)) * (SHOT ? 1 : 0.25);
-    const t = q[q.length - 1], px = t[0] + m.ox, py = t[1] + m.oy, tort = Math.hypot(m.ox, m.oy) > 1 ? `L${px.toFixed(1)} ${py.toFixed(1)}` : '';
-    m.ag.setAttribute('d', (q.length === 2 ? `M${f(q[0])}L${f(q[1])}` : `M${f(q[0])}L${f(q[1])}L${f(q[2])}L${f(q[3])}M${f(q[4])}L${f(q[5])}`) + tort); m.ag.style.display = a.rejt ? 'none' : '';
-    m.ag.style.opacity = a.halv ? 0.3 : 0.9; m.ag.style.strokeWidth = a.focus ? 2.6 : 2;
-    m.el.style.transform = `translate(${px}px,${py}px) translate(-50%,-100%) scale(${a.s})`;
+  const f = (q) => `${q[0].toFixed(1)} ${q[1].toFixed(1)}`;
+  const szar = (q) => (q.length === 2 ? `M${f(q[0])}L${f(q[1])}` : `M${f(q[0])}L${f(q[1])}L${f(q[2])}L${f(q[3])}M${f(q[4])}L${f(q[5])}`);
+  for (const a of pinSor) if (a.rejt) { a.m.ag.style.display = 'none'; a.m.csopN = 0; a.m.elozoFo = null; }
+  for (const g of csoportok) {
+    const a = g.fo, m = a.m, n = g.tagok.length;
+    // a fő pin eltolása a saját csúcspontjához képest, képkockánként puhán közelítve (forgás közben ne ugráljon)
+    const celX = g.cx - a.x, celY = g.cy - a.y, k = SHOT ? 1 : 0.25;
+    m.ox = (m.ox ?? celX) + (celX - (m.ox ?? celX)) * k; m.oy = (m.oy ?? celY) + (celY - (m.oy ?? celY)) * k;
+    const t = a.q[a.q.length - 1], px = t[0] + m.ox, py = t[1] + m.oy, pin = `L${px.toFixed(1)} ${py.toFixed(1)}`;
+    // szár: egyedül a saját szára (megtörve, ha eltoltuk); csoportban minden tag szára a közös pinhez fut össze
+    let d = '';
+    for (const b of g.tagok) { const bt = b.q[b.q.length - 1]; d += szar(b.q) + (n > 1 || Math.hypot(px - bt[0], py - bt[1]) > 1 ? pin : ''); }
+    m.ag.setAttribute('d', d); m.ag.style.display = '';
+    m.ag.style.opacity = a.halv ? 0.3 : n > 1 ? 0.6 : 0.9; m.ag.style.strokeWidth = a.focus ? 2.6 : n > 1 ? 1.5 : 2;
+    m.el.style.transform = `translate(${px}px,${py}px) translate(-50%,-100%) scale(${a.s * (n > 1 ? 1.1 : 1)})`;
+    m.el.classList.remove('osszevont');
+    if (m.csopN !== n) {
+      m.csopN = n; m.el.classList.toggle('csoport', n > 1);
+      (m.db ??= m.el.querySelector('.db')).textContent = n > 1 ? n : '';
+      (m.lbl ??= m.el.querySelector('.lbl')).textContent = n > 1 ? `${n} × ${CATS[m.p.cat].label} – koppints a közelítéshez` : m.p.name;
+    }
+    m.csopTagok = g.tagok.map((b) => b.m); m.elozoFo = null;
+    for (const b of g.tagok) if (b !== a) { const bm = b.m; bm.elozoFo = m; bm.csopN = 0; bm.ox = bm.oy = undefined; bm.el.classList.add('osszevont'); bm.ag.style.display = 'none'; }
   }
+}
+// Összevont pinre kattintva: közelítés a csoport közepére, amíg a tagok szét nem válnak
+function csoportKozelit(mk) {
+  const t = mk.csopTagok || [mk], c = new THREE.Vector3();
+  for (const x of t) c.add(x.world); c.multiplyScalar(1 / t.length);
+  let ter = 0; for (const x of t) ter = Math.max(ter, x.world.distanceTo(c));
+  const tav = THREE.MathUtils.clamp(ter * 3.2 + 18, 26, camera.position.distanceTo(c) * 0.6);
+  closePanel(false); enterDetail(c, tav * 0.8, tav * 0.6);
 }
 
 // ---------- Kamera: két mód ----------
