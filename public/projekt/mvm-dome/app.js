@@ -247,6 +247,8 @@ function tuneMaterials(root, key) {
       if (m.transparent) { m.depthWrite = false; }
       if (m.transparent && UVEG_FEL.test(alapNev(m.name))) m.opacity *= Number(QS.get('uveg')) || 0.5;   // (&uveg=1: eredeti) VIP-szint belső üvegei (Gold VIP üvegfront, mellvéd): fele ennyire fedjenek (felhasználó, 2026-11-19)
       reteg(m);
+      // színes szolgáltatás-jelölők (UJ_zona_<bar|ruhatar|merch|wc>_teto / _szegely / _betu): matt, ne tükrözzön (felhasználó, V2)
+      if (/UJ_zona_/.test(m.name)) { if ('roughness' in m) m.roughness = 1; if ('metalness' in m) m.metalness = 0; if ('envMapIntensity' in m) m.envMapIntensity = 0; if ('specularIntensity' in m) m.specularIntensity = 0; }
       if (m.map) m.map.anisotropy = 8;                 // csempézett anyagminták: lapos szögből se mosódjanak
       if (cut && FACADE.test(alapNev(m.name))) m.clippingPlanes = cut;
       const t = Object.entries(MAT).find(([k, v]) => v.exact ? alapNev(m.name) === k : alapNev(m.name).startsWith(k))?.[1];
@@ -434,11 +436,13 @@ function enterDetail(anchor, distance = 34, height = 24) {
   armIdle();
 }
 // Alapnézet: vissza a szint kezdőkamerájához (a körút eleje, eredeti távolság)
+// Álló telefonon a tág áttekintő kamera közelebbről indul (felhasználó, V2) – az aréna így kitölti a kép szélességét
+const alapZoom = () => (current && innerWidth / innerHeight < 0.8 && KAMERAK[LEVELS[current.level].key] && !QS.has('regikamera') ? 0.86 : 1);
 function alapNezet() {
   if (!current) return;
   closePanel(false);
   mode = 'tour'; controls.enabled = false; overviewBtn.classList.remove('show'); clearTimeout(idleTimer); nincsUresjarat = false;
-  tour.zoom = 1; tour.dir = 1; tour.vel = 0; tour.lastNow = 0; tour.u = current.path.closed ? 0 : 0.5;
+  tour.zoom = alapZoom(); tour.dir = 1; tour.vel = 0; tour.lastNow = 0; tour.u = current.path.closed ? 0 : 0.5;
   const p = new THREE.Vector3(), t = new THREE.Vector3(); pathAt(tour.u, p, t);
   anim = { from: { p: camera.position.clone(), t: controls.target.clone() }, to: { p, t }, t0: performance.now(), dur: 1400 };
 }
@@ -773,7 +777,7 @@ async function loadLevel(level) {
     document.querySelectorAll('#levels button').forEach(b => b.classList.toggle('active', b.dataset.level === level));
     renderer.compile(scene, camera);
     setTimeout(() => { loaderEl.classList.add('hide'); if (SHOT) loaderEl.style.display = 'none'; }, SHOT ? 250 : 450);   // a számláló még kifut 100-ig
-    tour.zoom = 1; tour.dir = 1;
+    tour.zoom = alapZoom(); tour.dir = 1;
     tour.u = c.path.closed ? 0 : 0.5;
     const p = new THREE.Vector3(), t = new THREE.Vector3(); pathAt(tour.u, p, t);
     camera.position.copy(p); controls.target.copy(t);
