@@ -12,13 +12,15 @@ const SHOT = QS.has('shot');
 if (SHOT) { addEventListener('error', (e) => { document.title = 'JSERR ' + e.message + ' @' + e.lineno; }); addEventListener('unhandledrejection', (e) => { document.title = 'JSREJ ' + (e.reason && e.reason.message); }); }   // képernyőkép-mód (fej nélküli böngésző): a betöltő azonnal eltűnik
 
 // ---------- konfiguráció ----------
-// 4 szint, mindegyik a saját padlóján (y = 0), az aréna középpontja az origó. A modellek a Blender showreel-fájlból
+// 4 szint + a teljes épület, mindegyik a saját padlóján (y = 0), az aréna középpontja az origó. A modellek a Blender showreel-fájlból
 // (00_Teljes_epulet/…_showreel_v01.blend) jönnek: _Blender_Projects/00_Web_export/scripts/export_web.py + web_adat.py
 const LEVELS = {
   felso:  { key: 'S3', name: 'Felső körüljáró', model: 'models/S3.glb', data: 'data/S3.json', tier: 'Felső lelátó (3xx)' },
   paholy: { key: 'S2', name: 'VIP páholy szint', model: 'models/S2.glb', data: 'data/S2.json', tier: 'Alsó lelátó (2xx)' },
   also:   { key: 'S1', name: 'Alsó körüljáró', model: 'models/S1.glb', data: 'data/S1.json', tier: 'Alsó lelátó (2xx)' },
   lobby:  { key: 'S0', name: 'Lobby és küzdőtér', model: 'models/S0.glb', data: 'data/S0.json', tier: 'Küzdőtéri lelátó (1xx)' },
+  // a teljes, megépített épület kívülről (homlokzat bekapcsolva, nyitott tető): a kezdőnézet, ha a fájljai megvannak (lásd VAN_EPULET)
+  epulet: { key: 'S4', name: 'Teljes épület', model: 'models/S4.glb', data: 'data/S4.json', tier: 'Lelátó' },
 };
 
 // Pinek: funkciónként színes (a térkép-stílus palettája), az ikon fehér vagy sötét a jobb olvashatóságért
@@ -484,6 +486,7 @@ canvas.addEventListener('touchend', (e) => {
 overviewBtn.addEventListener('click', () => { closePanel(false); enterTour(); });
 
 // ---------- Kiválasztás / infópanel ----------
+const TIER = { 1: 'Küzdőtéri lelátó (1xx)', 2: 'Alsó lelátó (2xx)', 3: 'Felső lelátó (3xx)' };   // a szektorszám első jegye szerint (a teljes épületen mindhárom látszik)
 let selectedEl = null;
 function side(p) {
   const a = Math.atan2(p.y, p.x) * 180 / Math.PI; // Blender XY: +Y = észak (a lobby oldala), +X = kelet
@@ -505,7 +508,7 @@ function selectPoi(p, anchor) {
   $('#panelCat').textContent = `${side(p)} · ${c.label}`;
   $('#panelTitle').textContent = p.name;
   $('#panelText').textContent = p.cat === 'szektor'
-    ? `${LEVELS[current.level].tier}. A szektor bejárata a körüljáróról nyílik; a legközelebbi mosdó és büfé a bejárat közelében található.`
+    ? `${TIER[p.id[8]] || LEVELS[current.level].tier}. A szektor bejárata a körüljáróról nyílik; a legközelebbi mosdó és büfé a bejárat közelében található.`
     : c.text;
   const near = nearestSectors(p, current.pois);
   $('#panelNear').innerHTML = p.cat === 'szektor' || !near.length ? '' : `Legközelebbi szektorok: <b>${near.join(', ')}</b>`;
@@ -615,7 +618,7 @@ async function loadLevel(level) {
     let c = cache[level];
     if (!c) {
       const resp = await fetch(asset(L.data));
-      if (!resp.ok) { showToast(`${L.name}: a modell pár percen belül érkezik.`); if (!current) setTimeout(() => loadLevel('also'), 0); return; }
+      if (!resp.ok) { showToast(`${L.name}: a modell pár percen belül érkezik.`); if (!current) setTimeout(() => loadLevel('lobby'), 0); return; }
       showLoader(L.name);
       const data = await resp.json();
       let c_baked = false, c_lm = null;
@@ -645,6 +648,7 @@ async function loadLevel(level) {
     hfov = 2 * Math.atan(c.data.camera.sensor / 2 / c.data.camera.lens) * 180 / Math.PI;
     resize();
     fillCounts(current.pois);
+    if (!QS.has('tiszta')) $('#filters').style.display = current.pois.length ? '' : 'none';   // a teljes épületen nincs pin → üres szűrőpanel se legyen
     $('#lvlSub').textContent = L.name;
     document.querySelectorAll('#levels button').forEach(b => b.classList.toggle('active', b.dataset.level === level));
     renderer.compile(scene, camera);
@@ -702,10 +706,15 @@ buildFilters();
 if (QS.has('tiszta')) ['#filters', '#levels', '#panel', '#hint', '#overviewBtn', '#toast'].forEach((q) => { const e = $(q); if (e) e.style.display = 'none'; });   // hibakeresés: kezelőfelület nélküli kép
 setTimeout(() => hint.classList.add('hide'), 9000);
 const start = QS.get('szint');
-loadLevel(LEVELS[start] ? start : 'lobby')   // alapszint: lobby és küzdőtér (felhasználó, 2026-11-18)
+// A teljes épület (S4) a kezdőnézet és a szintváltó legalsó gombja (felhasználó, 2026-11-19) – de csak ha a fájljai már kint vannak;
+// addig a gomb rejtve marad, és a lobby az alapszint (felhasználó, 2026-11-18).
+const VAN_EPULET = await fetch(asset(LEVELS.epulet.data), { method: 'HEAD' }).then((r) => r.ok && !/html/.test(r.headers.get('content-type') || '')).catch(() => false);
+if (!VAN_EPULET) { const b = document.querySelector('#levels button[data-level="epulet"]'); if (b) b.style.display = 'none'; }
+const ALAP = VAN_EPULET ? 'epulet' : 'lobby';
+loadLevel(LEVELS[start] && (start !== 'epulet' || VAN_EPULET) ? start : ALAP)
  .then(async () => {
   const vv = QS.get('valt');                             // hibakeresés: ?valt=also → átvált arra a szintre, majd vissza (a lightmap kiürítés / újrafeltöltés próbája)
-  if (vv && LEVELS[vv]) { await loadLevel(vv); await loadLevel(LEVELS[start] ? start : 'lobby'); }
+  if (vv && LEVELS[vv]) { await loadLevel(vv); await loadLevel(LEVELS[start] ? start : ALAP); }
   const sz = QS.get('szektor'), pid = QS.get('poi');   // mély link: ?szektor=209 vagy ?poi=lift_01
   const p = current?.pois.find(x => (sz && x.id === `szektor_${sz}`) || (pid && x.id === pid));
   if (p) { anim = null; selectPoi(p); if (SHOT && anim) { camera.position.copy(anim.to.p); controls.target.copy(anim.to.t); anim = null; controls.update(); } }
