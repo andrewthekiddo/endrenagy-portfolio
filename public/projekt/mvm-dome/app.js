@@ -358,7 +358,8 @@ function buildMarkers(pois) {
       const ag = document.createElementNS('http://www.w3.org/2000/svg', 'path'); ag.style.stroke = CATS[p.cat].color; AGAK.appendChild(ag);
       // 3D-s váz (világkoordináta): ajtó alja → ajtó fölött (gerinc vége) … gerinc a fal vonalában … → másik ajtó alja; a gerinc közepéről föl a pinhez
       const G = 3.3, P = 2.4;
-      if (!p.ajtok) { const al = poiWorld(p); return { p, el, world, ag, vaz: [al.clone().setY(al.y + 0.15), al.clone().setY(al.y + G + P)] }; }
+      // az információs pult pinje alacsonyabban áll (felhasználó, 2026-11-19): a lobbyban a mögötte lévő ruhatár-pinnel egybelógott
+      if (!p.ajtok) { const al = poiWorld(p); return { p, el, world, ag, vaz: [al.clone().setY(al.y + 0.15), al.clone().setY(al.y + (p.cat === 'info' ? 1.9 : G + P))] }; }
       const [a, b] = p.ajtok.map(poiWorld);
       const fa = a.clone().setY(a.y + G), fb = b.clone().setY(b.y + G), kz = fa.clone().lerp(fb, 0.5), tet = kz.clone().setY(kz.y + P);
       return { p, el, world, ag, vaz: [a.clone().setY(a.y + 0.15), fa, fb, b.clone().setY(b.y + 0.15), kz, tet] };
