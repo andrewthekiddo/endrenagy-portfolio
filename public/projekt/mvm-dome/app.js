@@ -451,6 +451,10 @@ const ZONA_MIND = new Set(['S1']);   // a páholy és a felső szinten az egysé
 // Feliratok a jelölt egységekre (felhasználó, 2026-11-20): minden típusnak saját angol felirata, sötét, nagy betűvel,
 // a helyiség hossztengelyével PÁRHUZAMOSAN (a pontfelhő fő iránya), a betűk teteje az aréna közepe felé – kívülről nézve egyenesen olvasható.
 const ZONA_SZOVEG = { bar: 'BAR', ruhatar: 'CLOAKROOM', wc: 'TOILET', merch: 'MERCH SHOP' };
+// EGYFORMA betűméret minden feliraton (felhasználó, 2026-11-20: „a BAR tök nagy, a CLOAKROOM hozzá képest nagyon kicsi … a méret nem stimmel”):
+// minden felirat ugyanakkora (FELIRAT_M méter magas); ha nem fér el a helyiségben, a rövidebb változat jön (RÖVID), és csak ha az sem, akkor kisebb.
+const FELIRAT_M = 2.2;
+const ZONA_ROVID = { CLOAKROOM: 'COATS', 'MERCH SHOP': 'MERCH' };
 function zonaFeliratPontokra(pontok, y, szoveg, szin = 0x0b1220) {
   // pontok: [[x, z], …] világkoordinátában
   const n = pontok.length; if (n < 3) return null;
@@ -466,7 +470,10 @@ function zonaFeliratPontokra(pontok, y, szoveg, szin = 0x0b1220) {
   const tw = Math.ceil(g.measureText(szoveg).width) + 40; c.width = tw; c.height = 260;
   g.font = `900 ${FS}px Nunito, "Arial Black", Arial, sans-serif`; g.fillStyle = '#' + new THREE.Color(szin).getHexString(); g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(szoveg, tw / 2, 136);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
-  const arany = tw / 260, h = Math.min(mely * 0.6, hossz * 0.82 / arany, 3.2), sz = h * arany;
+  let arany = tw / 260;
+  const elfer = (a) => FELIRAT_M <= mely * 0.8 && FELIRAT_M * a <= hossz * 0.92;
+  if (!elfer(arany) && ZONA_ROVID[szoveg]) return zonaFeliratPontokra(pontok, y, ZONA_ROVID[szoveg], szin);
+  const h = elfer(arany) ? FELIRAT_M : Math.min(mely * 0.8, hossz * 0.92 / arany), sz = h * arany;
   if (h < 0.35) return null;
   const m = new THREE.Mesh(new THREE.PlaneGeometry(sz, h), new THREE.MeshBasicMaterial({ name: 'WEB_zona_felirat', map: t, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
   m.renderOrder = 8; m.frustumCulled = false;
