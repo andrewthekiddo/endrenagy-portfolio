@@ -302,7 +302,7 @@ function zonaRejt(m, v) {
 //  1. a szintet felülről, merőlegesen kirajzolja magasságtérképnek (GPU, WC_N × WC_N képpont, ±WC_R m);
 //  2. minden mosdóajtó mögött megkeresi a falakkal körülzárt helyiséget (elárasztás a padló szintjén; fal = 1 m-nél magasabb cella);
 //  3. a helyiség alaprajzára a faltető magasságában kék, áttetsző lapot tesz. A helyiségek közti falak adják a „blokkokat”.
-const WC_SZINT = new Set(['S1', 'S2', 'S3']);
+const WC_SZINT = new Set(['S1']);   // a páholy szinten a felülnézeti tetőkeresés rossz felületekre (lelátóra) tette a lapot (felhasználó, 2026-11-20) → ott ajtófal-jelölés
 const WC_N = 2048, WC_R = 112, WC_CAM = 60;
 const wcMagAnyag = new THREE.ShaderMaterial({
   side: THREE.DoubleSide,
@@ -715,6 +715,65 @@ function homlokzatLapok(root, key) {
         ik.renderOrder = 8; ik.frustumCulled = false; ik.position.set(ux * (rk + 0.06) + tx * (t0 + t1) / 2, (ya + yb) / 2, uz * (rk + 0.06) + tz * (t0 + t1) / 2); ik.lookAt(ik.position.x + ux, ik.position.y, ik.position.z + uz); csop.add(ik);
       }
     }
+  }
+  return csop.children.length ? csop : null;
+}
+// Mosdó-jelölés az ajtók falán (páholy és felső szint, ahol a mosdók tetejét felülről nem lehet megbízhatóan megtalálni):
+// minden mosdó-csoport (a nézőben összevont férfi + női ajtók) ajtós falszakaszán függőleges kék lap, szegéllyel, TOILET felirattal.
+// A lap a folyosó felőli oldalra kerül (a magasságtérképen az ajtó két oldala közül az alacsonyabb a folyosó).
+const WC_FAL = new Set(['S3']);
+// páholy szint: a mosdók a VIP-tömb zárt mennyezete alatt vannak (az ajtós fal kívülről nem látszik) → a mennyezetre, közvetlenül a mosdó-csoport
+// fölé kerül egy kék téglalap: az ajtók oldalirányú sávja ± 2,5 m, a folyosóval ellentétes oldalon 6 m mélyen, a mennyezet ott mért magasságában
+const WC_MENNY = new Set(['S2']);
+function wcMennyezet(root, pois) {
+  const mag = wcMagassagTerkep(root), N = WC_N, cm = 2 * WC_R / (N - 1), csop = new THREE.Group(); csop.name = 'WEB_wc_menny';
+  const magAt = (x, z) => mag[wcCy(z) * N + wcCx(x)];
+  for (const p of pois) {
+    if (p.cat !== 'wc' || p.ikon === 'akadalymentes') continue;
+    const ajtok = (p.ajtok || [p]).map((a) => [a.x, -a.y]);
+    let mx = 0, mz = 0; for (const [x, z] of ajtok) { mx += x; mz += z; } mx /= ajtok.length; mz /= ajtok.length;
+    const r = Math.hypot(mx, mz) || 1, ux = mx / r, uz = mz / r, tx = -uz, tz = ux;
+    let t0 = 1e9, t1 = -1e9; for (const [x, z] of ajtok) { const t = (x - mx) * tx + (z - mz) * tz; t0 = Math.min(t0, t); t1 = Math.max(t1, t); }
+    t0 -= 2.5; t1 += 2.5;
+    let ki = 0, be = 0; for (const d of [1.5, 2.5, 3.5]) { ki += magAt(mx + ux * d, mz + uz * d); be += magAt(mx - ux * d, mz - uz * d); }
+    const s = ki > be ? 1 : -1;                                                     // a mosdó a magasabb (mennyezettel fedett) oldalon
+    const H = []; for (let a = t0; a <= t1; a += 0.5) for (let b = 0.5; b <= 6; b += 0.5) H.push(magAt(mx + tx * a + ux * b * s, mz + tz * a + uz * b * s));
+    H.sort((a, b) => a - b); const y = H[H.length >> 1]; if (!(y > 2.5 && y < 8)) continue;
+    const kpt = (a, b) => [mx + tx * a + ux * b * s, y + 0.07, mz + tz * a + uz * b * s];
+    const P = [kpt(t0, 0), kpt(t1, 0), kpt(t1, 6), kpt(t0, 6)].flat();
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setIndex([0, 1, 2, 0, 2, 3]);
+    const lap = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ name: 'WEB_wc_menny', color: ZONA_PALETTA.wc, transparent: true, opacity: ZONA_FEDES, depthWrite: false, side: THREE.DoubleSide })); lap.renderOrder = 5; lap.frustumCulled = false; csop.add(lap);
+    const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute([0, 1, 1, 2, 2, 3, 3, 0].flatMap((k) => P.slice(k * 3, k * 3 + 3)), 3));
+    const v = new THREE.LineSegments(sg, new THREE.LineBasicMaterial({ name: 'WEB_wc_menny_szegely', color: ZONA_PALETTA.wc })); v.renderOrder = 6; v.frustumCulled = false; csop.add(v);
+    const pts = []; for (let a = t0; a <= t1; a += 0.5) for (let b = 0; b <= 6; b += 0.5) { const q = kpt(a, b); pts.push([q[0], q[2]]); }
+    const f = zonaFeliratPontokra(pts, y + 0.07, 'TOILET'); if (f) csop.add(f);
+  }
+  return csop.children.length ? csop : null;
+}
+function wcFalak(root, pois) {
+  const mag = wcMagassagTerkep(root), N = WC_N, csop = new THREE.Group(); csop.name = 'WEB_wc_falak';
+  const magAt = (x, z) => mag[wcCy(z) * N + wcCx(x)];
+  for (const p of pois) {
+    if (p.cat !== 'wc' || p.ikon === 'akadalymentes') continue;
+    const ajtok = (p.ajtok || [p]).map((a) => [a.x, -a.y]);
+    let mx = 0, mz = 0; for (const [x, z] of ajtok) { mx += x; mz += z; } mx /= ajtok.length; mz /= ajtok.length;
+    const r = Math.hypot(mx, mz) || 1, ux = mx / r, uz = mz / r, tx = -uz, tz = ux;
+    let t0 = 1e9, t1 = -1e9; for (const [x, z] of ajtok) { const t = (x - mx) * tx + (z - mz) * tz; t0 = Math.min(t0, t); t1 = Math.max(t1, t); }
+    t0 -= 2.2; t1 += 2.2;
+    // melyik oldalon a folyosó: 1,5–3 m-re kifelé / befelé átlagos magasság
+    let ki = 0, be = 0; for (const d of [1.5, 2.2, 3]) { ki += magAt(mx + ux * d, mz + uz * d); be += magAt(mx - ux * d, mz - uz * d); }
+    const s = ki <= be ? 1 : -1, off = 0.08 * s, ya = 0.05, yb = 3.1;
+    const ax = mx + tx * t0 + ux * off, az = mz + tz * t0 + uz * off, bx = mx + tx * t1 + ux * off, bz = mz + tz * t1 + uz * off;
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute([ax, ya, az, bx, ya, bz, bx, yb, bz, ax, yb, az], 3)); g.setIndex([0, 1, 2, 0, 2, 3]);
+    const lap = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ name: 'WEB_wc_fal', color: ZONA_PALETTA.wc, transparent: true, opacity: ZONA_FEDES * 0.75, depthWrite: false, side: THREE.DoubleSide })); lap.renderOrder = 5; lap.frustumCulled = false; csop.add(lap);
+    const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute([ax, ya, az, bx, ya, bz, bx, ya, bz, bx, yb, bz, bx, yb, bz, ax, yb, az, ax, yb, az, ax, ya, az], 3));
+    const v = new THREE.LineSegments(sg, new THREE.LineBasicMaterial({ name: 'WEB_wc_fal_szegely', color: ZONA_PALETTA.wc })); v.renderOrder = 6; v.frustumCulled = false; csop.add(v);
+    // felirat a lap fölső részén, a folyosó felé nézve
+    const c = document.createElement('canvas'), gg = c.getContext('2d'); gg.font = '900 200px Nunito, "Arial Black", Arial, sans-serif'; const tw = Math.ceil(gg.measureText('TOILET').width) + 40; c.width = tw; c.height = 260;
+    gg.font = '900 200px Nunito, "Arial Black", Arial, sans-serif'; gg.fillStyle = '#0b1220'; gg.textAlign = 'center'; gg.textBaseline = 'middle'; gg.fillText('TOILET', tw / 2, 136);
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; const h = Math.min(1.3, (t1 - t0) * 0.85 / (tw / 260));
+    const f = new THREE.Mesh(new THREE.PlaneGeometry(h * tw / 260, h), new THREE.MeshBasicMaterial({ name: 'WEB_zona_felirat', map: tex, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+    f.renderOrder = 8; f.frustumCulled = false; f.position.set(mx + ux * off * 2, yb - h * 0.75, mz + uz * off * 2); f.lookAt(f.position.x + ux * s, f.position.y, f.position.z + uz * s); csop.add(f);
   }
   return csop.children.length ? csop : null;
 }
@@ -1470,6 +1529,8 @@ async function loadLevel(level) {
         try { animObj = setupAnim(await loadGltf(data.anim.model), data.anim.clip_top); } catch (e) { console.warn('animáció', e); }
       }
       if (LEPCSO_FADE[L.key] && !QS.has('nofade')) lepcsoFade(gltf.scene, LEPCSO_FADE[L.key]);
+      if (WC_MENNY.has(L.key) && !QS.has('nowcmenny')) { try { const w = wcMennyezet(gltf.scene, data.pois); if (w) gltf.scene.add(w); } catch (e) { console.warn('wc-menny', e); } }
+      if (WC_FAL.has(L.key) && !QS.has('nowcfal')) { try { const w = wcFalak(gltf.scene, data.pois); if (w) gltf.scene.add(w); } catch (e) { console.warn('wc-fal', e); } }
       if (HOMLOKZAT[L.key] && !QS.has('nohomlokzat')) { try { const h = homlokzatLapok(gltf.scene, L.key); if (h) gltf.scene.add(h); } catch (e) { console.warn('homlokzat', e); } }
       let tbRejt = [];
       if (TETOBLOKK[L.key] && !QS.has('noblokk')) { try { const b = tetoBlokkok(gltf.scene, L.key); if (b) { gltf.scene.add(b); tbRejt = b.userData.rejt; } } catch (e) { console.warn('tetőblokk', e); } }
