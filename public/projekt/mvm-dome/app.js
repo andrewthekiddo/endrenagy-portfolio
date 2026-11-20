@@ -688,6 +688,36 @@ function tetoBlokkok(root, key) {
   csop.userData.rejt = rejt;
   return csop.children.length ? csop : null;
 }
+// Felső szint: a ruhatárak a lelátó alatt vannak – felülről csak a modell 1,3 m-es csíkja látszik, a „ruhatár-épület” a kifelé néző
+// homlokzata (a pult, mögötte a ruhák). A néző ezért a csík külső élén függőleges, sárga homlokzat-lapot húz a padlótól a csík magasságáig,
+// rajta a ruhatár-piktogrammal (felhasználó, 2026-11-20: „csak egy kis téglalapba van kijelölve, közben egy sokkal nagyobb épület”).
+const HOMLOKZAT = { S3: ['ruhatar'] };
+function homlokzatLapok(root, key) {
+  root.updateMatrixWorld(true); const csop = new THREE.Group(); csop.name = 'WEB_homlokzatok';
+  for (const tipus of HOMLOKZAT[key]) {
+    const pts = []; root.traverse((o) => { if (!o.isMesh) return; for (const m of (Array.isArray(o.material) ? o.material : [o.material])) { if (!new RegExp(`UJ_zona_${tipus}_teto`).test(m.name || '')) continue;
+      const p = o.geometry.attributes.position, e = o.matrixWorld.elements; for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i), z = p.getZ(i); pts.push([e[0] * x + e[4] * y + e[8] * z + e[12], e[1] * x + e[5] * y + e[9] * z + e[13], e[2] * x + e[6] * y + e[10] * z + e[14]]); } } });
+    const kesz = new Array(pts.length).fill(false);
+    for (let i = 0; i < pts.length; i++) { if (kesz[i]) continue; const cs = [i]; kesz[i] = true;
+      for (let k = 0; k < cs.length; k++) for (let j = 0; j < pts.length; j++) if (!kesz[j] && Math.hypot(pts[j][0] - pts[cs[k]][0], pts[j][2] - pts[cs[k]][2]) < 9) { kesz[j] = true; cs.push(j); }
+      const pp = cs.map((j) => pts[j]); let mx = 0, mz = 0; for (const q of pp) { mx += q[0]; mz += q[2]; } mx /= pp.length; mz /= pp.length;
+      const r = Math.hypot(mx, mz) || 1, ux = mx / r, uz = mz / r, tx = -uz, tz = ux;            // u: kifelé, t: az ív mentén
+      let t0 = 1e9, t1 = -1e9, rk = -1e9, y = -1e9; for (const q of pp) { const t = (q[0] - mx) * tx + (q[2] - mz) * tz; t0 = Math.min(t0, t); t1 = Math.max(t1, t); rk = Math.max(rk, q[0] * ux + q[2] * uz); y = Math.max(y, q[1]); }
+      if (t1 - t0 < 2) continue;
+      const ax = ux * rk + tx * t0, az = uz * rk + tz * t0, bx = ux * rk + tx * t1, bz = uz * rk + tz * t1, ya = 0.05, yb = y;
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute([ax, ya, az, bx, ya, bz, bx, yb, bz, ax, yb, az], 3)); g.setIndex([0, 1, 2, 0, 2, 3]);
+      const lap = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ name: 'WEB_homlokzat', color: ZONA_PALETTA[tipus], transparent: true, opacity: ZONA_FEDES * 0.8, depthWrite: false, side: THREE.DoubleSide })); lap.renderOrder = 5; lap.frustumCulled = false; csop.add(lap);
+      const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute([ax, ya, az, bx, ya, bz, bx, ya, bz, bx, yb, bz, bx, yb, bz, ax, yb, az, ax, yb, az, ax, ya, az], 3));
+      const v = new THREE.LineSegments(sg, new THREE.LineBasicMaterial({ name: 'WEB_homlokzat_szegely', color: ZONA_PALETTA[tipus] })); v.renderOrder = 6; v.frustumCulled = false; csop.add(v);
+      if (ZONA_IKON[ZONA_SZOVEG[tipus]]) {
+        const d = Math.min(1.4 * FELIRAT_M, (yb - ya) * 0.8, (t1 - t0) * 0.8), tex = texLoader.load(ikonUrl(ZONA_IKON[ZONA_SZOVEG[tipus]])); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+        const ik = new THREE.Mesh(new THREE.PlaneGeometry(d, d), new THREE.MeshBasicMaterial({ name: 'WEB_zona_ikon', map: tex, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+        ik.renderOrder = 8; ik.frustumCulled = false; ik.position.set(ux * (rk + 0.06) + tx * (t0 + t1) / 2, (ya + yb) / 2, uz * (rk + 0.06) + tz * (t0 + t1) / 2); ik.lookAt(ik.position.x + ux, ik.position.y, ik.position.z + uz); csop.add(ik);
+      }
+    }
+  }
+  return csop.children.length ? csop : null;
+}
 function zonaUjra(root, lista) {
   const mag = wcMagassagTerkep(root), N = WC_N, cm = 2 * WC_R / (N - 1), csop = new THREE.Group(); csop.name = 'WEB_zona_ujra';
   for (const z of lista) {
@@ -1440,6 +1470,7 @@ async function loadLevel(level) {
         try { animObj = setupAnim(await loadGltf(data.anim.model), data.anim.clip_top); } catch (e) { console.warn('animáció', e); }
       }
       if (LEPCSO_FADE[L.key] && !QS.has('nofade')) lepcsoFade(gltf.scene, LEPCSO_FADE[L.key]);
+      if (HOMLOKZAT[L.key] && !QS.has('nohomlokzat')) { try { const h = homlokzatLapok(gltf.scene, L.key); if (h) gltf.scene.add(h); } catch (e) { console.warn('homlokzat', e); } }
       let tbRejt = [];
       if (TETOBLOKK[L.key] && !QS.has('noblokk')) { try { const b = tetoBlokkok(gltf.scene, L.key); if (b) { gltf.scene.add(b); tbRejt = b.userData.rejt; } } catch (e) { console.warn('tetőblokk', e); } }
       // lobby, páholy, felső szint: a modell feliratai (fehér háttérlapon, kicsi) helyett ugyanaz a nagy, sötét, egyforma felirat, mint az alsó szinten;
