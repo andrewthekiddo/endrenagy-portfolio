@@ -1602,6 +1602,11 @@ async function loadLevel(level) {
       showLoader(L.name);
       const data = await resp.json();
       if (SAJAT_POI[L.key]) data.pois = data.pois.concat(SAJAT_POI[L.key]);
+      // ugyanabban a bárépületben lévő két bár-pont (pl. felső szint, 313-mal szemben) egy pin legyen (felhasználó, 2026-11-20): 9 m-en belül összevonva
+      if (L.key === 'S3') { const bar = data.pois.filter((p) => p.cat === 'bar'), ki = new Set();
+        for (let i = 0; i < bar.length; i++) for (let j = i + 1; j < bar.length; j++) { const a = bar[i], b = bar[j]; if (ki.has(a) || ki.has(b) || Math.hypot(a.x - b.x, a.y - b.y) > 9) continue;
+          a.x = (a.x + b.x) / 2; a.y = (a.y + b.y) / 2; a.tagok = [a.id, b.id]; ki.add(b); }
+        data.pois = data.pois.filter((p) => !ki.has(p)); }
       if (!QS.has('kulonwc')) data.pois = osszevonMosdo(data.pois);   // férfi + női mosdó egy közös pin
       if (KAMERAK[L.key] && !QS.has('regikamera')) data.camera = KAMERAK[L.key];   // V2: tág áttekintő kamera (data/kamerak.json)
       let c_baked = false, c_lm = null;
