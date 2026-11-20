@@ -280,8 +280,7 @@ function lepcsoFade(root, v) {
 }
 // Zóna-jelölés elrejtése egy alaprajzi dobozban (világ x / z, m): a páholy szint Platinum bárján nem kell színes jelölés (felhasználó, 2026-11-20).
 const ZONA_REJT = { S2: [{ minta: /UJ_zona_bar_/, x0: -13, x1: 13, z0: -71, z1: -57 }],
-  // S1, 3-as büfé (212-es szektor): a modell rózsaszín lapja csak a helyiség elejét fedi, ferdén, és túllóg a falon (felhasználó, 2026-11-20) → elrejtve, a néző újrarajzolja (ZONA_UJRA)
-  S1: [{ minta: /UJ_zona_bar_(teto|szegely)/, x0: -47.2, x1: -39.5, z0: 19.5, z1: 37 }] };
+};
 const ZONA_REJT_KESZ = new WeakSet();   // (a userData átmásolódna az anyag klónjára, ezért külön halmaz)
 function zonaRejt(m, v) {
   ZONA_REJT_KESZ.add(m);
@@ -311,6 +310,7 @@ const wcMagAnyag = new THREE.ShaderMaterial({
   fragmentShader: 'varying float vY;' + '\n' + 'void main(){ float d = clamp((vY + 8.0) / 64.0, 0.0, 1.0) * 255.0; gl_FragColor = vec4(floor(d) / 255.0, fract(d), 0.0, 1.0); }',
 });
 function wcMagassagTerkep(root) {
+  if (root.userData.magTerkep) return root.userData.magTerkep;
   const rt = new THREE.WebGLRenderTarget(WC_N, WC_N, { depthBuffer: true });
   const cam = new THREE.OrthographicCamera(-WC_R, WC_R, WC_R, -WC_R, 0.1, WC_CAM + 20);
   cam.position.set(0, WC_CAM, 0); cam.up.set(0, 0, -1); cam.lookAt(0, 0, 0); cam.updateMatrixWorld(true);
@@ -324,6 +324,7 @@ function wcMagassagTerkep(root) {
   // magasság méterben (a háttér: −8); a kép sorai alulról fölfelé: sor = (R + z) / (2R) · N fordítva → lásd wcCella
   const mag = new Float32Array(WC_N * WC_N);
   for (let i = 0; i < mag.length; i++) mag[i] = (puf[i * 4] + puf[i * 4 + 1] / 255) / 255 * 64 - 8;
+  root.userData.magTerkep = mag;
   return mag;
 }
 // világ (x, z) ↔ cella: a kamera fölfelé-iránya −z, ezért a kép alja a +z; a visszaolvasott puffer 0. sora a kép alja
@@ -438,7 +439,107 @@ function wcTetok(root, pois) {
 }
 // Hibás modell-lapok újrarajzolása: a helyiség padlóját (falakkal körülzárt, 2,5 m alatti cellák) elárasztjuk a megadott belső pontból,
 // és az alaprajzára a faltető magasságában színes lapot + világító szegélyt teszünk (a modell lapjával azonos színben). mag: Blender x / y, m.
-const ZONA_UJRA = { S1: [{ mag: [-43.5, -25], szin: 0xff277c, fedes: 0.6, y: 4.3 }] };
+// (Az egyedi lista helyett ma már a ZONA_MIND fut: minden egység automatikusan.)
+const ZONA_UJRA = {};
+// A, P, F szint: a modell színes zóna-lapjai sok helyen nem a falakig érnek / túllógnak, a BAR felirat fehér háttérlapon, rossz irányban áll
+// (felhasználó, 2026-11-20, képpel). A néző ezért MINDEN egységet újrarajzol: a modell lapjának közepéből elárasztja a helyiség padlóját
+// (a magasságtérképen, 2,5 m-es falakig), arra teszi a lapot + szegélyt a modell színében, és a bárokra saját, sötét, nagy „BAR” feliratot,
+// a helyiség hossztengelye mentén, a betűk teteje az aréna közepe felé (kívülről nézve egyenesen olvasható). A modell lapja, szegélye,
+// felirata és háttérlapja ezeken a szinteken elrejtve. Ha egy helyiség elárasztása kifut (nyitott), annál az egységnél a modell lapja marad.
+const ZONA_MIND = new Set(['S1']);   // a páholy és a felső szinten az egységek a lelátó / mennyezet alatt vannak, felülről nem látszanak a falaik → ott a modell lapja marad
+function zonaFelirat(szoveg, hossz, mely, szin) {
+  const c = document.createElement('canvas'); c.width = 1024; c.height = 256; const g = c.getContext('2d');
+  g.fillStyle = '#' + new THREE.Color(szin).getHexString(); g.font = '900 190px Nunito, "Arial Black", Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  const w = g.measureText(szoveg).width, k = Math.min(1, 960 / w); g.save(); g.translate(512, 132); g.scale(k, 1); g.fillText(szoveg, 0, 0); g.restore();
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+  const h = Math.min(mely * 0.62, hossz * 0.62 / 4), sz = h * 4;
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(sz, h), new THREE.MeshBasicMaterial({ name: 'WEB_zona_felirat', map: t, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+  m.renderOrder = 8; m.frustumCulled = false; return m;
+}
+function zonaMind(root, key) {
+  const mag = wcMagassagTerkep(root), N = WC_N, cm = 2 * WC_R / (N - 1);
+  root.updateMatrixWorld(true);
+  // a modell zóna-lapjai: csúcsok egységenként (5 m-en belül összefüggő csoportok), típus és szín az anyagból
+  const egysegek = [];
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    for (const m of (Array.isArray(o.material) ? o.material : [o.material])) {
+      const t = /UJ_zona_([a-z]+)_teto/.exec(m.name || ''); if (!t || t[1] === 'wc') continue;
+      const p = o.geometry.attributes.position, e = o.matrixWorld.elements, cs = [];
+      for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i), z = p.getZ(i); cs.push([e[0] * x + e[4] * y + e[8] * z + e[12], e[1] * x + e[5] * y + e[9] * z + e[13], e[2] * x + e[6] * y + e[10] * z + e[14]]); }
+      const kesz = new Array(cs.length).fill(false);
+      for (let i = 0; i < cs.length; i++) { if (kesz[i]) continue; const cs0 = [i]; kesz[i] = true;
+        for (let k = 0; k < cs0.length; k++) for (let j = 0; j < cs.length; j++) if (!kesz[j] && Math.hypot(cs[j][0] - cs[cs0[k]][0], cs[j][2] - cs[cs0[k]][2]) < 5) { kesz[j] = true; cs0.push(j); }
+        const n = cs0.length, cx = cs0.reduce((a, j) => a + cs[j][0], 0) / n, cz = cs0.reduce((a, j) => a + cs[j][2], 0) / n, y = Math.max(...cs0.map((j) => cs[j][1]));
+        egysegek.push({ tipus: t[1], szin: m.color.getHex(), fedes: m.opacity, x: cx, z: cz, y });
+      }
+    }
+  });
+  for (let i = 0; i < egysegek.length; i++) for (let j = egysegek.length - 1; j > i; j--) {
+    const a = egysegek[i], b = egysegek[j];
+    if (a.tipus === b.tipus && Math.hypot(a.x - b.x, a.z - b.z) < 12) { a.x = (a.x + b.x) / 2; a.z = (a.z + b.z) / 2; a.y = Math.max(a.y, b.y); egysegek.splice(j, 1); }
+  }
+  // feliratos egységek: ahol a modellnek volt „_betu” felirata (a lap közelében)
+  const betuk = []; root.traverse((o) => { if (!o.isMesh) return; for (const m of (Array.isArray(o.material) ? o.material : [o.material])) if (/UJ_zona_[a-z]+_betu/.test(m.name || '')) { const b = new THREE.Box3().setFromObject(o); betuk.push(b); } });
+  const csop = new THREE.Group(); csop.name = 'WEB_zona_mind'; const rejt = [];
+  // 1. lépés: minden egység helyiségének elárasztása (a vékony falak 1 cellával hízlalva); folyosóra kifutó / túl nagy: kihagyva
+  const fal = (i) => mag[i] >= 2.5 || mag[i - 1] >= 2.5 || mag[i + 1] >= 2.5 || mag[i - N] >= 2.5 || mag[i + N] >= 2.5;
+  const K = Math.round(1.5 / cm);
+  for (const u of egysegek) {
+    let si = wcCy(u.z) * N + wcCx(u.x);
+    if (fal(si)) { let lj = 1e9, bj = -1; for (let dy = -K; dy <= K; dy++) for (let dx = -K; dx <= K; dx++) { const i = si + dy * N + dx; if (!fal(i) && dx * dx + dy * dy < lj) { lj = dx * dx + dy * dy; bj = i; } } if (bj < 0) continue; si = bj; }
+    const lat = new Set([si]), verem = [si]; let rossz = false;
+    while (verem.length) { const i = verem.pop(); if (lat.size > 320 / (cm * cm)) { rossz = true; break; }
+      for (const j of [i - 1, i + 1, i - N, i + N]) if (!lat.has(j) && !fal(j)) { lat.add(j); verem.push(j); } }
+    if (!rossz && lat.size >= 4 / (cm * cm)) u.lat = lat;
+  }
+  // 2. lépés: ugyanabba a helyiségbe eső egységek: azonos típus → egy egység; különböző típus (ruhatár + büfé) → a cellák a közelebbi középponté
+  const jo = egysegek.filter((u) => u.lat);
+  for (let i = 0; i < jo.length; i++) for (let j = jo.length - 1; j > i; j--) {
+    const a = jo[i], b = jo[j]; let kozos = false; for (const c of b.lat) if (a.lat.has(c)) { kozos = true; break; }
+    if (!kozos) continue;
+    if (a.tipus === b.tipus) { for (const c of b.lat) a.lat.add(c); a.y = Math.max(a.y, b.y); jo.splice(j, 1); }
+    else { const tav = (u, c) => (wcX(c % N) - u.x) ** 2 + (wcZ((c - c % N) / N) - u.z) ** 2;
+      for (const c of [...a.lat]) if (b.lat.has(c)) { if (tav(a, c) <= tav(b, c)) b.lat.delete(c); else a.lat.delete(c); } }
+  }
+  for (const u of jo) {
+    const lat = u.lat; if (lat.size < 4 / (cm * cm)) continue;
+    // a lap a fal közepéig ér: 2 cellás visszahízlalás, de a szomszéd egység cellái nélkül
+    const tobbi = new Set(); for (const w of jo) if (w !== u) for (const c of w.lat) tobbi.add(c);
+    let bov = new Set(lat); for (let k = 0; k < 2; k++) { const uj = new Set(bov); for (const i of bov) for (const j of [i - 1, i + 1, i - N, i + N]) if (!tobbi.has(j)) uj.add(j); bov = uj; }
+    const cs = [], ix = [], sz = [], y = u.y;
+    const sorok = new Map(); for (const i of bov) { const x = i % N, yy = (i - x) / N; if (!sorok.has(yy)) sorok.set(yy, []); sorok.get(yy).push(x); }
+    for (const [yy, xs] of sorok) { xs.sort((a, b) => a - b); let x0 = xs[0], e = xs[0];
+      for (let t = 1; t <= xs.length; t++) { if (t < xs.length && xs[t] === e + 1) { e = xs[t]; continue; }
+        const b = cs.length / 3, xa = wcX(x0) - cm / 2, xb = wcX(e) + cm / 2, za = wcZ(yy) + cm / 2, zb = wcZ(yy) - cm / 2;
+        cs.push(xa, y, za, xb, y, za, xb, y, zb, xa, y, zb); ix.push(b, b + 1, b + 2, b, b + 2, b + 3);
+        if (t < xs.length) { x0 = xs[t]; e = xs[t]; } } }
+    for (const i of bov) { const x = i % N, yy = (i - x) / N, xa = wcX(x) - cm / 2, xb = wcX(x) + cm / 2, za = wcZ(yy) + cm / 2, zb = wcZ(yy) - cm / 2, yv = y + 0.02;
+      if (!bov.has(i - 1)) sz.push(xa, yv, za, xa, yv, zb); if (!bov.has(i + 1)) sz.push(xb, yv, za, xb, yv, zb);
+      if (!bov.has(i - N)) sz.push(xa, yv, za, xb, yv, za); if (!bov.has(i + N)) sz.push(xa, yv, zb, xb, yv, zb); }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(cs, 3)); g.setIndex(ix);
+    const lap = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ name: 'WEB_zona_teto', color: u.szin, transparent: true, opacity: Math.max(0.45, u.fedes * 0.8), depthWrite: false, side: THREE.DoubleSide }));
+    lap.renderOrder = 5; lap.frustumCulled = false; csop.add(lap);
+    const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(sz, 3));
+    const v = new THREE.LineSegments(sg, new THREE.LineBasicMaterial({ name: 'WEB_zona_szegely', color: u.szin })); v.renderOrder = 6; v.frustumCulled = false; csop.add(v);
+    let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (const i of bov) { const x = wcX(i % N), z = wcZ((i - i % N) / N); x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
+    const doboz = { x0: x0 - 0.6, x1: x1 + 0.6, z0: z0 - 0.6, z1: z1 + 0.6 }; rejt.push(doboz);
+    // felirat: a bárokra és a merch shopra (a ruhatárra nem) – a helyiség hossztengelye mentén, a betűk teteje az aréna közepe felé
+    if (u.tipus === 'bar' || u.tipus === 'merch') {
+      let mx = 0, mz = 0; for (const i of lat) { mx += wcX(i % N); mz += wcZ((i - i % N) / N); } mx /= lat.size; mz /= lat.size;
+      const r = Math.hypot(mx, mz) || 1, ux = -mx / r, uz = -mz / r, rx = -uz, rz = ux;
+      let a0 = 1e9, a1 = -1e9, b0 = 1e9, b1 = -1e9; for (const i of lat) { const dx = wcX(i % N) - mx, dz = wcZ((i - i % N) / N) - mz, a = dx * rx + dz * rz, b = dx * ux + dz * uz; a0 = Math.min(a0, a); a1 = Math.max(a1, a); b0 = Math.min(b0, b); b1 = Math.max(b1, b); }
+      const f = zonaFelirat(u.tipus === 'merch' ? 'MERCH SHOP' : 'BAR', a1 - a0, b1 - b0, 0x0b1220);
+      f.rotation.set(-Math.PI / 2, 0, 0); f.rotation.order = 'YXZ'; f.rotation.y = Math.atan2(-ux, -uz);
+      f.position.set(mx + rx * (a0 + a1) / 2 + ux * (b0 + b1) / 2, y + 0.05, mz + rz * (a0 + a1) / 2 + uz * (b0 + b1) / 2);
+      csop.add(f);
+    }
+  }
+  // a modell zóna-anyagai (a mosdó kivételével) az újrarajzolt egységek dobozaiban eldobva
+  if (rejt.length) root.traverse((o) => { if (!o.isMesh) return; for (const m of (Array.isArray(o.material) ? o.material : [o.material]))
+    if (/UJ_zona_(?!wc)[a-z]+_(teto|szegely|betu|felirathatter)/.test(m.name || '') && !String(m.customProgramCacheKey?.() || '').includes('|zonarejt')) zonaRejt(m, rejt.concat(ZONA_REJT[key] || [])); });
+  return csop.children.length ? csop : null;
+}
 function zonaUjra(root, lista) {
   const mag = wcMagassagTerkep(root), N = WC_N, cm = 2 * WC_R / (N - 1), csop = new THREE.Group(); csop.name = 'WEB_zona_ujra';
   for (const z of lista) {
@@ -1187,6 +1288,7 @@ async function loadLevel(level) {
         try { animObj = setupAnim(await loadGltf(data.anim.model), data.anim.clip_top); } catch (e) { console.warn('animáció', e); }
       }
       if (LEPCSO_FADE[L.key] && !QS.has('nofade')) lepcsoFade(gltf.scene, LEPCSO_FADE[L.key]);
+      if (ZONA_MIND.has(L.key) && !QS.has('noujra')) { try { const u = zonaMind(gltf.scene, L.key); if (u) gltf.scene.add(u); } catch (e) { console.warn('zóna-mind', e); } }
       if (ZONA_UJRA[L.key] && !QS.has('noujra')) { try { const u = zonaUjra(gltf.scene, ZONA_UJRA[L.key]); if (u) gltf.scene.add(u); } catch (e) { console.warn('zóna-újra', e); } }
       // ahol a modell már ad kék mosdó-tetőt (UJ_zona_wc…), ott a néző nem épít másikat – különben duplán lenne
       if (WC_SZINT.has(L.key) && !QS.has('nowcteto')) { try {
