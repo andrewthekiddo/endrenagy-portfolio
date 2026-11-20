@@ -41,7 +41,7 @@ const CATS = {
 const IKONFAJL = { wc: 'wc', baba: 'baba', bar: 'bufe', ruhatar: 'ruhatar', lift: 'lift', vip: 'vip', elsosegely: 'elsosegely', info: 'info' };
 const ikonUrl = (nev) => asset(`img/ikonok/ikon_${nev}.${nev === 'info' ? 'png' : 'svg'}`);
 // Az ikonok már induláskor letöltődnek és dekódolódnak (a modell letöltése alatt), hogy a pinek ne üres körként jelenjenek meg, amibe később ugrik be a rajz (felhasználó, 2026-11-19)
-const IKON_ELO = ['wc', 'wc_ferfi', 'wc_noi', 'akadalymentes', 'baba', 'bufe', 'ruhatar', 'lift', 'vip', 'elsosegely', 'info'].map((n) => { const k = new Image(); k.src = ikonUrl(n); k.decode?.().catch(() => {}); return k; });
+const IKON_ELO = ['wc', 'wc_ferfi', 'wc_noi', 'akadalymentes', 'baba', 'bufe', 'ruhatar', 'lift', 'vip', 'elsosegely', 'info', 'wc_s', 'wc_ferfi_s', 'wc_noi_s', 'akadalymentes_s', 'baba_s', 'bufe_s', 'ruhatar_s', 'vip_s', 'elsosegely_s'].map((n) => { const k = new Image(); k.src = ikonUrl(n); k.decode?.().catch(() => {}); return k; });
 // Szűrés: null = minden szolgáltatás látszik; egy kategória = csak az látszik (pulzálva). A szektorszámok külön kapcsolhatók.
 let activeCat = null;
 let showSectors = true;
@@ -300,6 +300,11 @@ function addPoiLights(pois) {
 
 // ---------- Markerek ----------
 const ICON = (cat, nev) => `<img class="ik" src="${ikonUrl(nev || IKONFAJL[cat])}" alt="">`;
+// A pineken két kép van: a színes (eredeti) és a semleges (sötét korong, sárga rajz); alapból a semleges látszik, a színes csak kijelöléskor –
+// kivéve az információt és a liftet, azok mindig színesek (felhasználó, 2026-11-20). A szűrőgombokon marad a színes.
+const MINDIG_SZINES = new Set(['info', 'lift']);
+const semUrl = (nev) => (nev === 'info' ? ikonUrl(nev) : asset(`img/ikonok/ikon_${nev}_s.svg`));
+const ICON2 = (cat, nev) => { const n = nev || IKONFAJL[cat]; return `<img class="ik szin" src="${ikonUrl(n)}" alt=""><img class="ik sem" src="${semUrl(n)}" alt="">`; };
 const poiWorld = (p) => new THREE.Vector3(p.x, p.z, -p.y);
 
 // Mosdók összevonása (felhasználó, V2, 2026-11-19): az egymás melletti férfi és női mosdó EGY közös pin (férfi-női piktogram),
@@ -345,12 +350,13 @@ function buildMarkers(pois) {
   return pois.map((p) => {
     const el = document.createElement('div');
     el.className = `mk ${p.cat}`;
-    el.style.setProperty('--pin', CATS[p.cat].color);
+    el.style.setProperty('--szin', CATS[p.cat].color);
+    if (p.cat === 'szektor' || MINDIG_SZINES.has(p.cat)) el.classList.add('eredeti');
     el.style.setProperty('--ink', CATS[p.cat].ink);
     if (p.cat === 'szektor') {
       el.innerHTML = `<div class="pin">${p.name.replace('Szektor ', '')}</div>`;
     } else {
-      el.innerHTML = `<div class="lbl">${p.name}</div><div class="pin">${ICON(p.cat, p.ikon)}<span class="db"></span></div><div class="stem"></div>`;
+      el.innerHTML = `<div class="lbl">${p.name}</div><div class="pin">${ICON2(p.cat, p.ikon)}<span class="db"></span></div><div class="stem"></div>`;
     }
     el.addEventListener('click', (e) => { e.stopPropagation(); const mk = current.markers.find((x) => x.el === el); if (mk?.csopN > 1) csoportKozelit(mk); else selectPoi(p); });
     el.addEventListener('dblclick', (e) => e.stopPropagation());
@@ -358,7 +364,7 @@ function buildMarkers(pois) {
     const world = poiWorld(p); world.y += p.cat === 'szektor' ? 1.5 : 1.2;
     if (p.cat !== 'szektor') {   // minden szolgáltatás-pin EGY magasságban (felhasználó, V2): a padlótól 5,7 m-rel följebb, 3D-s szárral; a közös mosdó szára elágazik
       el.classList.add('agas');
-      const ag = document.createElementNS('http://www.w3.org/2000/svg', 'path'); ag.style.stroke = CATS[p.cat].color; AGAK.appendChild(ag);
+      const ag = document.createElementNS('http://www.w3.org/2000/svg', 'path'); AGAK.appendChild(ag);
       // 3D-s váz (világkoordináta): ajtó alja → ajtó fölött (gerinc vége) … gerinc a fal vonalában … → másik ajtó alja; a gerinc közepéről föl a pinhez
       const G = 3.3, P = 2.4;
       // az információs pult pinje alacsonyabban áll (felhasználó, 2026-11-19): a lobbyban a mögötte lévő ruhatár-pinnel egybelógott
@@ -429,6 +435,7 @@ function updateMarkers() {
     const t = a.q[a.q.length - 1];
     m.ag.setAttribute('d', szar(a.q)); m.ag.style.display = '';
     m.ag.style.opacity = a.halv ? 0.3 : 0.9; m.ag.style.strokeWidth = a.focus ? 2.6 : 2;
+    m.ag.style.stroke = a.focus || m.el === selectedEl || MINDIG_SZINES.has(m.p.cat) ? CATS[m.p.cat].color : 'rgba(252,191,32,.5)';   // semleges állapotban halvány sárga szár
     m.el.style.transform = `translate(${t[0]}px,${t[1]}px) translate(-50%,-100%) scale(${a.s})`;
     m.el.classList.remove('osszevont');
     if (m.csopN !== n) {

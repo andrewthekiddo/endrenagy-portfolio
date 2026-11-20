@@ -100,6 +100,13 @@
   .mk:hover .pin,.mk.sel .pin{transform:scale(1.18)}
   .mk .lbl{position:absolute;bottom:calc(100% + 6px);white-space:nowrap;background:var(--navy);border:1px solid var(--panel-border);padding:5px 9px;border-radius:7px;font-size:12px;font-weight:500;opacity:0;transition:.15s;pointer-events:none}
   .mk:hover .lbl{opacity:1}
+  /* semleges alapállapot (sötét korong, sárga rajz); a kategória színe csak kijelöléskor (.focus / .sel) – az info és a lift mindig színes (.eredeti) */
+  .mk{--pin:rgba(252,191,32,.45)}
+  .mk.focus,.mk.sel,.mk.eredeti{--pin:var(--szin)}
+  .mk .pin .ik.szin{display:none}
+  .mk.focus .pin .ik.szin,.mk.sel .pin .ik.szin,.mk.eredeti .pin .ik.szin{display:block}
+  .mk.focus .pin .ik.sem,.mk.sel .pin .ik.sem,.mk.eredeti .pin .ik.sem{display:none}
+  .mk:not(.szektor):not(.focus):not(.sel):not(.eredeti) .pin{box-shadow:0 0 0 2px rgba(16,24,40,.7),0 4px 12px rgba(0,0,0,.45)}
   .mk.hidden{opacity:0;pointer-events:none}
   /* összevont pin (több azonos típus egy helyen): darabszám-jelvény; a beolvadt tagok rejtve */
   .mk.osszevont{opacity:0;pointer-events:none}
