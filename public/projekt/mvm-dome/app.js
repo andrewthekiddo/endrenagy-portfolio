@@ -17,10 +17,10 @@ if (SHOT) { addEventListener('error', (e) => { document.title = 'JSERR ' + e.mes
 // 4 szint + a teljes épület, mindegyik a saját padlóján (y = 0), az aréna középpontja az origó. A modellek a Blender showreel-fájlból
 // (00_Teljes_epulet/…_showreel_v01.blend) jönnek: _Blender_Projects/00_Web_export/scripts/export_web.py + web_adat.py
 const LEVELS = {
-  felso:  { key: 'S3', name: 'Felső körüljáró szint', model: 'models/S3.glb', meret: 6982624, data: 'data/S3.json', tier: 'Felső lelátó (3xx)' },
-  paholy: { key: 'S2', name: 'Páholy szint (VIP)', model: 'models/S2.glb', meret: 7275836, data: 'data/S2.json', tier: 'Alsó lelátó (2xx)' },
-  also:   { key: 'S1', name: 'Alsó körüljáró szint', model: 'models/S1.glb', meret: 5199388, data: 'data/S1.json', tier: 'Alsó lelátó (2xx)' },
-  lobby:  { key: 'S0', name: 'Lobby – Bejárati szint', model: 'models/S0.glb', meret: 2502708, data: 'data/S0.json', tier: 'Küzdőtéri lelátó (1xx)' },
+  felso:  { key: 'S3', name: 'Felső körüljáró szint', model: 'models/S3.glb', meret: 7006272, data: 'data/S3.json', tier: 'Felső lelátó (3xx)' },
+  paholy: { key: 'S2', name: 'Páholy szint (VIP)', model: 'models/S2.glb', meret: 7283232, data: 'data/S2.json', tier: 'Alsó lelátó (2xx)' },
+  also:   { key: 'S1', name: 'Alsó körüljáró szint', model: 'models/S1.glb', meret: 5233836, data: 'data/S1.json', tier: 'Alsó lelátó (2xx)' },
+  lobby:  { key: 'S0', name: 'Lobby – Bejárati szint', model: 'models/S0.glb', meret: 2524160, data: 'data/S0.json', tier: 'Küzdőtéri lelátó (1xx)' },
   // a teljes, megépített épület kívülről (homlokzat bekapcsolva, nyitott tető): a kezdőnézet, ha a fájljai megvannak (lásd VAN_EPULET)
   epulet: { key: 'S4', name: 'MVM Dome', model: 'models/S4.glb', meret: 7399156, data: 'data/S4.json', tier: 'Lelátó' },
 };
@@ -294,6 +294,138 @@ function zonaRejt(m, v) {
   };
   m.customProgramCacheKey = () => (kulcs ? kulcs() : '') + '|zonarejt';
   m.needsUpdate = true;
+}
+// ---------- Kék mosdó-tömb tetők az A / P / F szinten (felhasználó, 2026-11-20) ----------
+// „ahol van WC … annak az épületnek a teteje … a lobbiba odaraktunk egy ilyen blokkosított kék kijelölést … a többi szinten is ezt csináld meg.”
+// A lobbyn ez a modellben van (UJ_zona_wc_teto); a többi szinten a modellben nem készült el, ezért a NÉZŐ építi fel betöltéskor:
+//  1. a szintet felülről, merőlegesen kirajzolja magasságtérképnek (GPU, WC_N × WC_N képpont, ±WC_R m);
+//  2. minden mosdóajtó mögött megkeresi a falakkal körülzárt helyiséget (elárasztás a padló szintjén; fal = 1 m-nél magasabb cella);
+//  3. a helyiség alaprajzára a faltető magasságában kék, áttetsző lapot tesz. A helyiségek közti falak adják a „blokkokat”.
+const WC_SZINT = new Set(['S1', 'S2', 'S3']);
+const WC_N = 2048, WC_R = 112, WC_CAM = 60;
+const wcMagAnyag = new THREE.ShaderMaterial({
+  side: THREE.DoubleSide,
+  vertexShader: 'varying float vY;' + '\n' + 'void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vY = w.y; gl_Position = projectionMatrix * viewMatrix * w; }',
+  fragmentShader: 'varying float vY;' + '\n' + 'void main(){ float d = clamp((vY + 8.0) / 64.0, 0.0, 1.0) * 255.0; gl_FragColor = vec4(floor(d) / 255.0, fract(d), 0.0, 1.0); }',
+});
+function wcMagassagTerkep(root) {
+  const rt = new THREE.WebGLRenderTarget(WC_N, WC_N, { depthBuffer: true });
+  const cam = new THREE.OrthographicCamera(-WC_R, WC_R, WC_R, -WC_R, 0.1, WC_CAM + 20);
+  cam.position.set(0, WC_CAM, 0); cam.up.set(0, 0, -1); cam.lookAt(0, 0, 0); cam.updateMatrixWorld(true);
+  const sz = new THREE.Scene(); sz.background = new THREE.Color(0x000000);
+  const szulo = root.parent; sz.add(root); sz.overrideMaterial = wcMagAnyag;
+  // az áttetsző lapok (üveg, zóna-lapok) és a jelölések ne számítsanak
+  const rejt = []; root.traverse((o) => { if (!o.isMesh) return; const ms = Array.isArray(o.material) ? o.material : [o.material]; if (o.visible && ms.every((m) => m.transparent || m.opacity < 1 || /UJ_/.test(m.name || ''))) { rejt.push(o); o.visible = false; } });
+  const elozo = renderer.getRenderTarget(); renderer.setRenderTarget(rt); renderer.render(sz, cam);
+  const puf = new Uint8Array(WC_N * WC_N * 4); renderer.readRenderTargetPixels(rt, 0, 0, WC_N, WC_N, puf);
+  renderer.setRenderTarget(elozo); for (const o of rejt) o.visible = true; sz.remove(root); if (szulo) szulo.add(root); rt.dispose();
+  // magasság méterben (a háttér: −8); a kép sorai alulról fölfelé: sor = (R + z) / (2R) · N fordítva → lásd wcCella
+  const mag = new Float32Array(WC_N * WC_N);
+  for (let i = 0; i < mag.length; i++) mag[i] = (puf[i * 4] + puf[i * 4 + 1] / 255) / 255 * 64 - 8;
+  return mag;
+}
+// világ (x, z) ↔ cella: a kamera fölfelé-iránya −z, ezért a kép alja a +z; a visszaolvasott puffer 0. sora a kép alja
+const wcCx = (x) => Math.round((x + WC_R) / (2 * WC_R) * (WC_N - 1));
+const wcCy = (z) => Math.round((WC_R - z) / (2 * WC_R) * (WC_N - 1));
+const wcX = (cx) => cx / (WC_N - 1) * 2 * WC_R - WC_R, wcZ = (cy) => WC_R - cy / (WC_N - 1) * 2 * WC_R;
+function wcTetok(root, pois) {
+  const mag = wcMagassagTerkep(root), N = WC_N, cm = 2 * WC_R / (N - 1);
+  const fal = (i) => mag[i] > 1.0;                                     // 1 m-nél magasabb: fal, ajtólap, lelátó – nem járható
+  const foglalt = new Uint8Array(N * N);                               // 1: már egy helyiséghez tartozik
+  const ajtok = []; for (const p of pois) { if (p.cat !== 'wc') continue; for (const a of (p.ajtok || [p])) ajtok.push(a); }
+  // A mosdó-tömbnek a modellben sík teteje van (kb. 3 m magasan): az ajtóhoz legközelebbi tetőcellától elárasztjuk az AZONOS magasságú,
+  // összefüggő felületet – ez a tömb alaprajza. (A lelátó emelkedik, a folyosó padlója 0 m: egyik sem azonos magasságú, tehát határol.)
+  const MAXT = 1500 / (cm * cm), MINT = 25 / (cm * cm), KER = Math.round(4 / cm);
+  const helyisegek = [];
+  for (const a of ajtok) {
+    const ax = wcCx(a.x), ay = wcCy(-a.y); let si = -1, legj = 1e9;
+    for (let dy = -KER; dy <= KER; dy++) for (let dx = -KER; dx <= KER; dx++) {
+      const x = ax + dx, y = ay + dy; if (x < 2 || y < 2 || x > N - 3 || y > N - 3) continue;
+      const i = y * N + x, d = dx * dx + dy * dy; if (d < legj && mag[i] > 2.3 && mag[i] < 4.8) { legj = d; si = i; }
+    }
+    if (si < 0 || foglalt[si]) continue;
+    const h0 = mag[si], verem = [si], latott = new Map([[si, 1]]); let rossz = false;
+    while (verem.length) {
+      const i = verem.pop(); if (latott.size > MAXT) { rossz = true; break; }
+      const x = i % N; if (x < 2 || x > N - 3 || i < 2 * N || i > N * (N - 2)) continue;
+      for (const j of [i - 1, i + 1, i - N, i + N]) if (!latott.has(j) && Math.abs(mag[j] - h0) < 0.2) { latott.set(j, 1); verem.push(j); }
+    }
+    if (rossz || latott.size < MINT) continue;
+    for (const i of latott.keys()) foglalt[i] = 1;
+    // NYITÁS (zsugorítás, majd visszahízlalás 0,6 m-rel): az azonos magasságú, de keskeny faltetők (büfék, mellvédek) kiesnek, csak a tömör tető marad
+    let cellak = [...latott.keys()];
+    { const E = Math.round(0.6 / cm); let h = new Set(cellak);
+      const lep = (be, zsug) => { let akt = be; for (const [dx, dy] of [[1, 0], [0, 1]]) { const ki = new Set();
+        if (zsug) { for (const i of akt) { let jo = true; for (let k = -E; k <= E && jo; k++) if (!akt.has(i + k * (dx + dy * N))) jo = false; if (jo) ki.add(i); } }
+        else { for (const i of akt) for (let k = -E; k <= E; k++) ki.add(i + k * (dx + dy * N)); }
+        akt = ki; } return akt; };
+      const mag0 = h; h = lep(lep(h, true), false); cellak = [...h].filter((i) => mag0.has(i)); }
+    if (cellak.length < MINT) continue;
+    // NAGY tömb (450 m² fölött – pl. a páholy szint lounge-ai): nem az egész tető mosdó → csak az ajtók körüli szelet marad,
+    // az aréna közepéből nézve az ajtók szögtartománya ± kb. 6 m ívnyi ráhagyással (egyenes, sugárirányú vágás)
+    if (cellak.length * cm * cm > 450) {
+      const sajat = ajtok.filter((b) => { const bx = wcCx(b.x), by = wcCy(-b.y); for (let dy = -KER; dy <= KER; dy++) for (let dx = -KER; dx <= KER; dx++) if (latott.has((by + dy) * N + bx + dx)) return true; return false; });
+      const kp = Math.atan2(-a.y, a.x), kul = (f) => { let d = f - kp; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d; };
+      let f0 = 0, f1 = 0; for (const b of sajat) { const d = kul(Math.atan2(-b.y, b.x)); if (Math.abs(d) < 0.6) { f0 = Math.min(f0, d); f1 = Math.max(f1, d); } }
+      const r = Math.hypot(a.x, a.y) || 1, ra = 6 / r;
+      cellak = cellak.filter((i) => { const d = kul(Math.atan2(wcZ((i - i % N) / N), wcX(i % N))); return d >= f0 - ra && d <= f1 + ra; });
+      if (cellak.length < MINT) continue;
+    }
+    // BLOKKOK: a tömb folyosó felőli (a padlóval határos) szélét az aréna közepe körüli szög szerint sorba rendezzük, egyszerűsítjük (0,6 m),
+    // és a töréspontoknál a közép felé futó, 0,35 m széles rést vágunk a lapba – „a falak törésvonalában”.
+    const halm = new Set(cellak), szel = [];
+    for (const i of cellak) { let p = false; for (const j of [i - 1, i + 1, i - N, i + N]) if (!halm.has(j) && mag[j] < 1.0) { p = true; break; } if (p) { const x = wcX(i % N), z = wcZ((i - i % N) / N); szel.push([Math.atan2(z, x), x, z]); } }
+    if (szel.length > 20) {
+      szel.sort((p, q) => p[0] - q[0]);
+      // ha a szögtartomány átlépi a ±π-t (a tömb a −x tengelyen ül), forgassuk el a sorrendet a legnagyobb résnél
+      let ri = 0, rmax = 0; for (let k = 0; k < szel.length; k++) { const d = (szel[(k + 1) % szel.length][0] - szel[k][0] + 2 * Math.PI) % (2 * Math.PI); if (d > rmax) { rmax = d; ri = k + 1; } }
+      const vonal = szel.slice(ri).concat(szel.slice(0, ri)).filter((_, k) => k % 3 === 0);
+      const dp = (a, b, ki) => { let m = 0, mi = -1; const [, x0, z0] = vonal[a], [, x1, z1] = vonal[b], L = Math.hypot(x1 - x0, z1 - z0) || 1;
+        for (let k = a + 1; k < b; k++) { const d = Math.abs((vonal[k][1] - x0) * (z1 - z0) - (vonal[k][2] - z0) * (x1 - x0)) / L; if (d > m) { m = d; mi = k; } }
+        if (m > 0.6) { dp(a, mi, ki); ki.push(mi); dp(mi, b, ki); } };
+      const tor = []; dp(0, vonal.length - 1, tor);
+      const hossz = (k) => Math.hypot(vonal[k][1] - vonal[0][1], vonal[k][2] - vonal[0][2]), teljes = hossz(vonal.length - 1);
+      const ures = new Set();
+      for (const k of tor) {
+        const [, x, z] = vonal[k]; if (hossz(k) < 3 || teljes - hossz(k) < 3) continue;       // a tömb végeinél ne legyen keskeny szelet
+        const r = Math.hypot(x, z) || 1, ux = -x / r, uz = -z / r;                          // a rés iránya: az aréna közepe felé
+        for (let t = -0.6; t < 40; t += cm * 0.5) for (let o = -0.18; o <= 0.18; o += cm * 0.5) {
+          const i = wcCy(z + uz * t - ux * o) * N + wcCx(x + ux * t + uz * o); if (halm.has(i)) ures.add(i);
+        }
+      }
+      helyisegek.push({ cellak: cellak.filter((i) => !ures.has(i)), y: h0 });
+    } else helyisegek.push({ cellak, y: h0 });
+  }
+  if (QS.has('wcdebug')) {   // hibakeresés: a magasságtérkép (szürke: 0–8 m), a talált helyiségek (kék) és az ajtók (piros) képként
+    const c = document.createElement('canvas'); c.width = c.height = N; const g = c.getContext('2d'), im = g.createImageData(N, N);
+    for (let i = 0; i < N * N; i++) { const x = i % N, y = N - 1 - ((i - x) / N), o = (y * N + x) * 4, v = Math.max(0, Math.min(255, (mag[i] + 1) / 9 * 255)); im.data[o] = im.data[o + 1] = im.data[o + 2] = v; im.data[o + 3] = 255; if (foglalt[i]) { im.data[o] = 40; im.data[o + 1] = 140; im.data[o + 2] = 255; } }
+    g.putImageData(im, 0, 0); g.fillStyle = '#f00'; for (const a of ajtok) g.fillRect(wcCx(a.x) - 3, N - 1 - wcCy(-a.y) - 3, 7, 7);
+    window.__wcdbg = c.toDataURL('image/jpeg', 0.85);
+  }
+  if (!helyisegek.length) return null;
+  // lap: a helyiség cellái + 1 cella ráhagyás a falra; soronkénti sávokból, az egymás alatti azonos sávok összevonva
+  const cs = [], ix = [];
+  const anyag = new THREE.MeshBasicMaterial({ name: 'WEB_wc_teto', color: 0x6db3ea, transparent: true, opacity: 0.5, depthWrite: false, side: THREE.DoubleSide });
+  for (const { cellak, y: yt } of helyisegek) {
+    const y = yt + 0.07, bov = new Set(cellak);
+    const sorok = new Map(); for (const i of bov) { const x = i % N, yy = (i - x) / N; if (!sorok.has(yy)) sorok.set(yy, []); sorok.get(yy).push(x); }
+    let nyitott = new Map();                                            // 'x0_x1' → kezdő sor (az összevonáshoz)
+    const lezar = (kulcs, y0, y1) => { const [x0, x1] = kulcs.split('_').map(Number), b = cs.length / 3;
+      const xa = wcX(x0) - cm / 2, xb = wcX(x1) + cm / 2, za = wcZ(y0) + cm / 2, zb = wcZ(y1) - cm / 2;
+      cs.push(xa, y, za, xb, y, za, xb, y, zb, xa, y, zb); ix.push(b, b + 1, b + 2, b, b + 2, b + 3); };
+    const ys = [...sorok.keys()].sort((p, q) => p - q);
+    for (let k = 0; k <= ys.length; k++) {
+      const yy = ys[k], uj = new Map();
+      if (k < ys.length) { const xs = sorok.get(yy).sort((p, q) => p - q); let x0 = xs[0], e = xs[0];
+        for (let t = 1; t <= xs.length; t++) { if (t < xs.length && xs[t] === e + 1) { e = xs[t]; continue; } uj.set(`${x0}_${e}`, yy); if (t < xs.length) { x0 = xs[t]; e = xs[t]; } } }
+      for (const [kulcs, y0] of nyitott) { if (uj.has(kulcs) && ys[k - 1] === yy - 1) uj.set(kulcs, y0); else lezar(kulcs, y0, ys[k - 1]); }
+      nyitott = uj;
+    }
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(cs, 3)); g.setIndex(ix);
+  const halo = new THREE.Mesh(g, anyag); halo.name = 'WEB_wc_tetok'; halo.renderOrder = 5; halo.frustumCulled = false;
+  halo.userData.helyisegek = helyisegek.length;
+  return halo;
 }
 function tuneMaterials(root, key) {
   const cut = FACADE_CUT[key] ? [new THREE.Plane(new THREE.Vector3(0, -1, 0), FACADE_CUT[key])] : null;
@@ -1015,6 +1147,11 @@ async function loadLevel(level) {
         try { animObj = setupAnim(await loadGltf(data.anim.model), data.anim.clip_top); } catch (e) { console.warn('animáció', e); }
       }
       if (LEPCSO_FADE[L.key] && !QS.has('nofade')) lepcsoFade(gltf.scene, LEPCSO_FADE[L.key]);
+      // ahol a modell már ad kék mosdó-tetőt (UJ_zona_wc…), ott a néző nem épít másikat – különben duplán lenne
+      if (WC_SZINT.has(L.key) && !QS.has('nowcteto')) { try {
+        let vanModellben = false; gltf.scene.traverse((o) => { if (o.isMesh) for (const m of (Array.isArray(o.material) ? o.material : [o.material])) if (/UJ_zona_wc/.test(m.name || '')) vanModellben = true; });
+        const t = !vanModellben && wcTetok(gltf.scene, data.pois); if (t) gltf.scene.add(t);
+      } catch (e) { console.warn('wc-tető', e); } }
       // a sütött-fény átalakítás új anyagpéldányt adhat, a szektor-kiemelő shader pedig felülírja az onBeforeCompile-t → a zóna-elrejtést a végleges anyagokra újra rátesszük
       if (ZONA_REJT[L.key] && !QS.has('norejt')) gltf.scene.traverse((o) => { if (!o.isMesh) return; for (const m of (Array.isArray(o.material) ? o.material : [o.material])) if (ZONA_REJT[L.key].minta.test(m.name || '') && !String(m.customProgramCacheKey?.() || '').includes('|zonarejt')) zonaRejt(m, ZONA_REJT[L.key]); });
       c = cache[level] = { level, baked: c_baked, lm: c_lm, root: gltf.scene, anim: animObj, data, path: buildPath(data.camera) };
