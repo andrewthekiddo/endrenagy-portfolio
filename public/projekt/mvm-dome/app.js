@@ -22,7 +22,7 @@ const LEVELS = {
   also:   { key: 'S1', name: 'Alsó körüljáró szint', model: 'models/S1.glb', meret: 5244224, data: 'data/S1.json', tier: 'Alsó lelátó (2xx)' },
   lobby:  { key: 'S0', name: 'Lobby – Bejárati szint', model: 'models/S0.glb', meret: 2526800, data: 'data/S0.json', tier: 'Küzdőtéri lelátó (1xx)' },
   // a teljes, megépített épület kívülről (homlokzat bekapcsolva, nyitott tető): a kezdőnézet, ha a fájljai megvannak (lásd VAN_EPULET)
-  epulet: { key: 'S4', name: 'MVM Dome', model: 'models/S4.glb', meret: 7399156, data: 'data/S4.json', tier: 'Lelátó' },
+  epulet: { key: 'S4', name: 'MVM Dome', model: 'models/S4.glb', meret: 7398620, data: 'data/S4.json', tier: 'Lelátó' },
 };
 
 // Pinek: funkciónként színes (a térkép-stílus palettája), az ikon fehér vagy sötét a jobb olvashatóságért
