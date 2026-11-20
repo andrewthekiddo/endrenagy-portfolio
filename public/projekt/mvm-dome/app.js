@@ -278,6 +278,23 @@ function lepcsoFade(root, v) {
     }
   });
 }
+// Zóna-jelölés elrejtése egy alaprajzi dobozban (világ x / z, m): a páholy szint Platinum bárján nem kell színes jelölés (felhasználó, 2026-11-20).
+const ZONA_REJT = { S2: { minta: /UJ_zona_bar_/, x0: -13, x1: 13, z0: -71, z1: -57 } };
+const ZONA_REJT_KESZ = new WeakSet();   // (a userData átmásolódna az anyag klónjára, ezért külön halmaz)
+function zonaRejt(m, v) {
+  ZONA_REJT_KESZ.add(m);
+  const elozo = m.onBeforeCompile, kulcs = m.customProgramCacheKey?.bind(m);
+  m.onBeforeCompile = (sh, r) => {
+    elozo?.call(m, sh, r);
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vRejtP;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\nvRejtP = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vRejtP;')
+      .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n' +
+        `if (vRejtP.x > ${v.x0.toFixed(1)} && vRejtP.x < ${v.x1.toFixed(1)} && vRejtP.z > ${v.z0.toFixed(1)} && vRejtP.z < ${v.z1.toFixed(1)}) discard;`);
+  };
+  m.customProgramCacheKey = () => (kulcs ? kulcs() : '') + '|zonarejt';
+  m.needsUpdate = true;
+}
 function tuneMaterials(root, key) {
   const cut = FACADE_CUT[key] ? [new THREE.Plane(new THREE.Vector3(0, -1, 0), FACADE_CUT[key])] : null;
   const done = new Set();
@@ -291,6 +308,7 @@ function tuneMaterials(root, key) {
       reteg(m);
       // színes szolgáltatás-jelölők (UJ_zona_<bar|ruhatar|merch|wc>_teto / _szegely / _betu): matt, ne tükrözzön (felhasználó, V2)
       if (ZONA_VAGAS[key]?.minta.test(m.name) && !QS.has('novag')) zonaVag(m, ZONA_VAGAS[key]);
+      if (ZONA_REJT[key]?.minta.test(m.name) && !QS.has('norejt')) zonaRejt(m, ZONA_REJT[key]);
       // a zónák feliratai (BAR, MERCH SHOP …) sokkal sötétebbek és a színes lap FÖLÉ rajzolva (felhasználó, 2026-11-20: „nehezen olvasom el”):
       // áttetsző körben, a lap után rajzoljuk, így a lap színe nem mossa ki; a szín közel fekete sötétkék
       if (/UJ_zona_.*_betu/.test(m.name)) { m.color.setHex(0x070b14); if (m.emissive) m.emissive.setHex(0); m.map = null; m.transparent = true; m.opacity = 1; m.depthWrite = false; o.renderOrder = 20; }
@@ -802,7 +820,17 @@ function nearestSectors(p, pois) {
 // Ha az adott szinten a típusról nincs fotó, egy másik szint ugyanilyen helyiségének képe jön, felirattal; ha sehol sincs, a szint általános képe.
 const FOTOK = await ELO.fotok.then((r) => r.json()).then((d) => d.szintek).catch(() => ({}));
 const SZINTNEV = Object.fromEntries(Object.values(LEVELS).map((l) => [l.key, l.name]));
+// Kézzel felvett pontok (a data/S*.json-t nem bántjuk): a páholy szint Visa Platinum Lounge bárja – a felhasználó kérése (2026-11-20):
+// ott ne színes jelölés legyen, hanem egy bár-pin a közepén, és rákattintva KÉT kép a bárról. fotok: saját képek (img/fotok/), nem a típus közös képe.
+const SAJAT_POI = { S2: [{ id: 'bar_platinum', cat: 'bar', ikon: 'bufe', name: 'Visa Platinum Lounge bár', x: 0, y: 64, z: 3.94,
+  fotok: ['DSC00559.jpg', 'DSC00532.jpg'], szoveg: 'A Visa Platinum Lounge központi bárpultja: italok és snackek a lounge vendégeinek. A lounge a páholy szint északi oldalán található.' }] };
 function setPhotos(p, c) {
+  $('#panelPhoto2').style.display = p.fotok?.[1] ? '' : 'none';
+  if (p.fotok?.length) {
+    $('#panelPhoto').style.backgroundImage = `url(${asset('img/fotok/' + p.fotok[0])})`; $('#photoCap').textContent = '';
+    if (p.fotok[1]) $('#panelPhoto2').style.backgroundImage = `url(${asset('img/fotok/' + p.fotok[1])})`;
+    return;
+  }
   const kulcs = LEVELS[current.level].key, F = FOTOK[kulcs] || {}, f = p.ikon === 'wc' ? (F.wc_noi || F.wc_ferfi) : F[p.cat === 'szektor' ? 'szektor' : (p.ikon || p.cat)];
   $('#panelPhoto').style.backgroundImage = `url(${asset(f ? 'img/fotok/' + f.f : c.photo)})`;
   $('#photoCap').textContent = !f ? '' : f.alt ? 'Kép a szintről' : (f.szint !== kulcs ? `A kép másik szinten készült: ${SZINTNEV[f.szint]}` : '');
@@ -816,7 +844,7 @@ function selectPoi(p, anchor) {
   $('#panelTitle').textContent = p.name;
   $('#panelText').textContent = p.cat === 'szektor'
     ? `${TIER[p.id[8]] || LEVELS[current.level].tier}. A szektor bejárata a körüljáróról nyílik; a legközelebbi mosdó és büfé a bejárat közelében található.`
-    : c.text;
+    : (p.szoveg || c.text);
   const near = nearestSectors(p, current.pois);
   $('#panelNear').innerHTML = p.cat === 'szektor' || !near.length ? '' : `Legközelebbi szektorok: <b>${near.join(', ')}</b>`;
   panel.classList.add('show'); document.body.classList.add('panel-open');
@@ -969,6 +997,7 @@ async function loadLevel(level) {
       if (!resp.ok) { showToast(`${L.name}: a modell pár percen belül érkezik.`); if (!current) setTimeout(() => loadLevel('lobby'), 0); return; }
       showLoader(L.name);
       const data = await resp.json();
+      if (SAJAT_POI[L.key]) data.pois = data.pois.concat(SAJAT_POI[L.key]);
       if (!QS.has('kulonwc')) data.pois = osszevonMosdo(data.pois);   // férfi + női mosdó egy közös pin
       if (KAMERAK[L.key] && !QS.has('regikamera')) data.camera = KAMERAK[L.key];   // V2: tág áttekintő kamera (data/kamerak.json)
       let c_baked = false, c_lm = null;
@@ -986,6 +1015,8 @@ async function loadLevel(level) {
         try { animObj = setupAnim(await loadGltf(data.anim.model), data.anim.clip_top); } catch (e) { console.warn('animáció', e); }
       }
       if (LEPCSO_FADE[L.key] && !QS.has('nofade')) lepcsoFade(gltf.scene, LEPCSO_FADE[L.key]);
+      // a sütött-fény átalakítás új anyagpéldányt adhat, a szektor-kiemelő shader pedig felülírja az onBeforeCompile-t → a zóna-elrejtést a végleges anyagokra újra rátesszük
+      if (ZONA_REJT[L.key] && !QS.has('norejt')) gltf.scene.traverse((o) => { if (!o.isMesh) return; for (const m of (Array.isArray(o.material) ? o.material : [o.material])) if (ZONA_REJT[L.key].minta.test(m.name || '') && !String(m.customProgramCacheKey?.() || '').includes('|zonarejt')) zonaRejt(m, ZONA_REJT[L.key]); });
       c = cache[level] = { level, baked: c_baked, lm: c_lm, root: gltf.scene, anim: animObj, data, path: buildPath(data.camera) };
       setProgress(1);
     }
