@@ -489,7 +489,8 @@ function zonaFeliratPontokra(pontok, y, szoveg, szin = 0x0b1220) {
   const hossz = a1 - a0, mely = b1 - b0;
   // a ruhatáron NEM felirat, hanem az eredeti (sárga) ruhatár-piktogram, a tetőre fektetve; sugara ≈ a betűmagasság (felhasználó, 2026-11-20)
   if (ZONA_IKON[szoveg]) {
-    const d = Math.min(2 * FELIRAT_M, mely * 0.9, hossz * 0.9); if (d < 0.7) return null;
+    const d = Math.min(1.4 * FELIRAT_M, mely * 0.85, hossz * 0.85); if (d < 0.7) return null;
+    { const r = Math.hypot(mx, mz) || 1; dx = -mz / r; dz = mx / r; if (dz * -mx + -dx * -mz < 0) { dx = -dx; dz = -dz; } }   // a kör „felfelé” iránya az aréna közepe felé, mint a szövegeké
     const t = texLoader.load(ikonUrl(ZONA_IKON[szoveg])); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
     const m = new THREE.Mesh(new THREE.PlaneGeometry(d, d), new THREE.MeshBasicMaterial({ name: 'WEB_zona_ikon', map: t, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
     m.renderOrder = 8; m.frustumCulled = false; m.rotation.order = 'YXZ'; m.rotation.set(-Math.PI / 2, Math.atan2(-dz, dx), 0);
@@ -860,6 +861,7 @@ function updateMarkers() {
     }
     takarJel(m, m.world);
     m.el.style.transform = `translate(${x}px,${y}px) translate(-50%,-100%) scale(${s})`;
+    m.el.style.zIndex = String(1000 - Math.round(_v.z * 900));   // szektorszám: 100–1000 között, a közelebbi felül (a pinek 2000 fölött)
   }
   // ZSÚFOLTSÁG (felhasználó, 2026-11-20): távolról az egymáshoz közeli, AZONOS típusú pinek közül csak EGY látszik (a saját helyén, rajta a darabszámmal)
   // („2 ruhatár helyett csak egyet mutat”); közelebb menve szétválnak és a helyükre kerülnek. A csoportosítás képernyő-távolság szerint megy,
@@ -894,6 +896,8 @@ function updateMarkers() {
     m.ag.style.opacity = a.halv ? 0.3 : 0.9; m.ag.style.strokeWidth = a.focus ? 2.6 : 2;
     m.ag.style.stroke = a.focus || m.el === selectedEl || MINDIG_SZINES.has(m.p.cat) ? CATS[m.p.cat].color : 'rgba(252,191,32,.5)';   // semleges állapotban halvány sárga szár
     m.el.style.transform = `translate(${t[0]}px,${t[1]}px) translate(-50%,-100%) scale(${a.s})`;
+    // rétegezés (felhasználó, 2026-11-20): a szolgáltatás-pin mindig a szektorszámok fölött van, egymás között a közelebbi felül
+    _v.copy(m.vaz[m.vaz.length - 1]).project(camera); m.el.style.zIndex = String((a.focus || m.el === selectedEl ? 4000 : 3000) - Math.round(_v.z * 900));
     m.el.classList.remove('osszevont');
     if (m.csopN !== n) {
       m.csopN = n; m.el.classList.toggle('csoport', n > 1);
