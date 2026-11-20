@@ -454,7 +454,8 @@ const ZONA_SZOVEG = { bar: 'BAR', ruhatar: 'CLOAKROOM', wc: 'TOILET', merch: 'ME
 // EGYFORMA betűméret minden feliraton (felhasználó, 2026-11-20: „a BAR tök nagy, a CLOAKROOM hozzá képest nagyon kicsi … a méret nem stimmel”):
 // minden felirat ugyanakkora (FELIRAT_M méter magas); ha nem fér el a helyiségben, a rövidebb változat jön (RÖVID), és csak ha az sem, akkor kisebb.
 const FELIRAT_M = 2.2;
-const ZONA_ROVID = { CLOAKROOM: 'COATS', 'MERCH SHOP': 'MERCH' };
+const ZONA_ROVID = { 'MERCH SHOP': 'MERCH' };
+const ZONA_IKON = { CLOAKROOM: 'ruhatar' };   // felirat helyett piktogram
 // Szintenként legalább EGY merch shop (felhasználó, 2026-11-20: „valamelyiket véletlenszerűen válaszd ki, egy darab legyen legalább minden szinten”).
 // A lobbyn a modellben van; a többi szinten egy-egy büfé lesz merch shop, a lobby merch-színével (türkizzöld). Világkoordináta (x, z) doboz.
 const MERCH_SZIN = 0x00ddcb;
@@ -486,6 +487,15 @@ function zonaFeliratPontokra(pontok, y, szoveg, szin = 0x0b1220) {
   let a0 = 1e9, a1 = -1e9, b0 = 1e9, b1 = -1e9;
   for (const [x, z] of pontok) { const ex = x - mx, ez = z - mz, a = ex * dx + ez * dz, b = ex * dz - ez * dx; a0 = Math.min(a0, a); a1 = Math.max(a1, a); b0 = Math.min(b0, b); b1 = Math.max(b1, b); }
   const hossz = a1 - a0, mely = b1 - b0;
+  // a ruhatáron NEM felirat, hanem az eredeti (sárga) ruhatár-piktogram, a tetőre fektetve; sugara ≈ a betűmagasság (felhasználó, 2026-11-20)
+  if (ZONA_IKON[szoveg]) {
+    const d = Math.min(2 * FELIRAT_M, mely * 0.9, hossz * 0.9); if (d < 0.7) return null;
+    const t = texLoader.load(ikonUrl(ZONA_IKON[szoveg])); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(d, d), new THREE.MeshBasicMaterial({ name: 'WEB_zona_ikon', map: t, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+    m.renderOrder = 8; m.frustumCulled = false; m.rotation.order = 'YXZ'; m.rotation.set(-Math.PI / 2, Math.atan2(-dz, dx), 0);
+    m.position.set(mx + dx * (a0 + a1) / 2 + dz * (b0 + b1) / 2, y + 0.06, mz + dz * (a0 + a1) / 2 - dx * (b0 + b1) / 2);
+    return m;
+  }
   const c = document.createElement('canvas'), g = c.getContext('2d'), FS = 200; g.font = `900 ${FS}px Nunito, "Arial Black", Arial, sans-serif`;
   const tw = Math.ceil(g.measureText(szoveg).width) + 40; c.width = tw; c.height = 260;
   g.font = `900 ${FS}px Nunito, "Arial Black", Arial, sans-serif`; g.fillStyle = '#' + new THREE.Color(szin).getHexString(); g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(szoveg, tw / 2, 136);
