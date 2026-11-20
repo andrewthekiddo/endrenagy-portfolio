@@ -693,7 +693,58 @@ function tetoBlokkok(root, key) {
 // Felső szint: a ruhatárak a lelátó alatt vannak – felülről csak a modell 1,3 m-es csíkja látszik, a „ruhatár-épület” a kifelé néző
 // homlokzata (a pult, mögötte a ruhák). A néző ezért a csík külső élén függőleges, sárga homlokzat-lapot húz a padlótól a csík magasságáig,
 // rajta a ruhatár-piktogrammal (felhasználó, 2026-11-20: „csak egy kis téglalapba van kijelölve, közben egy sokkal nagyobb épület”).
-const HOMLOKZAT = { S3: ['ruhatar'] };
+const HOMLOKZAT = {};   // a homlokzat-lap a felhasználónak nem kellett (2026-11-20) – helyette a mennyezeti csík teljes mélységű (MENNY_TELJES)
+// Felső szint, ruhatár: a modell sárga csíkja (1,3 m) csak a fele a ruhatár mennyezetének (W_L3_teto, ~2,2 m mély) → a néző a csík melletti,
+// azonos magasságú vízszintes mennyezetfelület teljes sugárirányú mélységére húzza ki (a csík hossza mentén); a modell csíkja elrejtve.
+const MENNY_TELJES = { S3: ['ruhatar'] };
+function mennyTeljes(root, key) {
+  root.updateMatrixWorld(true); const csop = new THREE.Group(), rejt = []; csop.name = 'WEB_menny_teljes';
+  const A = new THREE.Vector3(), B = new THREE.Vector3(), C = new THREE.Vector3(), E1 = new THREE.Vector3(), E2 = new THREE.Vector3(), Nn = new THREE.Vector3();
+  const vizsz = [];
+  root.traverse((o) => { if (!o.isMesh) return; const g = o.geometry, p = g.attributes.position, ix = g.index, mats = Array.isArray(o.material) ? o.material : [o.material], cnt = ix ? ix.count : p.count;
+    for (let t = 0; t < cnt; t += 3) {
+      let mn = mats[0]?.name || ''; if (g.groups.length) for (const gr of g.groups) if (t >= gr.start && t < gr.start + gr.count) { mn = mats[gr.materialIndex]?.name || ''; break; }
+      if (/UJ_|WEB_/.test(mn)) continue;
+      A.fromBufferAttribute(p, ix ? ix.getX(t) : t).applyMatrix4(o.matrixWorld); B.fromBufferAttribute(p, ix ? ix.getX(t + 1) : t + 1).applyMatrix4(o.matrixWorld); C.fromBufferAttribute(p, ix ? ix.getX(t + 2) : t + 2).applyMatrix4(o.matrixWorld);
+      const cy = (A.y + B.y + C.y) / 3; if (cy < 2.5 || cy > 7) continue;
+      E1.subVectors(B, A); E2.subVectors(C, A); Nn.crossVectors(E1, E2); const L = Nn.length(); if (L < 1e-6 || Math.abs(Nn.y / L) < 0.95) continue;
+      if (!/_teto/.test(mn)) continue;   // csak a modell mennyezet-felületei (pl. W_L3_teto)
+      vizsz.push([A.x, A.z, B.x, B.z, C.x, C.z, cy]); } });
+  for (const tipus of MENNY_TELJES[key]) {
+    // a csík csúcsai háromszögenként összekötve (egy csík = egy egység), plusz 1,5 m-en belüli csúcsok
+    const pts = [], szulo = [], gy = (k) => { while (szulo[k] !== k) { szulo[k] = szulo[szulo[k]]; k = szulo[k]; } return k; }, egy = (a, b) => { a = gy(a); b = gy(b); if (a !== b) szulo[a] = b; };
+    root.traverse((o) => { if (!o.isMesh) return; for (const m of (Array.isArray(o.material) ? o.material : [o.material])) { if (!new RegExp(`UJ_zona_${tipus}_teto`).test(m.name || '')) continue;
+      const p = o.geometry.attributes.position, e = o.matrixWorld.elements, b0 = pts.length;
+      for (let k = 0; k < p.count; k++) { const x = p.getX(k), y = p.getY(k), z = p.getZ(k); pts.push([e[0] * x + e[4] * y + e[8] * z + e[12], e[1] * x + e[5] * y + e[9] * z + e[13], e[2] * x + e[6] * y + e[10] * z + e[14]]); szulo.push(pts.length - 1); }
+      const ix = o.geometry.index; if (ix) for (let t = 0; t < ix.count; t += 3) { egy(b0 + ix.getX(t), b0 + ix.getX(t + 1)); egy(b0 + ix.getX(t), b0 + ix.getX(t + 2)); } else for (let t = 0; t + 2 < p.count; t += 3) { egy(b0 + t, b0 + t + 1); egy(b0 + t, b0 + t + 2); } } });
+    for (let k = 0; k < pts.length; k++) for (let j = k + 1; j < pts.length; j++) if (Math.hypot(pts[j][0] - pts[k][0], pts[j][2] - pts[k][2]) < 1.5) egy(k, j);
+    const csopok = new Map(); for (let k = 0; k < pts.length; k++) { const g0 = gy(k); if (!csopok.has(g0)) csopok.set(g0, []); csopok.get(g0).push(k); }
+    for (const cs of csopok.values()) {
+      const pp = cs.map((j) => pts[j]); let mx = 0, mz = 0, ys = -1e9; for (const q of pp) { mx += q[0]; mz += q[2]; ys = Math.max(ys, q[1]); } mx /= pp.length; mz /= pp.length;
+      // tengelyek a csík saját irányából (fő irány = hossz), a mélység iránya kifelé (a középponttól el)
+      let sxx = 0, szz = 0, sxz = 0; for (const q of pp) { const dx = q[0] - mx, dz = q[2] - mz; sxx += dx * dx; szz += dz * dz; sxz += dx * dz; }
+      const fi = 0.5 * Math.atan2(2 * sxz, sxx - szz); let tx = Math.cos(fi), tz = Math.sin(fi), ux = -tz, uz = tx; if (ux * mx + uz * mz < 0) { ux = -ux; uz = -uz; }
+      let t0 = 1e9, t1 = -1e9, r0 = 1e9, r1 = -1e9; for (const q of pp) { const t = (q[0] - mx) * tx + (q[2] - mz) * tz, rr = q[0] * ux + q[2] * uz; t0 = Math.min(t0, t); t1 = Math.max(t1, t); r0 = Math.min(r0, rr); r1 = Math.max(r1, rr); }
+      let a0 = r0, a1 = r1, ym = -1e9;
+      for (const v of vizsz) { if (Math.abs(v[6] - (ys - 0.1)) > 0.35) continue;
+        for (let k = 0; k < 6; k += 2) { const x = v[k], z = v[k + 1], t = (x - mx) * tx + (z - mz) * tz, rr = x * ux + z * uz; if (t < t0 - 0.3 || t > t1 + 0.3 || rr < r0 - 2.5 || rr > r1 + 2.5) continue; a0 = Math.min(a0, rr); a1 = Math.max(a1, rr); ym = Math.max(ym, v[6]); } }
+      const y = Math.max(ys, ym + 0.05), merch = dobozban(MERCH_HELY[key], mx, mz), szin = merch ? MERCH_SZIN : ZONA_PALETTA[tipus];
+      const rm = mx * ux + mz * uz, kp = (t, rr) => [mx + tx * t + ux * (rr - rm), y, mz + tz * t + uz * (rr - rm)], P = [kp(t0, a0), kp(t1, a0), kp(t1, a1), kp(t0, a1)].flat();
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setIndex([0, 1, 2, 0, 2, 3]);
+      const lap = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ name: 'WEB_menny_teljes', color: szin, transparent: true, opacity: ZONA_FEDES, depthWrite: false, side: THREE.DoubleSide })); lap.renderOrder = 5; lap.frustumCulled = false; csop.add(lap);
+      const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute([0, 1, 1, 2, 2, 3, 3, 0].flatMap((k) => P.slice(k * 3, k * 3 + 3)), 3));
+      const v = new THREE.LineSegments(sg, new THREE.LineBasicMaterial({ name: 'WEB_menny_teljes_szegely', color: szin })); v.renderOrder = 6; v.frustumCulled = false; csop.add(v);
+      const fp = []; for (let t = t0; t <= t1; t += 0.4) for (let rr = a0; rr <= a1; rr += 0.2) { const q = kp(t, rr); fp.push([q[0], q[2]]); }
+      const f = zonaFeliratPontokra(fp, y, merch ? 'MERCH SHOP' : ZONA_SZOVEG[tipus]); if (f) csop.add(f);
+      let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (const q of pp) { x0 = Math.min(x0, q[0]); x1 = Math.max(x1, q[0]); z0 = Math.min(z0, q[2]); z1 = Math.max(z1, q[2]); }
+      rejt.push({ x0: x0 - 0.5, x1: x1 + 0.5, z0: z0 - 0.5, z1: z1 + 0.5 });
+    }
+  }
+  if (rejt.length) root.traverse((o) => { if (!o.isMesh) return; for (const m of (Array.isArray(o.material) ? o.material : [o.material]))
+    if (/UJ_zona_ruhatar_(teto|szegely)/.test(m.name || '') && !String(m.customProgramCacheKey?.() || '').includes('|zonarejt')) zonaRejt(m, rejt); });
+  csop.userData.rejt = rejt;
+  return csop.children.length ? csop : null;
+}
 function homlokzatLapok(root, key) {
   root.updateMatrixWorld(true); const csop = new THREE.Group(); csop.name = 'WEB_homlokzatok';
   for (const tipus of HOMLOKZAT[key]) {
@@ -1541,6 +1592,8 @@ async function loadLevel(level) {
       if (WC_MENNY.has(L.key) && !QS.has('nowcmenny')) { try { const w = wcMennyezet(gltf.scene, data.pois); if (w) gltf.scene.add(w); } catch (e) { console.warn('wc-menny', e); } }
       if (WC_FAL.has(L.key) && !QS.has('nowcfal')) { try { const w = wcFalak(gltf.scene, data.pois); if (w) gltf.scene.add(w); } catch (e) { console.warn('wc-fal', e); } }
       if (HOMLOKZAT[L.key] && !QS.has('nohomlokzat')) { try { const h = homlokzatLapok(gltf.scene, L.key); if (h) gltf.scene.add(h); } catch (e) { console.warn('homlokzat', e); } }
+      let mtRejt = [];
+      if (MENNY_TELJES[L.key] && !QS.has('nomenny')) { try { const h = mennyTeljes(gltf.scene, L.key); if (h) { gltf.scene.add(h); mtRejt = h.userData.rejt; } } catch (e) { console.warn('mennyezet', e); } }
       let tbRejt = [];
       if (TETOBLOKK[L.key] && !QS.has('noblokk')) { try { const b = tetoBlokkok(gltf.scene, L.key); if (b) { gltf.scene.add(b); tbRejt = b.userData.rejt; } } catch (e) { console.warn('tetőblokk', e); } }
       // lobby, páholy, felső szint: a modell feliratai (fehér háttérlapon, kicsi) helyett ugyanaz a nagy, sötét, egyforma felirat, mint az alsó szinten;
@@ -1553,7 +1606,7 @@ async function loadLevel(level) {
         } });
         const g = new THREE.Group(); g.name = 'WEB_feliratok'; const kozep = (pp) => { let x = 0, z = 0; for (const [a, b] of pp) { x += a; z += b; } return [x / pp.length, z / pp.length]; };
         const blokkban = (pp) => { const [x, z] = kozep(pp); return tbRejt.some((d) => x > d.x0 - 2 && x < d.x1 + 2 && z > d.z0 - 2 && z < d.z1 + 2); };
-        for (const [t, sz] of Object.entries(ZONA_SZOVEG)) for (const f of modellLapFeliratok(gltf.scene, new RegExp(`UJ_zona_${t}_teto`), sz, (pp) => (t === 'ruhatar' && dobozban(mh, ...kozep(pp))) || (t === 'bar' && blokkban(pp)))) g.add(f);
+        for (const [t, sz] of Object.entries(ZONA_SZOVEG)) for (const f of modellLapFeliratok(gltf.scene, new RegExp(`UJ_zona_${t}_teto`), sz, (pp) => (t === 'ruhatar' && dobozban(mh, ...kozep(pp))) || (t === 'bar' && blokkban(pp)) || (t === 'ruhatar' && mtRejt.some((d) => dobozban(d, ...kozep(pp)))))) g.add(f);
         if (mh && !HOMLOKZAT[L.key]) for (const f of modellLapFeliratok(gltf.scene, /UJ_zona_ruhatar_teto/, 'MERCH SHOP', (pp) => !dobozban(mh, ...kozep(pp)))) g.add(f);
         if (g.children.length) gltf.scene.add(g);
       }
