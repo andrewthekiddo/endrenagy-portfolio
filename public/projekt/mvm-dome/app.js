@@ -811,7 +811,7 @@ function homlokzatLapok(root, key) {
 // Mosdó-jelölés az ajtók falán (páholy és felső szint, ahol a mosdók tetejét felülről nem lehet megbízhatóan megtalálni):
 // minden mosdó-csoport (a nézőben összevont férfi + női ajtók) ajtós falszakaszán függőleges kék lap, szegéllyel, TOILET felirattal.
 // A lap a folyosó felőli oldalra kerül (a magasságtérképen az ajtó két oldala közül az alacsonyabb a folyosó).
-const WC_FAL = new Set(['S3']);
+const WC_FAL = new Set();   // NINCS falra / homlokzatra tett jelölés – a felhasználó kifejezett kérése (2026-11-20): csak mennyezeti jelölés
 // páholy szint: a mosdók a VIP-tömb zárt mennyezete alatt vannak (az ajtós fal kívülről nem látszik) → a mennyezetre, közvetlenül a mosdó-csoport
 // fölé kerül egy kék téglalap: az ajtók oldalirányú sávja ± 2,5 m, a folyosóval ellentétes oldalon 6 m mélyen, a mennyezet ott mért magasságában
 const WC_MENNY = new Set(['S2']);
