@@ -253,6 +253,31 @@ function zonaVag(m, v) {
   m.customProgramCacheKey = () => (kulcs ? kulcs() : '') + '|zonavag' + v.hely.join('_');
   m.needsUpdate = true;
 }
+// A lobby lépcsői és mozgólépcsői a szint tetejénél élesen el voltak vágva; a felhasználó kérésére (V2) fölfelé fokozatosan „elporladnak”:
+// a megadott alaprajzi sávban (a két lépcsőcsoport) az y0 fölötti képpontokat magassággal növekvő arányban eldobjuk (szitaminta), y1-nél teljesen.
+// Nem átlátszóság, ezért a sütött fény és a rajzolási sorrend érintetlen. A homlokzat anyagai kimaradnak (a lobby kivágott homlokzat-alakja marad).
+const LEPCSO_FADE = { S0: { xMin: 17, xMax: 38, zMin: -77, zMax: -57, y0: 3.0, y1: 6.2 } };
+function lepcsoFade(root, v) {
+  const kesz = new Set();
+  root.traverse((o) => {
+    if (!o.isMesh || !o.material) return;
+    for (const m of (Array.isArray(o.material) ? o.material : [o.material])) {
+      if (kesz.has(m) || FACADE.test(alapNev(m.name)) || /UJ_/.test(m.name)) continue; kesz.add(m);
+      const elozo = m.onBeforeCompile, kulcs = m.customProgramCacheKey?.bind(m);
+      m.onBeforeCompile = (sh, r) => {
+        elozo?.call(m, sh, r);
+        sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vFadeP;')
+          .replace('#include <project_vertex>', '#include <project_vertex>\nvFadeP = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+        sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vFadeP;')
+          .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n' +
+            `if (abs(vFadeP.x) > ${v.xMin.toFixed(1)} && abs(vFadeP.x) < ${v.xMax.toFixed(1)} && vFadeP.z > ${v.zMin.toFixed(1)} && vFadeP.z < ${v.zMax.toFixed(1)}) {` +
+            ` float fk = smoothstep(${v.y0.toFixed(1)}, ${v.y1.toFixed(1)}, vFadeP.y); if (fk > 0.0 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) < fk) discard; }`);
+      };
+      m.customProgramCacheKey = () => (kulcs ? kulcs() : '') + '|lepcsofade';
+      m.needsUpdate = true;
+    }
+  });
+}
 function tuneMaterials(root, key) {
   const cut = FACADE_CUT[key] ? [new THREE.Plane(new THREE.Vector3(0, -1, 0), FACADE_CUT[key])] : null;
   const done = new Set();
@@ -345,7 +370,24 @@ function osszevonMosdo(pois) {
   return ki;
 }
 const AGAK = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); AGAK.setAttribute('class', 'agak');
-function buildMarkers(pois) {
+// A szektorszám helye: a szektor KÖZEPE a lelátón (felhasználó, 2026-11-20: „nagyon a nézőtér legtetején van … lehetne a szektorok közepén”).
+// A szektor-alaprajzból (data/szektorok.json) számolva: a szám a saját oldalán, a sorok (r) és a magasság (z) közepén ül; ha nincs adat, marad a régi hely.
+function szektorKozep(p, padlo) {
+  const q = SZEKTOR?.szektorok[p.id.slice(8)]; if (!q?.length) return null;
+  let bf = 0, br = -1e9; SZEKTOR.oldalak.forEach((o, i) => { const r = o[0] * p.x + o[1] * p.y - o[2]; if (r > br) { br = r; bf = i; } });
+  const sajat = q.filter((k) => k[0] === bf), k = sajat.length ? sajat : q, o = SZEKTOR.oldalak[k[0][0]];
+  let r0 = 1e9, r1 = -1e9, t0 = -1e9, t1 = 1e9; for (const a of k) { r0 = Math.min(r0, a[3]); r1 = Math.max(r1, a[4]); t0 = Math.max(t0, a[1]); t1 = Math.min(t1, a[2]); }
+  const rm = (r0 + r1) / 2;
+  // a magasság a sorok közepén: abban a darabban, amelyikbe az rm esik
+  const d = k.find((a) => rm >= a[3] && rm <= a[4]) || k[0], z = d[5] + (d[6] - d[5]) * Math.min(1, Math.max(0, (rm - d[3]) / (d[4] - d[3])));
+  // az oldal menti hely: a szám eredeti helye, de a szektor (véges) határain belül; saroknál (±999) a véges vég felől 4 m-rel beljebb
+  let t = -o[1] * p.x + o[0] * p.y;
+  const v0 = t0 > -900, v1 = t1 < 900;
+  if (v0 && v1) t = (t0 + t1) / 2; else if (v0) t = Math.max(t, t0 + 2); else if (v1) t = Math.min(t, t1 - 2);
+  const x = o[0] * (rm + o[2]) - o[1] * t, y = o[1] * (rm + o[2]) + o[0] * t;
+  return new THREE.Vector3(x, z - padlo + 0.9, -y);
+}
+function buildMarkers(pois, padlo = 0) {
   markersEl.innerHTML = ''; AGAK.innerHTML = ''; markersEl.appendChild(AGAK);
   return pois.map((p) => {
     const el = document.createElement('div');
@@ -361,7 +403,7 @@ function buildMarkers(pois) {
     el.addEventListener('click', (e) => { e.stopPropagation(); const mk = current.markers.find((x) => x.el === el); if (mk?.csopN > 1) csoportKozelit(mk); else selectPoi(p); });
     el.addEventListener('dblclick', (e) => e.stopPropagation());
     markersEl.appendChild(el);
-    const world = poiWorld(p); world.y += p.cat === 'szektor' ? 1.5 : 1.2;
+    const world = (p.cat === 'szektor' && !QS.has('regiszektor') && szektorKozep(p, padlo)) || poiWorld(p); if (p.cat !== 'szektor' || world.x === p.x) world.y += p.cat === 'szektor' ? 1.5 : 1.2;
     if (p.cat !== 'szektor') {   // minden szolgáltatás-pin EGY magasságban (felhasználó, V2): a padlótól 5,7 m-rel följebb, 3D-s szárral; a közös mosdó szára elágazik
       el.classList.add('agas');
       const ag = document.createElementNS('http://www.w3.org/2000/svg', 'path'); AGAK.appendChild(ag);
@@ -375,6 +417,59 @@ function buildMarkers(pois) {
     }
     return { p, el, world };
   });
+}
+
+// ---------- Takarás: a modell mögé kerülő buborékok eltűnnek (felhasználó, 2026-11-20: „a modell ki tudná maszkolni … az adna mélységet”) ----------
+// A buborékok HTML-elemek, ezért a kép mélységét külön, kis felbontásban rajzoljuk ki (minden tömör felület távolsága a kamerától, 16 biten),
+// visszaolvassuk, és amelyik buborék pontja mögötte van, azt elhalványítjuk. Az áttetsző felületek (üveg, színes zóna-lapok) nem takarnak.
+const TAKAR = { be: !QS.has('notakar'), sz: 288, kep: null, m: 0, rt: null, puf: null, kocka: 0, elozo: '', kesz: false };
+const takarAnyag = new THREE.ShaderMaterial({
+  uniforms: { uTav: { value: 1200 } }, side: THREE.DoubleSide,
+  vertexShader: 'varying float vZ;' + '\n' + 'void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); vZ = -mv.z; gl_Position = projectionMatrix * mv; }',
+  fragmentShader: 'uniform float uTav; varying float vZ;' + '\n' + 'void main(){ float d = clamp(vZ / uTav, 0.0, 1.0) * 255.0; gl_FragColor = vec4(floor(d) / 255.0, fract(d), 0.0, 1.0); }',
+});
+const _feher = new THREE.Color(0xffffff);
+function takarasFrissit() {
+  if (!TAKAR.be || !current) return;
+  // csak akkor rajzoljuk újra, ha a kamera elmozdult (álló képnél elég egyszer), és akkor is csak minden 3. képkockán
+  const kulcs = current.level + camera.matrixWorld.elements.map((x) => x.toFixed(2)).join(',') + camera.fov.toFixed(1) + innerWidth + 'x' + innerHeight;
+  if (kulcs === TAKAR.elozo || (++TAKAR.kocka % 3 && TAKAR.kesz)) return;
+  TAKAR.elozo = kulcs;
+  const w = TAKAR.sz, h = Math.max(32, Math.round(TAKAR.sz * innerHeight / innerWidth));
+  if (!TAKAR.rt || TAKAR.m !== h) { TAKAR.rt?.dispose(); TAKAR.rt = new THREE.WebGLRenderTarget(w, h, { depthBuffer: true }); TAKAR.puf = new Uint8Array(w * h * 4); TAKAR.m = h; }
+  // ami nem takar: áttetsző anyagok, a levágott homlokzat (FACADE_CUT) – ezeket a mélységrajz idejére elrejtjük
+  current.nemTakar ??= (() => { const l = []; const vag = !!FACADE_CUT[LEVELS[current.level].key];
+    for (const gy of [current.root, current.anim?.root]) gy?.traverse((o) => { if (!o.isMesh) return; const ms = Array.isArray(o.material) ? o.material : [o.material];
+      if (ms.every((m) => m.transparent || m.opacity < 1 || (vag && FACADE.test(alapNev(m.name))))) l.push(o); }); return l; })();
+  for (const o of current.nemTakar) o.visible = false;
+  const hatter = scene.background; scene.background = _feher; scene.overrideMaterial = takarAnyag; takarAnyag.uniforms.uTav.value = camera.far;
+  renderer.setRenderTarget(TAKAR.rt); renderer.render(scene, camera);
+  renderer.readRenderTargetPixels(TAKAR.rt, 0, 0, w, h, TAKAR.puf);
+  renderer.setRenderTarget(null); scene.overrideMaterial = null; scene.background = hatter;
+  for (const o of current.nemTakar) o.visible = true;
+  TAKAR.kesz = true;
+}
+// igaz, ha a világbeli pont a modell mögött van (a pont körüli 3×3 képpont mindegyikében közelebb van valami tömör felület)
+const _tv = new THREE.Vector3();
+function takart(pont) {
+  if (!TAKAR.be || !TAKAR.kesz) return false;
+  _tv.copy(pont).applyMatrix4(camera.matrixWorldInverse); const tav = -_tv.z; if (tav <= 0) return false;
+  _tv.copy(pont).project(camera);
+  const w = TAKAR.sz, h = TAKAR.m, px = Math.round((_tv.x * 0.5 + 0.5) * (w - 1)), py = Math.round((_tv.y * 0.5 + 0.5) * (h - 1));
+  if (px < 1 || py < 1 || px > w - 2 || py > h - 2) return false;
+  const tures = 7 + tav * 0.012;   // csak az takar, ami legalább ~7 m-rel a pont ELŐTT van – a pin saját tárgya (liftakna, pult, fal, amin ül) ne tüntesse el
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+    const i = ((py + dy) * w + px + dx) * 4, d = (TAKAR.puf[i] + TAKAR.puf[i + 1] / 255) / 255 * camera.far;
+    if (d >= tav - tures) return false;
+  }
+  return true;
+}
+// puhítás: csak akkor vált állapotot, ha két egymást követő mérés ugyanazt mondja (a széleken ne villogjon)
+function takarJel(m, pont) {
+  const t = m.el !== selectedEl && takart(pont);
+  m.tk = t ? Math.min(2, (m.tk || 0) + 1) : Math.max(0, (m.tk || 0) - 1);
+  if (m.tk === 2 && !m.tkBe) { m.tkBe = true; m.el.classList.add('takart'); } else if (m.tk === 0 && m.tkBe) { m.tkBe = false; m.el.classList.remove('takart'); }
+  return !!m.tkBe;
 }
 
 const _v = new THREE.Vector3();
@@ -403,6 +498,7 @@ function updateMarkers() {
       pinSor.push({ m, q, s, rejt, halv, focus, x: t[0], y: t[1] - 18 * s, r: 18 * s + 2 });   // x, y: a pin-kör közepe; r: sugara képpontban
       continue;
     }
+    takarJel(m, m.world);
     m.el.style.transform = `translate(${x}px,${y}px) translate(-50%,-100%) scale(${s})`;
   }
   // ZSÚFOLTSÁG (felhasználó, 2026-11-20): távolról az egymáshoz közeli, AZONOS típusú pinek közül csak EGY látszik (a saját helyén, rajta a darabszámmal)
@@ -433,7 +529,8 @@ function updateMarkers() {
   for (const g of csoportok) {
     const a = g.fo, m = a.m, n = g.tagok.length;
     const t = a.q[a.q.length - 1];
-    m.ag.setAttribute('d', szar(a.q)); m.ag.style.display = '';
+    const tk = takarJel(m, m.vaz[m.vaz.length - 1]);
+    m.ag.setAttribute('d', szar(a.q)); m.ag.style.display = tk ? 'none' : '';
     m.ag.style.opacity = a.halv ? 0.3 : 0.9; m.ag.style.strokeWidth = a.focus ? 2.6 : 2;
     m.ag.style.stroke = a.focus || m.el === selectedEl || MINDIG_SZINES.has(m.p.cat) ? CATS[m.p.cat].color : 'rgba(252,191,32,.5)';   // semleges állapotban halvány sárga szár
     m.el.style.transform = `translate(${t[0]}px,${t[1]}px) translate(-50%,-100%) scale(${a.s})`;
@@ -888,6 +985,7 @@ async function loadLevel(level) {
       if (data.anim) {
         try { animObj = setupAnim(await loadGltf(data.anim.model), data.anim.clip_top); } catch (e) { console.warn('animáció', e); }
       }
+      if (LEPCSO_FADE[L.key] && !QS.has('nofade')) lepcsoFade(gltf.scene, LEPCSO_FADE[L.key]);
       c = cache[level] = { level, baked: c_baked, lm: c_lm, root: gltf.scene, anim: animObj, data, path: buildPath(data.camera) };
       setProgress(1);
     }
@@ -898,7 +996,7 @@ async function loadLevel(level) {
       markersEl.innerHTML = '';
     }
     scene.add(c.root); if (c.anim) scene.add(c.anim.root);
-    current = { ...c, pois: c.data.pois, markers: buildMarkers(c.data.pois), lights: c.baked ? [] : addPoiLights(c.data.pois) };
+    current = { ...c, pois: c.data.pois, markers: buildMarkers(c.data.pois, c.data.padlo || 0), lights: c.baked ? [] : addPoiLights(c.data.pois) };
     camShift = [c.data.camera.shift_x || 0, c.data.camera.shift_y || 0];
     LM.gain.value = Number(QS.get('lmg')) || c.data.lightmap?.gain || 1; LM.gamma.value = Number(QS.get('lmgam')) || c.data.lightmap?.gamma || 1;
     hfov = 2 * Math.atan(c.data.camera.sensor / 2 / c.data.camera.lens) * 180 / Math.PI;
@@ -957,6 +1055,7 @@ renderer.setAnimationLoop((now) => {
   if (mode === 'detail' && !anim) controls.update(); else camera.lookAt(controls.target);
   if (DBGFOV && camera.fov !== DBGFOV) { camera.fov = DBGFOV; camera.updateProjectionMatrix(); }
   renderer.render(scene, camera);
+  takarasFrissit();
   updateMarkers();
 });
 
