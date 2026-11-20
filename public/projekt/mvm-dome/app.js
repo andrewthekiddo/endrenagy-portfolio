@@ -279,7 +279,9 @@ function lepcsoFade(root, v) {
   });
 }
 // Zóna-jelölés elrejtése egy alaprajzi dobozban (világ x / z, m): a páholy szint Platinum bárján nem kell színes jelölés (felhasználó, 2026-11-20).
-const ZONA_REJT = { S2: { minta: /UJ_zona_bar_/, x0: -13, x1: 13, z0: -71, z1: -57 } };
+const ZONA_REJT = { S2: [{ minta: /UJ_zona_bar_/, x0: -13, x1: 13, z0: -71, z1: -57 }],
+  // S1, 3-as büfé (212-es szektor): a modell rózsaszín lapja csak a helyiség elejét fedi, ferdén, és túllóg a falon (felhasználó, 2026-11-20) → elrejtve, a néző újrarajzolja (ZONA_UJRA)
+  S1: [{ minta: /UJ_zona_bar_(teto|szegely)/, x0: -47.2, x1: -39.5, z0: 19.5, z1: 37 }] };
 const ZONA_REJT_KESZ = new WeakSet();   // (a userData átmásolódna az anyag klónjára, ezért külön halmaz)
 function zonaRejt(m, v) {
   ZONA_REJT_KESZ.add(m);
@@ -290,7 +292,7 @@ function zonaRejt(m, v) {
       .replace('#include <project_vertex>', '#include <project_vertex>\nvRejtP = (modelMatrix * vec4(transformed, 1.0)).xyz;');
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vRejtP;')
       .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n' +
-        `if (vRejtP.x > ${v.x0.toFixed(1)} && vRejtP.x < ${v.x1.toFixed(1)} && vRejtP.z > ${v.z0.toFixed(1)} && vRejtP.z < ${v.z1.toFixed(1)}) discard;`);
+        v.map((d) => `if (vRejtP.x > ${d.x0.toFixed(1)} && vRejtP.x < ${d.x1.toFixed(1)} && vRejtP.z > ${d.z0.toFixed(1)} && vRejtP.z < ${d.z1.toFixed(1)}) discard;`).join('\n'));
   };
   m.customProgramCacheKey = () => (kulcs ? kulcs() : '') + '|zonarejt';
   m.needsUpdate = true;
@@ -434,6 +436,37 @@ function wcTetok(root, pois) {
   const szegely = new THREE.LineSegments(sg, new THREE.LineBasicMaterial({ name: 'WEB_wc_szegely', color: 0x5cc0ff, transparent: true, opacity: 0.95 })); szegely.renderOrder = 6; szegely.frustumCulled = false; halo.add(szegely);
   return halo;
 }
+// Hibás modell-lapok újrarajzolása: a helyiség padlóját (falakkal körülzárt, 2,5 m alatti cellák) elárasztjuk a megadott belső pontból,
+// és az alaprajzára a faltető magasságában színes lapot + világító szegélyt teszünk (a modell lapjával azonos színben). mag: Blender x / y, m.
+const ZONA_UJRA = { S1: [{ mag: [-43.5, -25], szin: 0xff277c, fedes: 0.6, y: 4.3 }] };
+function zonaUjra(root, lista) {
+  const mag = wcMagassagTerkep(root), N = WC_N, cm = 2 * WC_R / (N - 1), csop = new THREE.Group(); csop.name = 'WEB_zona_ujra';
+  for (const z of lista) {
+    const si = wcCy(-z.mag[1]) * N + wcCx(z.mag[0]); if (mag[si] >= 2.5) continue;
+    const latott = new Set([si]), verem = [si]; let rossz = false;
+    while (verem.length) { const i = verem.pop(); if (latott.size > 400 / (cm * cm)) { rossz = true; break; }
+      for (const j of [i - 1, i + 1, i - N, i + N]) if (!latott.has(j) && mag[j] < 2.5) { latott.add(j); verem.push(j); } }
+    if (rossz) continue;
+    // a fal feléig kiterjesztve (a lap a fal belső élén érjen véget, ne maradjon rés)
+    const bov = new Set(latott); for (const i of latott) for (const j of [i - 1, i + 1, i - N, i + N]) bov.add(j);
+    const cs = [], ix = [], sz = [], y = z.y;
+    const sorok = new Map(); for (const i of bov) { const x = i % N, yy = (i - x) / N; if (!sorok.has(yy)) sorok.set(yy, []); sorok.get(yy).push(x); }
+    for (const [yy, xs] of sorok) { xs.sort((a, b) => a - b); let x0 = xs[0], e = xs[0];
+      for (let t = 1; t <= xs.length; t++) { if (t < xs.length && xs[t] === e + 1) { e = xs[t]; continue; }
+        const b = cs.length / 3, xa = wcX(x0) - cm / 2, xb = wcX(e) + cm / 2, za = wcZ(yy) + cm / 2, zb = wcZ(yy) - cm / 2;
+        cs.push(xa, y, za, xb, y, za, xb, y, zb, xa, y, zb); ix.push(b, b + 1, b + 2, b, b + 2, b + 3);
+        if (t < xs.length) { x0 = xs[t]; e = xs[t]; } } }
+    for (const i of bov) { const x = i % N, yy = (i - x) / N, xa = wcX(x) - cm / 2, xb = wcX(x) + cm / 2, za = wcZ(yy) + cm / 2, zb = wcZ(yy) - cm / 2, yv = y + 0.02;
+      if (!bov.has(i - 1)) sz.push(xa, yv, za, xa, yv, zb); if (!bov.has(i + 1)) sz.push(xb, yv, za, xb, yv, zb);
+      if (!bov.has(i - N)) sz.push(xa, yv, za, xb, yv, za); if (!bov.has(i + N)) sz.push(xa, yv, zb, xb, yv, zb); }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(cs, 3)); g.setIndex(ix);
+    const lap = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ name: 'WEB_zona_ujra_teto', color: z.szin, transparent: true, opacity: z.fedes * 0.85, depthWrite: false, side: THREE.DoubleSide }));
+    lap.renderOrder = 5; lap.frustumCulled = false; csop.add(lap);
+    const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(sz, 3));
+    const vonal = new THREE.LineSegments(sg, new THREE.LineBasicMaterial({ name: 'WEB_zona_ujra_szegely', color: z.szin })); vonal.renderOrder = 6; vonal.frustumCulled = false; csop.add(vonal);
+  }
+  return csop.children.length ? csop : null;
+}
 function tuneMaterials(root, key) {
   const cut = FACADE_CUT[key] ? [new THREE.Plane(new THREE.Vector3(0, -1, 0), FACADE_CUT[key])] : null;
   const done = new Set();
@@ -447,7 +480,7 @@ function tuneMaterials(root, key) {
       reteg(m);
       // színes szolgáltatás-jelölők (UJ_zona_<bar|ruhatar|merch|wc>_teto / _szegely / _betu): matt, ne tükrözzön (felhasználó, V2)
       if (ZONA_VAGAS[key]?.minta.test(m.name) && !QS.has('novag')) zonaVag(m, ZONA_VAGAS[key]);
-      if (ZONA_REJT[key]?.minta.test(m.name) && !QS.has('norejt')) zonaRejt(m, ZONA_REJT[key]);
+      { const d = (ZONA_REJT[key] || []).filter((d) => d.minta.test(m.name)); if (d.length && !QS.has('norejt')) zonaRejt(m, d); }
       // a zónák feliratai (BAR, MERCH SHOP …) sokkal sötétebbek és a színes lap FÖLÉ rajzolva (felhasználó, 2026-11-20: „nehezen olvasom el”):
       // áttetsző körben, a lap után rajzoljuk, így a lap színe nem mossa ki; a szín közel fekete sötétkék
       if (/UJ_zona_.*_betu/.test(m.name)) { m.color.setHex(0x070b14); if (m.emissive) m.emissive.setHex(0); m.map = null; m.transparent = true; m.opacity = 1; m.depthWrite = false; o.renderOrder = 20; }
@@ -1154,13 +1187,14 @@ async function loadLevel(level) {
         try { animObj = setupAnim(await loadGltf(data.anim.model), data.anim.clip_top); } catch (e) { console.warn('animáció', e); }
       }
       if (LEPCSO_FADE[L.key] && !QS.has('nofade')) lepcsoFade(gltf.scene, LEPCSO_FADE[L.key]);
+      if (ZONA_UJRA[L.key] && !QS.has('noujra')) { try { const u = zonaUjra(gltf.scene, ZONA_UJRA[L.key]); if (u) gltf.scene.add(u); } catch (e) { console.warn('zóna-újra', e); } }
       // ahol a modell már ad kék mosdó-tetőt (UJ_zona_wc…), ott a néző nem épít másikat – különben duplán lenne
       if (WC_SZINT.has(L.key) && !QS.has('nowcteto')) { try {
         let vanModellben = false; gltf.scene.traverse((o) => { if (o.isMesh) for (const m of (Array.isArray(o.material) ? o.material : [o.material])) if (/UJ_zona_wc/.test(m.name || '')) vanModellben = true; });
         const t = !vanModellben && wcTetok(gltf.scene, data.pois); if (t) gltf.scene.add(t);
       } catch (e) { console.warn('wc-tető', e); } }
       // a sütött-fény átalakítás új anyagpéldányt adhat, a szektor-kiemelő shader pedig felülírja az onBeforeCompile-t → a zóna-elrejtést a végleges anyagokra újra rátesszük
-      if (ZONA_REJT[L.key] && !QS.has('norejt')) gltf.scene.traverse((o) => { if (!o.isMesh) return; for (const m of (Array.isArray(o.material) ? o.material : [o.material])) if (ZONA_REJT[L.key].minta.test(m.name || '') && !String(m.customProgramCacheKey?.() || '').includes('|zonarejt')) zonaRejt(m, ZONA_REJT[L.key]); });
+      if (ZONA_REJT[L.key] && !QS.has('norejt')) gltf.scene.traverse((o) => { if (!o.isMesh) return; for (const m of (Array.isArray(o.material) ? o.material : [o.material])) { const d = ZONA_REJT[L.key].filter((d) => d.minta.test(m.name || '')); if (d.length && !String(m.customProgramCacheKey?.() || '').includes('|zonarejt')) zonaRejt(m, d); } });
       c = cache[level] = { level, baked: c_baked, lm: c_lm, root: gltf.scene, anim: animObj, data, path: buildPath(data.camera) };
       setProgress(1);
     }
@@ -1293,4 +1327,4 @@ loadLevel(LEVELS[start] && (start !== 'epulet' || VAN_EPULET) ? start : ALAP)
   }
 });
 
-window.__mvm = { scene, camera, controls, THREE, loadLevel, get current() { return current; }, get mode() { return mode; } };
+window.__mvm = { scene, camera, controls, THREE, loadLevel, magTerkep: () => wcMagassagTerkep(current.root), WC_N, WC_R, get current() { return current; }, get mode() { return mode; } };
