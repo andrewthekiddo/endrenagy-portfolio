@@ -409,7 +409,7 @@ function wcTetok(root, pois) {
   // lap: a helyiség cellái + 1 cella ráhagyás a falra; soronkénti sávokból, az egymás alatti azonos sávok összevonva
   const cs = [], ix = [];
   // ugyanaz a kinézet, mint a modell kék mosdó-blokkjain az alsó szinten (W_UJ_zona_wc_teto / _szegely): világoskék, saját fénnyel, 60%-os fedés, világító szegély
-  const anyag = new THREE.MeshBasicMaterial({ name: 'WEB_wc_teto', color: 0x5fb4f2, transparent: true, opacity: 0.62, depthWrite: false, side: THREE.DoubleSide });   // saját színű (nem a jelenet fényétől függő): a sütött szinten a lámpás anyag sötét maradna
+  const anyag = new THREE.MeshBasicMaterial({ name: 'WEB_wc_teto', color: ZONA_PALETTA.wc, transparent: true, opacity: ZONA_FEDES, depthWrite: false, side: THREE.DoubleSide });   // saját színű (nem a jelenet fényétől függő): a sütött szinten a lámpás anyag sötét maradna
   const szelek = [];
   for (const { cellak, y: yt } of helyisegek) {
     const y = yt + 0.07, bov = new Set(cellak);
@@ -435,7 +435,7 @@ function wcTetok(root, pois) {
   halo.userData.helyisegek = helyisegek.length;
   for (const { cellak, y: yt } of helyisegek) { const f = zonaFeliratPontokra(cellak.map((i) => [wcX(i % N), wcZ((i - i % N) / N)]), yt + 0.07, 'TOILET'); if (f) halo.add(f); }
   const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(szelek, 3));
-  const szegely = new THREE.LineSegments(sg, new THREE.LineBasicMaterial({ name: 'WEB_wc_szegely', color: 0x5cc0ff, transparent: true, opacity: 0.95 })); szegely.renderOrder = 6; szegely.frustumCulled = false; halo.add(szegely);
+  const szegely = new THREE.LineSegments(sg, new THREE.LineBasicMaterial({ name: 'WEB_wc_szegely', color: ZONA_PALETTA.wc, transparent: true, opacity: 0.95 })); szegely.renderOrder = 6; szegely.frustumCulled = false; halo.add(szegely);
   return halo;
 }
 // Hibás modell-lapok újrarajzolása: a helyiség padlóját (falakkal körülzárt, 2,5 m alatti cellák) elárasztjuk a megadott belső pontból,
@@ -458,7 +458,9 @@ const ZONA_ROVID = { 'MERCH SHOP': 'MERCH' };
 const ZONA_IKON = { CLOAKROOM: 'ruhatar' };   // felirat helyett piktogram
 // Szintenként legalább EGY merch shop (felhasználó, 2026-11-20: „valamelyiket véletlenszerűen válaszd ki, egy darab legyen legalább minden szinten”).
 // A lobbyn a modellben van; a többi szinten egy-egy büfé lesz merch shop, a lobby merch-színével (türkizzöld). Világkoordináta (x, z) doboz.
-const MERCH_SZIN = 0x00ddcb;
+const MERCH_SZIN = 0x00e5b4;
+// Telítettebb, kontrasztosabb kiemelő színek (felhasználó, 2026-11-20): csak a jelölő lapok / szegélyek színe, minden szinten
+const ZONA_PALETTA = { bar: 0xff1468, wc: 0x168dff, ruhatar: 0xffb000, merch: 0x00e5b4 }, ZONA_FEDES = 0.74;
 const MERCH_HELY = { S1: { x0: 2, x1: 18, z0: -70, z1: -52 }, S2: { x0: 18, x1: 28, z0: 68, z1: 80 }, S3: { x0: 60, x1: 70, z0: -8, z1: 9 } };
 const dobozban = (d, x, z) => d && x > d.x0 && x < d.x1 && z > d.z0 && z < d.z1;
 // a modell bár-lapjának / szegélyének átszínezése egy dobozban (sütetlen, áttetsző anyag – a shader cseréli a színt)
@@ -595,10 +597,10 @@ function zonaMind(root, key) {
       if (!bov.has(i - 1)) sz.push(xa, yv, za, xa, yv, zb); if (!bov.has(i + 1)) sz.push(xb, yv, za, xb, yv, zb);
       if (!bov.has(i - N)) sz.push(xa, yv, za, xb, yv, za); if (!bov.has(i + N)) sz.push(xa, yv, zb, xb, yv, zb); }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(cs, 3)); g.setIndex(ix);
-    const lap = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ name: 'WEB_zona_teto', color: u.szin, transparent: true, opacity: Math.max(0.45, u.fedes * 0.8), depthWrite: false, side: THREE.DoubleSide }));
+    const lap = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ name: 'WEB_zona_teto', color: ZONA_PALETTA[u.tipus] ?? u.szin, transparent: true, opacity: ZONA_FEDES, depthWrite: false, side: THREE.DoubleSide }));
     lap.renderOrder = 5; lap.frustumCulled = false; csop.add(lap);
     const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(sz, 3));
-    const v = new THREE.LineSegments(sg, new THREE.LineBasicMaterial({ name: 'WEB_zona_szegely', color: u.szin })); v.renderOrder = 6; v.frustumCulled = false; csop.add(v);
+    const v = new THREE.LineSegments(sg, new THREE.LineBasicMaterial({ name: 'WEB_zona_szegely', color: ZONA_PALETTA[u.tipus] ?? u.szin })); v.renderOrder = 6; v.frustumCulled = false; csop.add(v);
     let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (const i of bov) { const x = wcX(i % N), z = wcZ((i - i % N) / N); x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
     const doboz = { x0: x0 - 0.6, x1: x1 + 0.6, z0: z0 - 0.6, z1: z1 + 0.6 }; rejt.push(doboz);
     // felirat minden egységre, a helyiség hossztengelyével párhuzamosan
@@ -608,6 +610,82 @@ function zonaMind(root, key) {
   // a modell zóna-anyagai (a mosdó kivételével) az újrarajzolt egységek dobozaiban eldobva
   if (rejt.length) root.traverse((o) => { if (!o.isMesh) return; for (const m of (Array.isArray(o.material) ? o.material : [o.material]))
     if (/UJ_zona_(?!wc)[a-z]+_(teto|szegely|betu|felirathatter)/.test(m.name || '') && !String(m.customProgramCacheKey?.() || '').includes('|zonarejt')) zonaRejt(m, rejt.concat(ZONA_REJT[key] || [])); });
+  return csop.children.length ? csop : null;
+}
+// A modell egységenként egy (vagy több) keskeny lapot ad; a néző a lap mögötti tömör tetőtömböt keresi meg a magasságtérképen
+// (2,5–6 m magas, azonos magasságú összefüggő felület, a lap oldalirányú kiterjedése ± 3,5 m-en belül), és azt színezi ki egészben.
+const TETOBLOKK = { S3: ['bar', 'merch'] };
+function tetoBlokkok(root, key) {
+  const mag = wcMagassagTerkep(root), N = WC_N, cm = 2 * WC_R / (N - 1), csop = new THREE.Group(), rejt = []; csop.name = 'WEB_tetoblokkok';
+  const mh = MERCH_HELY[key];
+  root.updateMatrixWorld(true);
+  const lapok = [];
+  root.traverse((o) => { if (!o.isMesh) return; for (const m of (Array.isArray(o.material) ? o.material : [o.material])) {
+    const t = /UJ_zona_([a-z]+)_teto/.exec(m.name || ''); if (!t || !TETOBLOKK[key].includes(t[1])) continue;
+    const p = o.geometry.attributes.position, e = o.matrixWorld.elements;
+    for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i), z = p.getZ(i); lapok.push([e[0] * x + e[4] * y + e[8] * z + e[12], e[2] * x + e[6] * y + e[10] * z + e[14]]); } } });
+  // egységek: 4 m-nél közelebbi csúcsok egy csoport
+  const kesz = new Array(lapok.length).fill(false), egys = [];
+  for (let i = 0; i < lapok.length; i++) { if (kesz[i]) continue; const cs = [i]; kesz[i] = true;
+    for (let k = 0; k < cs.length; k++) for (let j = 0; j < lapok.length; j++) if (!kesz[j] && Math.hypot(lapok[j][0] - lapok[cs[k]][0], lapok[j][1] - lapok[cs[k]][1]) < 9) { kesz[j] = true; cs.push(j); }
+    egys.push(cs.map((j) => lapok[j])); }
+  const foglalt = new Set();
+  for (const pp of egys) {
+    let mx = 0, mz = 0; for (const [x, z] of pp) { mx += x; mz += z; } mx /= pp.length; mz /= pp.length;
+    const r = Math.hypot(mx, mz) || 1, tx = -mz / r, tz = mx / r;                 // érintő irány (az épület íve mentén)
+    let t0 = 1e9, t1 = -1e9; for (const [x, z] of pp) { const t = (x - mx) * tx + (z - mz) * tz; t0 = Math.min(t0, t); t1 = Math.max(t1, t); }
+    // kiinduló cella: 8 m-en belül a legközelebbi 2,5–6 m magas tető
+    const cx = wcCx(mx), cy = wcCy(mz), K = Math.round(8 / cm); let si = -1, lj = 1e9;
+    for (let dy = -K; dy <= K; dy += 2) for (let dx = -K; dx <= K; dx += 2) { const i = (cy + dy) * N + cx + dx; if (mag[i] > 2.5 && mag[i] < 6 && !foglalt.has(i) && dx * dx + dy * dy < lj) { lj = dx * dx + dy * dy; si = i; } }
+    if (si < 0) continue;
+    const h0 = mag[si], lat = new Set([si]), verem = [si]; let rossz = false;
+    while (verem.length) { const i = verem.pop(); if (lat.size > 600 / (cm * cm)) { rossz = true; break; }
+      for (const j of [i - 1, i + 1, i - N, i + N]) { if (lat.has(j) || Math.abs(mag[j] - h0) > 0.15) continue;
+        const x = wcX(j % N), z = wcZ((j - j % N) / N), t = (x - mx) * tx + (z - mz) * tz; if (t < t0 - 3.5 || t > t1 + 3.5) continue;
+        lat.add(j); verem.push(j); } }
+    if (rossz || lat.size < 6 / (cm * cm)) continue;
+    // a tömb téglalapja: sugárirányban az elárasztott fél tömb sávja; oldalirányban azonos magasságú cellák ugyanebben a sávban,
+    // a fél tömbtől kiindulva, legfeljebb 2,5 m-es réseken át (a modell kivágása kettévágja a tetőt) – a szomszéd tömbökig nem
+    const rx = mx / r, rz = mz / r, K2 = Math.round(16 / cm);
+    let ta = 1e9, tb = -1e9, ra = 1e9, rb = -1e9;
+    { // percentilisek (3–97 %): a szomszéd tömbök sarkán átszivárgó keskeny csík ne tágítsa a téglalapot
+      const T = [], Rr = []; for (const i of lat) { const x = wcX(i % N), z = wcZ((i - i % N) / N); T.push((x - mx) * tx + (z - mz) * tz); Rr.push(x * rx + z * rz); }
+      T.sort((a, b) => a - b); Rr.sort((a, b) => a - b); const q = (A, f) => A[Math.min(A.length - 1, Math.max(0, Math.round(f * (A.length - 1))))];
+      ta = q(T, 0.03); tb = q(T, 0.97); ra = q(Rr, 0.03); rb = q(Rr, 0.97); }
+    const ts = [];
+    for (let dy = -K2; dy <= K2; dy++) for (let dx = -K2; dx <= K2; dx++) { const i = (cy + dy) * N + cx + dx; if (Math.abs(mag[i] - h0) > 0.15 || foglalt.has(i)) continue;
+      const x = wcX(i % N), z = wcZ((i - i % N) / N), rr = x * rx + z * rz; if (rr < ra + 2 || rr > rb - 2) continue; ts.push((x - mx) * tx + (z - mz) * tz); }
+    ts.sort((a, b) => a - b);
+    if (QS.has('blokkdebug')) console.log('tetoblokk', JSON.stringify({ mx: +mx.toFixed(1), mz: +mz.toFixed(1), h0, ta: +ta.toFixed(1), tb: +tb.toFixed(1), ra: +ra.toFixed(1), rb: +rb.toFixed(1), n: ts.length, t0: +t0.toFixed(1), t1: +t1.toFixed(1) }));
+    for (const t of ts) if (t > tb && t - tb < 2.5) tb = t;
+    for (let k = ts.length - 1; k >= 0; k--) if (ts[k] < ta && ta - ts[k] < 2.5) ta = ts[k];
+    lat.clear();
+    for (let dy = -K2; dy <= K2; dy++) for (let dx = -K2; dx <= K2; dx++) { const i = (cy + dy) * N + cx + dx, x = wcX(i % N), z = wcZ((i - i % N) / N), t = (x - mx) * tx + (z - mz) * tz, rr = x * rx + z * rz;
+      if (t >= ta - cm && t <= tb + cm && rr >= ra - cm && rr <= rb + cm) lat.add(i); }
+    for (const i of lat) foglalt.add(i);
+    const merch = mh && dobozban(mh, mx, mz), szin = merch ? MERCH_SZIN : ZONA_PALETTA.bar, y = h0 + 0.07;
+    const cs = [], ix = [], sz = [];
+    const sorok = new Map(); for (const i of lat) { const x = i % N, yy = (i - x) / N; if (!sorok.has(yy)) sorok.set(yy, []); sorok.get(yy).push(x); }
+    for (const [yy, xs] of sorok) { xs.sort((a, b) => a - b); let x0 = xs[0], e = xs[0];
+      for (let t = 1; t <= xs.length; t++) { if (t < xs.length && xs[t] === e + 1) { e = xs[t]; continue; }
+        const b = cs.length / 3, xa = wcX(x0) - cm / 2, xb = wcX(e) + cm / 2, za = wcZ(yy) + cm / 2, zb = wcZ(yy) - cm / 2;
+        cs.push(xa, y, za, xb, y, za, xb, y, zb, xa, y, zb); ix.push(b, b + 1, b + 2, b, b + 2, b + 3);
+        if (t < xs.length) { x0 = xs[t]; e = xs[t]; } } }
+    for (const i of lat) { const x = i % N, yy = (i - x) / N, xa = wcX(x) - cm / 2, xb = wcX(x) + cm / 2, za = wcZ(yy) + cm / 2, zb = wcZ(yy) - cm / 2, yv = y + 0.02;
+      if (!lat.has(i - 1)) sz.push(xa, yv, za, xa, yv, zb); if (!lat.has(i + 1)) sz.push(xb, yv, za, xb, yv, zb);
+      if (!lat.has(i - N)) sz.push(xa, yv, za, xb, yv, za); if (!lat.has(i + N)) sz.push(xa, yv, zb, xb, yv, zb); }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(cs, 3)); g.setIndex(ix);
+    const lap = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ name: 'WEB_tetoblokk', color: szin, transparent: true, opacity: ZONA_FEDES, depthWrite: false, side: THREE.DoubleSide })); lap.renderOrder = 5; lap.frustumCulled = false; csop.add(lap);
+    const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(sz, 3));
+    const v = new THREE.LineSegments(sg, new THREE.LineBasicMaterial({ name: 'WEB_tetoblokk_szegely', color: szin })); v.renderOrder = 6; v.frustumCulled = false; csop.add(v);
+    const f = zonaFeliratPontokra([...lat].map((i) => [wcX(i % N), wcZ((i - i % N) / N)]), y, merch ? 'MERCH SHOP' : 'BAR'); if (f) csop.add(f);
+    // a modell keskeny lapja, szegélye és az ide tartozó (nézőbeli) modell-felirat ennél az egységnél elrejtve
+    let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (const [x, z] of pp) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
+    rejt.push({ x0: x0 - 0.8, x1: x1 + 0.8, z0: z0 - 0.8, z1: z1 + 0.8, cx: mx, cz: mz });
+  }
+  if (rejt.length) root.traverse((o) => { if (!o.isMesh) return; for (const m of (Array.isArray(o.material) ? o.material : [o.material]))
+    if (/UJ_zona_(bar|merch)_(teto|szegely)/.test(m.name || '')) zonaRejt(m, rejt); });
+  csop.userData.rejt = rejt;
   return csop.children.length ? csop : null;
 }
 function zonaUjra(root, lista) {
@@ -655,6 +733,7 @@ function tuneMaterials(root, key) {
       // a zónák feliratai (BAR, MERCH SHOP …) sokkal sötétebbek és a színes lap FÖLÉ rajzolva (felhasználó, 2026-11-20: „nehezen olvasom el”):
       // áttetsző körben, a lap után rajzoljuk, így a lap színe nem mossa ki; a szín közel fekete sötétkék
       if (/UJ_zona_.*_betu/.test(m.name)) { m.color.setHex(0x070b14); if (m.emissive) m.emissive.setHex(0); m.map = null; m.transparent = true; m.opacity = 1; m.depthWrite = false; o.renderOrder = 20; }
+      { const t = /UJ_zona_([a-z]+)_(teto|szegely)/.exec(m.name || ''); if (t && ZONA_PALETTA[t[1]] && m.color) { m.color.setHex(ZONA_PALETTA[t[1]]); if (m.emissive && t[2] === 'szegely') m.emissive.setHex(ZONA_PALETTA[t[1]]); if (t[2] === 'teto') { m.opacity = ZONA_FEDES; if (m.emissive) m.emissive.setHex(ZONA_PALETTA[t[1]]).multiplyScalar(0.45); } } }
       if (/UJ_zona_/.test(m.name)) { if ('roughness' in m) m.roughness = 1; if ('metalness' in m) m.metalness = 0; if ('envMapIntensity' in m) m.envMapIntensity = 0; if ('specularIntensity' in m) m.specularIntensity = 0; }
       if (m.map) m.map.anisotropy = 8;                 // csempézett anyagminták: lapos szögből se mosódjanak
       if (cut && FACADE.test(alapNev(m.name))) m.clippingPlanes = cut;
@@ -1361,6 +1440,8 @@ async function loadLevel(level) {
         try { animObj = setupAnim(await loadGltf(data.anim.model), data.anim.clip_top); } catch (e) { console.warn('animáció', e); }
       }
       if (LEPCSO_FADE[L.key] && !QS.has('nofade')) lepcsoFade(gltf.scene, LEPCSO_FADE[L.key]);
+      let tbRejt = [];
+      if (TETOBLOKK[L.key] && !QS.has('noblokk')) { try { const b = tetoBlokkok(gltf.scene, L.key); if (b) { gltf.scene.add(b); tbRejt = b.userData.rejt; } } catch (e) { console.warn('tetőblokk', e); } }
       // lobby, páholy, felső szint: a modell feliratai (fehér háttérlapon, kicsi) helyett ugyanaz a nagy, sötét, egyforma felirat, mint az alsó szinten;
       // a merch-dobozba eső büfé átszínezve, MERCH SHOP felirattal
       if (['S0', 'S2', 'S3'].includes(L.key) && !QS.has('nofelirat')) {
@@ -1370,8 +1451,9 @@ async function loadLevel(level) {
           else if (mh && /UJ_zona_bar_(teto|szegely)/.test(m.name || '') && !String(m.customProgramCacheKey?.() || '').includes('|atszinez')) zonaAtszinez(m, mh, MERCH_SZIN);
         } });
         const g = new THREE.Group(); g.name = 'WEB_feliratok'; const kozep = (pp) => { let x = 0, z = 0; for (const [a, b] of pp) { x += a; z += b; } return [x / pp.length, z / pp.length]; };
-        for (const [t, sz] of Object.entries(ZONA_SZOVEG)) for (const f of modellLapFeliratok(gltf.scene, new RegExp(`UJ_zona_${t}_teto`), sz, (pp) => t === 'bar' && dobozban(mh, ...kozep(pp)))) g.add(f);
-        if (mh) for (const f of modellLapFeliratok(gltf.scene, /UJ_zona_bar_teto/, 'MERCH SHOP', (pp) => !dobozban(mh, ...kozep(pp)))) g.add(f);
+        const blokkban = (pp) => { const [x, z] = kozep(pp); return tbRejt.some((d) => x > d.x0 - 2 && x < d.x1 + 2 && z > d.z0 - 2 && z < d.z1 + 2); };
+        for (const [t, sz] of Object.entries(ZONA_SZOVEG)) for (const f of modellLapFeliratok(gltf.scene, new RegExp(`UJ_zona_${t}_teto`), sz, (pp) => (t === 'bar' && dobozban(mh, ...kozep(pp))) || (t === 'bar' && blokkban(pp)))) g.add(f);
+        if (mh) for (const f of modellLapFeliratok(gltf.scene, /UJ_zona_bar_teto/, 'MERCH SHOP', (pp) => !dobozban(mh, ...kozep(pp)) || blokkban(pp))) g.add(f);
         if (g.children.length) gltf.scene.add(g);
       }
       if (ZONA_MIND.has(L.key) && !QS.has('noujra')) { try { const u = zonaMind(gltf.scene, L.key); if (u) gltf.scene.add(u); } catch (e) { console.warn('zóna-mind', e); } }
