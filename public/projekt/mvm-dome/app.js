@@ -19,7 +19,7 @@ if (SHOT) { addEventListener('error', (e) => { document.title = 'JSERR ' + e.mes
 const LEVELS = {
   felso:  { key: 'S3', name: 'Felső körüljáró szint', model: 'models/S3.glb', meret: 7017024, data: 'data/S3.json', tier: 'Felső lelátó (3xx)' },
   paholy: { key: 'S2', name: 'Páholy szint (VIP)', model: 'models/S2.glb', meret: 7293664, data: 'data/S2.json', tier: 'Alsó lelátó (2xx)' },
-  also:   { key: 'S1', name: 'Alsó körüljáró szint', model: 'models/S1.glb', meret: 5280968, data: 'data/S1.json', tier: 'Alsó lelátó (2xx)' },
+  also:   { key: 'S1', name: 'Alsó körüljáró szint', model: 'models/S1.glb', meret: 5191340, data: 'data/S1.json', tier: 'Alsó lelátó (2xx)' },
   lobby:  { key: 'S0', name: 'Lobby – Bejárati szint', model: 'models/S0.glb', meret: 2488836, data: 'data/S0.json', tier: 'Küzdőtéri lelátó (1xx)' },
   // a teljes, megépített épület kívülről (homlokzat bekapcsolva, nyitott tető): a kezdőnézet, ha a fájljai megvannak (lásd VAN_EPULET)
   epulet: { key: 'S4', name: 'MVM Dome', model: 'models/S4.glb', meret: 7343352, data: 'data/S4.json', tier: 'Lelátó' },
@@ -435,7 +435,7 @@ function wcTetok(root, pois) {
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(cs, 3)); g.setIndex(ix);
   const halo = new THREE.Mesh(g, anyag); halo.name = 'WEB_wc_tetok'; halo.renderOrder = 5; halo.frustumCulled = false;
   halo.userData.helyisegek = helyisegek.length;
-  for (const { cellak, y: yt } of helyisegek) { const f = zonaFeliratPontokra(cellak.map((i) => [wcX(i % N), wcZ((i - i % N) / N)]), yt + 0.07, 'TOILET'); if (f) halo.add(f); }
+  for (const { cellak, y: yt } of helyisegek) { const f = zonaFeliratPontokra(cellak.map((i) => [wcX(i % N), wcZ((i - i % N) / N)]), yt + 0.07, 'TOILET_IKON'); if (f) halo.add(f); }
   const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(szelek, 3));
   const szegely = new THREE.LineSegments(sg, new THREE.LineBasicMaterial({ name: 'WEB_wc_szegely', color: ZONA_PALETTA.wc, transparent: true, opacity: 0.95 })); szegely.renderOrder = 6; szegely.frustumCulled = false; halo.add(szegely);
   return halo;
@@ -503,6 +503,7 @@ function zonaFeliratPontokra(pontok, y, szoveg, szin = 0x0b1220, haromszogek = n
       // a legbelsőbbek (≥ 90 %) közül a súlyponthoz legközelebbi lesz az ikon közepe, a mérete ehhez a „belső körhöz” igazodik
       const bent = (x, z) => (!haromszogek.lathato || haromszogek.lathato(x, z)) && haromszogek.some((q) => { const s1 = (x - q[2]) * (q[1] - q[3]) - (q[0] - q[2]) * (z - q[3]), s2 = (x - q[4]) * (q[3] - q[5]) - (q[2] - q[4]) * (z - q[5]), s3 = (x - q[0]) * (q[5] - q[1]) - (q[4] - q[0]) * (z - q[1]); return !((s1 < 0 || s2 < 0 || s3 < 0) && (s1 > 0 || s2 > 0 || s3 > 0)); });
       let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (const [x, z] of pontok) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
+      for (const q of haromszogek) for (let k = 0; k < 6; k += 2) { x0 = Math.min(x0, q[k] - 0.5); x1 = Math.max(x1, q[k] + 0.5); z0 = Math.min(z0, q[k + 1] - 0.5); z1 = Math.max(z1, q[k + 1] + 0.5); }   // a lap teljes kiterjedése + ráhagyás (különben egy oldalon nincs „kinti” pont)
       const L = 0.25, nx = Math.ceil((x1 - x0) / L) + 3, nz = Math.ceil((z1 - z0) / L) + 3, ben = new Uint8Array(nx * nz), kint = [];
       for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) { const x = x0 + (i - 1) * L, z = z0 + (j - 1) * L; if (bent(x, z)) ben[j * nx + i] = 1; else kint.push([x, z]); }
       const tav = []; let tmax = 0;
@@ -565,6 +566,88 @@ function modellLapFeliratok(root, minta, szoveg, kihagy = () => false) {
   }
   return out;
 }
+// Rács-cellahalmazból (magasságtérkép-indexek) SIMA kiemelő lap: a külső körvonal egyenes szakaszokra egyszerűsítve (Douglas–Peucker),
+// abból háromszögelt lap + szegély – a cellák lépcsős, „pixeles” széle helyett (felhasználó, 2026-11-21, alsó szint)
+function racsPoligon(cellak, tures = 0.3, sarokTag = false) {
+  const N = WC_N, cm = 2 * WC_R / (N - 1), ki = new Map();
+  const el = (ax, ay, bx, by) => { const k = ax + ',' + ay; if (!ki.has(k)) ki.set(k, []); ki.get(k).push([bx, by]); };
+  for (const i of cellak) { const x = i % N, y = (i - x) / N;
+    if (!cellak.has(i - N)) el(x, y, x + 1, y); if (!cellak.has(i + 1)) el(x + 1, y, x + 1, y + 1);
+    if (!cellak.has(i + N)) el(x + 1, y + 1, x, y + 1); if (!cellak.has(i - 1)) el(x, y + 1, x, y); }
+  let leg = null;
+  while (ki.size) {
+    const [k0] = ki.keys(); let [cx, cy] = k0.split(',').map(Number); const hurok = [];
+    for (let lep = 0; lep < 400000; lep++) { const k = cx + ',' + cy, l = ki.get(k); if (!l) break; const [nx, ny] = l.pop(); if (!l.length) ki.delete(k); hurok.push([cx, cy]); cx = nx; cy = ny; }
+    if (!leg || hurok.length > leg.length) leg = hurok;
+  }
+  if (!leg || leg.length < 4) return null;
+  const pts = leg.map(([x, y]) => [wcX(x) - cm / 2, wcZ(y) + cm / 2]);
+  // a helyiségek domborúak: a cellák köré feszített (konvex) burok nem hagy bevágást / levágott sarkot (felhasználó, 2026-11-21);
+  // utána egyenesítés és 0,15 m-es befelé húzás (a faltól és a szomszéd egységtől tiszta rés)
+  if (!QS.has('nokonvex')) {
+    const s = pts.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]), cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+    const lo = [], hi = []; for (const q of s) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], q) <= 0) lo.pop(); lo.push(q); }
+    for (let i = s.length - 1; i >= 0; i--) { const q = s[i]; while (hi.length >= 2 && cr(hi[hi.length - 2], hi[hi.length - 1], q) <= 0) hi.pop(); hi.push(q); }
+    let burok = lo.slice(0, -1).concat(hi.slice(0, -1));
+    // a burok közel egyenes csúcsainak elhagyása (< 0,15 m eltérés)
+    const egyszerusit = (q) => { let v = q.slice(), valt = true; while (valt && v.length > 3) { valt = false; for (let i = 0; i < v.length; i++) { const a = v[(i + v.length - 1) % v.length], b = v[i], c = v[(i + 1) % v.length], L = Math.hypot(c[0] - a[0], c[1] - a[1]) || 1e-9; if (Math.abs(cr(a, c, b)) / L < 0.15) { v.splice(i, 1); valt = true; break; } } } return v; };
+    burok = egyszerusit(burok);
+    const egy = QS.has('nosarok') ? burok : (poligonEgyenesit(burok, sarokTag) || burok);
+    return poligonBeljebb(egy, 0.15) || egy;
+  }
+  const dp = (p, a, b, out) => { let mi = -1, md = 0; const [ax, az] = p[a], [bx, bz] = p[b], L = Math.hypot(bx - ax, bz - az) || 1e-9;
+    for (let i = a + 1; i < b; i++) { const d = Math.abs((bx - ax) * (az - p[i][1]) - (ax - p[i][0]) * (bz - az)) / L; if (d > md) { md = d; mi = i; } }
+    if (md > tures) { dp(p, a, mi, out); dp(p, mi, b, out); } else out.push(p[a]); };
+  let far = 0, fd = 0; for (let i = 1; i < pts.length; i++) { const d = (pts[i][0] - pts[0][0]) ** 2 + (pts[i][1] - pts[0][1]) ** 2; if (d > fd) { fd = d; far = i; } }
+  const ki2 = []; dp(pts, 0, far, ki2); const vissza = pts.slice(far).concat([pts[0]]); dp(vissza, 0, vissza.length - 1, ki2);
+  if (ki2.length < 3) return null;
+  return QS.has('nosarok') ? ki2 : (poligonEgyenesit(ki2, sarokTag) || ki2);
+}
+// Tiszta sarkok (felhasználó, 2026-11-21: „a highlight sarkok le vannak csapva”): a helyiség fő tengelyéhez (a leghosszabb él) ±18°-on belüli
+// éleket pontosan tengelyirányba fordítjuk, a rövid (< 1,4 m) levágó éleket elhagyjuk, a csúcsok a szomszéd egyenesek metszéspontjai.
+// konvex sokszög befelé tolása d méterrel (minden él a saját normálisa mentén, a csúcsok a szomszéd élek metszéspontjai)
+function poligonBeljebb(p, d) {
+  const n = p.length; if (n < 3) return null;
+  const ter = p.reduce((s, c, i) => { const q = p[(i + 1) % n]; return s + c[0] * q[1] - q[0] * c[1]; }, 0), irany = ter > 0 ? 1 : -1;
+  const vonal = p.map((a, i) => { const b = p[(i + 1) % n], dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz) || 1e-9, nx = -dz / L * irany, nz = dx / L * irany; return { px: a[0] + nx * d, pz: a[1] + nz * d, dx: dx / L, dz: dz / L }; });
+  const ki = [];
+  for (let i = 0; i < n; i++) { const a = vonal[(i + n - 1) % n], b = vonal[i], det = a.dx * b.dz - a.dz * b.dx; if (Math.abs(det) < 1e-6) { ki.push([b.px, b.pz]); continue; }
+    const t = ((b.px - a.px) * b.dz - (b.pz - a.pz) * b.dx) / det; ki.push([a.px + a.dx * t, a.pz + a.dz * t]); }
+  return ki;
+}
+function poligonEgyenesit(p, sarokTag = false) {
+  const n = p.length, el = []; let lh = 0, fo = 0;
+  for (let i = 0; i < n; i++) { const a = p[i], b = p[(i + 1) % n], dx = b[0] - a[0], dz = b[1] - a[1], h = Math.hypot(dx, dz); el.push({ a, b, h, sz: Math.atan2(dz, dx) }); if (h > lh) { lh = h; fo = Math.atan2(dz, dx); } }
+  const sz90 = (s) => { let d = ((s - fo) % (Math.PI / 2) + Math.PI / 2) % (Math.PI / 2); if (d > Math.PI / 4) d -= Math.PI / 2; return d; };
+  const egy = [];
+  // a 45° körüli (30–60°) ferde „sarok-levágás” 2,2 m-ig is elhagyható (felhasználó: „a bal felső sarok éle le van csapva”)
+  for (const e of el) { const d = sz90(e.sz); if (e.h < 1.4 || (sarokTag && e.h < 2.2 && Math.abs(d) > 0.52)) continue; const s = Math.abs(d) < 0.31 ? e.sz - d : e.sz;
+    egy.push({ px: (e.a[0] + e.b[0]) / 2, pz: (e.a[1] + e.b[1]) / 2, dx: Math.cos(s), dz: Math.sin(s) }); }
+  // szomszédos, (közel) párhuzamos egyenesek összevonása
+  const tiszta = []; for (const e of egy) { const u = tiszta[tiszta.length - 1]; if (u && Math.abs(u.dx * e.dz - u.dz * e.dx) < 0.05) { u.px = (u.px + e.px) / 2; u.pz = (u.pz + e.pz) / 2; } else tiszta.push(e); }
+  if (tiszta.length > 1) { const u = tiszta[tiszta.length - 1], e = tiszta[0]; if (Math.abs(u.dx * e.dz - u.dz * e.dx) < 0.05) { e.px = (u.px + e.px) / 2; e.pz = (u.pz + e.pz) / 2; tiszta.pop(); } }
+  if (tiszta.length < 3) return null;
+  const ki = [];
+  for (let i = 0; i < tiszta.length; i++) { const a = tiszta[i], b = tiszta[(i + 1) % tiszta.length], det = a.dx * b.dz - a.dz * b.dx; if (Math.abs(det) < 1e-6) return null;
+    const t = ((b.px - a.px) * b.dz - (b.pz - a.pz) * b.dx) / det; ki.push([a.px + a.dx * t, a.pz + a.dz * t]); }
+  // ellenőrzés: a terület ne változzon sokat, és a csúcsok ne szaladjanak el
+  const ter = (q) => Math.abs(q.reduce((s, c, i) => { const d = q[(i + 1) % q.length]; return s + c[0] * d[1] - d[0] * c[1]; }, 0)) / 2;
+  const t0 = ter(p), t1 = ter(ki); if (!(t1 > t0 * 0.85 && t1 < t0 * 1.2)) return null;
+  // minden új csúcs az eredeti körvonalon belül vagy legfeljebb 0,4 m-re tőle (különben tüske nyúlna a szomszéd egységbe)
+  const belul = (x, z) => { let b = false; for (let i = 0, j = n - 1; i < n; j = i++) { const [xi, zi] = p[i], [xj, zj] = p[j]; if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) b = !b; } return b; };
+  const szeltav = (x, z) => { let m = 1e9; for (let i = 0; i < n; i++) { const [ax, az] = p[i], [bx, bz] = p[(i + 1) % n], dx = bx - ax, dz = bz - az, L = dx * dx + dz * dz || 1e-9, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L)); m = Math.min(m, Math.hypot(ax + dx * t - x, az + dz * t - z)); } return m; };
+  for (const [x, z] of ki) if (!belul(x, z) && szeltav(x, z) > (sarokTag ? 1.0 : 0.4)) return null;
+  return ki;
+}
+function poligonLap(poli, y, szin, nev) {
+  const v2 = poli.map(([x, z]) => new THREE.Vector2(x, z)), tri = THREE.ShapeUtils.triangulateShape(v2, []);
+  const cs = poli.flatMap(([x, z]) => [x, y, z]), g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(cs, 3)); g.setIndex(tri.flat());
+  const lap = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ name: nev + '_teto', color: szin, transparent: true, opacity: ZONA_FEDES, depthWrite: false, side: THREE.DoubleSide }));
+  lap.renderOrder = 5; lap.frustumCulled = false;
+  const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(poli.flatMap(([x, z]) => [x, y + 0.02, z]), 3));
+  const v = new THREE.LineLoop(sg, new THREE.LineBasicMaterial({ name: nev + '_szegely', color: szin })); v.renderOrder = 6; v.frustumCulled = false;
+  return [lap, v];
+}
 function zonaMind(root, key) {
   const mag = wcMagassagTerkep(root), N = WC_N, cm = 2 * WC_R / (N - 1);
   root.updateMatrixWorld(true);
@@ -593,7 +676,8 @@ function zonaMind(root, key) {
   const csop = new THREE.Group(); csop.name = 'WEB_zona_mind'; const rejt = [];
   const mh = MERCH_HELY[key]; if (mh) { const u = egysegek.filter((w) => w.tipus === 'ruhatar').sort((a, b) => Math.hypot(a.x - (mh.x0 + mh.x1) / 2, a.z - (mh.z0 + mh.z1) / 2) - Math.hypot(b.x - (mh.x0 + mh.x1) / 2, b.z - (mh.z0 + mh.z1) / 2))[0]; if (u && dobozban(mh, u.x, u.z)) { u.tipus = 'merch'; u.szin = MERCH_SZIN; } }
   // 1. lépés: minden egység helyiségének elárasztása (a vékony falak 1 cellával hízlalva); folyosóra kifutó / túl nagy: kihagyva
-  const fal = (i) => mag[i] >= 2.5 || mag[i - 1] >= 2.5 || mag[i + 1] >= 2.5 || mag[i - N] >= 2.5 || mag[i + N] >= 2.5;
+  // fal: 2,5 m-nél magasabb (a 3,6 m-es határnál a kitöltés a bárok mögött a lelátó alsó soraira is kifutott); a bevágásokat a konvex burok tünteti el
+  const FH = Number(QS.get('falh')) || 2.5, fal = (i) => mag[i] >= FH || mag[i - 1] >= FH || mag[i + 1] >= FH || mag[i - N] >= FH || mag[i + N] >= FH;
   const K = Math.round(1.5 / cm);
   for (const u of egysegek) {
     let si = wcCy(u.z) * N + wcCx(u.x);
@@ -610,8 +694,23 @@ function zonaMind(root, key) {
     if (!kozos) continue;
     if (a.tipus === b.tipus) { for (const c of b.lat) a.lat.add(c); a.y = Math.max(a.y, b.y); jo.splice(j, 1); }
     else { const tav = (u, c) => (wcX(c % N) - u.x) ** 2 + (wcZ((c - c % N) / N) - u.z) ** 2;
-      for (const c of [...a.lat]) if (b.lat.has(c)) { if (tav(a, c) <= tav(b, c)) b.lat.delete(c); else a.lat.delete(c); } }
+      for (const c of [...a.lat]) if (b.lat.has(c)) { if (tav(a, c) <= tav(b, c)) b.lat.delete(c); else a.lat.delete(c); }
+      a.par = b; b.par = a; }
   }
+  // közös helyiség (ruhatár + bár): EGY körvonal az egész helyiségre, egyetlen egyenes vágással kettéosztva → a két lap pontosan
+  // összeér, se rés, se átfedés (felhasználó, 2026-11-21). A vágás iránya a helyiség fő tengelyére merőleges, ha ±25°-on belül van.
+  const kozosPoli = (u) => {
+    const p = u.par, osszes = new Set([...u.lat, ...p.lat]), szoba = racsPoligon(osszes); if (!szoba) return null;
+    const kp = (s) => { let x = 0, z = 0; for (const c of s) { x += wcX(c % N); z += wcZ((c - c % N) / N); } return [x / s.size, z / s.size]; };
+    const [ax, az] = kp(u.lat), [bx, bz] = kp(p.lat); let nx = bx - ax, nz = bz - az; const L = Math.hypot(nx, nz) || 1; nx /= L; nz /= L;
+    { let lh = 0, fx = 1, fz = 0; for (let i = 0; i < szoba.length; i++) { const q = szoba[i], r = szoba[(i + 1) % szoba.length], h = Math.hypot(r[0] - q[0], r[1] - q[1]); if (h > lh) { lh = h; fx = (r[0] - q[0]) / h; fz = (r[1] - q[1]) / h; } }
+      for (const [cx, cz] of [[fx, fz], [-fz, fx]]) { const d = cx * nx + cz * nz; if (Math.abs(d) >= Math.SQRT1_2) { nx = Math.sign(d) * cx; nz = Math.sign(d) * cz; break; } } }   // mindig a helyiség tengelyéhez igazítva
+    let umax = -1e9, pmin = 1e9; for (const c of u.lat) umax = Math.max(umax, wcX(c % N) * nx + wcZ((c - c % N) / N) * nz); for (const c of p.lat) pmin = Math.min(pmin, wcX(c % N) * nx + wcZ((c - c % N) / N) * nz);
+    const h0 = (umax + pmin) / 2, ki = [];
+    for (let i = 0; i < szoba.length; i++) { const A = szoba[i], B = szoba[(i + 1) % szoba.length], da = A[0] * nx + A[1] * nz - h0, db = B[0] * nx + B[1] * nz - h0;
+      if (da <= 0) ki.push(A); if ((da < 0) !== (db < 0) && da !== db) { const t = da / (da - db); ki.push([A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t]); } }
+    return ki.length >= 3 ? ki : null;
+  };
   for (const u of jo) {
     const lat = u.lat; if (lat.size < 4 / (cm * cm)) continue;
     // a lap a fal közepéig ér: 2 cellás visszahízlalás, de a szomszéd egység cellái nélkül
@@ -627,17 +726,23 @@ function zonaMind(root, key) {
     for (const i of bov) { const x = i % N, yy = (i - x) / N, xa = wcX(x) - cm / 2, xb = wcX(x) + cm / 2, za = wcZ(yy) + cm / 2, zb = wcZ(yy) - cm / 2, yv = y + 0.02;
       if (!bov.has(i - 1)) sz.push(xa, yv, za, xa, yv, zb); if (!bov.has(i + 1)) sz.push(xb, yv, za, xb, yv, zb);
       if (!bov.has(i - N)) sz.push(xa, yv, za, xb, yv, za); if (!bov.has(i + N)) sz.push(xa, yv, zb, xb, yv, zb); }
+    const poli = QS.has('pixeles') ? null : ((u.par && u.par.lat && !QS.has('nokozos') && kozosPoli(u)) || racsPoligon(QS.has('bov') ? bov : lat, 0.3, u.tipus === 'ruhatar' && !u.par));   // a különálló ruhatár téglalap: a ferde sarok-levágás is elhagyható   // a fal BELSŐ oldaláig (a kihízlalt „bov” a falon túl lógott – felhasználó, 2026-11-21)
+    if (poli) { for (const o of poligonLap(poli, y, ZONA_PALETTA[u.tipus] ?? u.szin, 'WEB_zona')) csop.add(o); }
+    else {
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(cs, 3)); g.setIndex(ix);
     const lap = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ name: 'WEB_zona_teto', color: ZONA_PALETTA[u.tipus] ?? u.szin, transparent: true, opacity: ZONA_FEDES, depthWrite: false, side: THREE.DoubleSide }));
     lap.renderOrder = 5; lap.frustumCulled = false; csop.add(lap);
     const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(sz, 3));
     const v = new THREE.LineSegments(sg, new THREE.LineBasicMaterial({ name: 'WEB_zona_szegely', color: ZONA_PALETTA[u.tipus] ?? u.szin })); v.renderOrder = 6; v.frustumCulled = false; csop.add(v);
+    }
     let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (const i of bov) { const x = wcX(i % N), z = wcZ((i - i % N) / N); x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
-    const doboz = { x0: x0 - 0.6, x1: x1 + 0.6, z0: z0 - 0.6, z1: z1 + 0.6 }; rejt.push(doboz);
+    const doboz = { x0: x0 - 2.5, x1: x1 + 2.5, z0: z0 - 2.5, z1: z1 + 2.5 }; rejt.push(doboz);   // 2,5 m ráhagyás: a modell lapjának a homlokzatra kilógó csíkja is tűnjön el (felhasználó, 2026-11-21)
     // felirat minden egységre, a helyiség hossztengelyével párhuzamosan
-    { const f = zonaFeliratPontokra([...lat].map((i) => [wcX(i % N), wcZ((i - i % N) / N)]), y, ZONA_SZOVEG[u.tipus] || u.tipus.toUpperCase()); if (f) csop.add(f); }
+    { // a sima lap háromszögei → az ikon a lap közepén, a leghosszabb élével párhuzamosan (egyenesen), mint a lobbyban
+      let hsz = null; if (poli) { const tr = THREE.ShapeUtils.triangulateShape(poli.map(([x, z]) => new THREE.Vector2(x, z)), []); hsz = tr.map((q) => q.flatMap((k) => poli[k])); hsz.lathato = (x, z) => mag[wcCy(z) * N + wcCx(x)] < y + 0.6; }
+      const f = zonaFeliratPontokra([...lat].map((i) => [wcX(i % N), wcZ((i - i % N) / N)]), y, ZONA_SZOVEG[u.tipus] || u.tipus.toUpperCase(), undefined, hsz); if (f) csop.add(f); }
   }
-  for (const f of modellLapFeliratok(root, /UJ_zona_wc_teto/, 'TOILET')) csop.add(f);
+  for (const f of modellLapFeliratok(root, /UJ_zona_wc_teto/, 'TOILET_IKON')) csop.add(f);   // alsó szint: felirat helyett kék mosdó-ikon, mint a lobbyban (felhasználó, 2026-11-21)
   // a modell zóna-anyagai (a mosdó kivételével) az újrarajzolt egységek dobozaiban eldobva
   if (rejt.length) root.traverse((o) => { if (!o.isMesh) return; for (const m of (Array.isArray(o.material) ? o.material : [o.material]))
     if (/UJ_zona_(?!wc)[a-z]+_(teto|szegely|betu|felirathatter)/.test(m.name || '') && !String(m.customProgramCacheKey?.() || '').includes('|zonarejt')) zonaRejt(m, rejt.concat(ZONA_REJT[key] || [])); });
@@ -1035,6 +1140,23 @@ const WC_TAV = 10.8;
 // szintenként kézzel megadott ajtópárok (a csoport többi tagja nem kap külön pint) – lobby: a középső fal-szakaszok két ajtaja (x ≈ ±12,8 és ±20,1);
 // a női mosdó pontja (±8,7) a ruhatár mögé esik, ott nem látszik ajtó
 const WC_PAROK = { S0: [['wc_ferfi_01', 'wc_ferfi_02'], ['wc_ferfi_04', 'wc_ferfi_03']] };
+// A közös mosdó-pin ágai a modell VALÓDI ajtónyílásaiba fussanak (felhasználó, 2026-11-21: „az ajtónak a közepére érkezzen meg a csík”):
+// a nyílások a W_TS_wc_nyilas_belso anyag háromszögeiből (1,5 m-en belül egy nyílás); minden ág-vég a hozzá legközelebbi, 8 m-en belüli,
+// még szabad nyílás közepére kerül. Szintenként kapcsolva (a lobbyban a WC_PAROK kézi pár elég).
+const AJTO_IGAZIT = new Set(['S1']);
+function mosdoAjtokhoz(root, pois) {
+  root.updateMatrixWorld(true); const A = new THREE.Vector3(), cl = [];
+  root.traverse((o) => { if (!o.isMesh) return; const g = o.geometry, p = g.attributes.position, ix = g.index, ms = Array.isArray(o.material) ? o.material : [o.material], cnt = ix ? ix.count : p.count;
+    for (let t = 0; t < cnt; t += 3) { let mn = ms[0]?.name || ''; if (g.groups.length) for (const gr of g.groups) if (t >= gr.start && t < gr.start + gr.count) { mn = ms[gr.materialIndex]?.name || ''; break; }
+      if (!/wc_nyilas_belso/.test(mn)) continue; let x = 0, y = 0, z = 0;
+      for (let k = 0; k < 3; k++) { A.fromBufferAttribute(p, ix ? ix.getX(t + k) : t + k).applyMatrix4(o.matrixWorld); x += A.x / 3; y += A.y / 3; z += A.z / 3; }
+      if (y > 3) continue; let c = cl.find((c) => Math.hypot(c.x - x, c.z - z) < 1.5); if (!c) { c = { x, z, n: 0, sx: 0, sz: 0 }; cl.push(c); } c.n++; c.sx += x; c.sz += z; c.x = c.sx / c.n; c.z = c.sz / c.n; } });
+  const foglalt = new Set();
+  for (const p of pois) { if (!p.ajtok) continue;
+    for (const a of p.ajtok) { let leg = null, ld = 8; for (const c of cl) { if (foglalt.has(c)) continue; const d = Math.hypot(c.x - a.x, c.z + a.y); if (d < ld) { ld = d; leg = c; } }
+      if (leg) { foglalt.add(leg); a.x = +leg.x.toFixed(2); a.y = +(-leg.z).toFixed(2); } }
+    p.x = (p.ajtok[0].x + p.ajtok[1].x) / 2; p.y = (p.ajtok[0].y + p.ajtok[1].y) / 2; }
+}
 function osszevonMosdo(pois, szintKulcs) {
   const w = pois.filter((p) => p.ikon === 'wc_ferfi' || p.ikon === 'wc_noi');
   const szulo = w.map((_, i) => i), gy = (i) => { while (szulo[i] !== i) i = szulo[i]; return i; };
@@ -1699,6 +1821,7 @@ async function loadLevel(level) {
       const lmP = data.lightmap && !QS.has('nolm') ? loadLightmap(data.lightmap).catch((e) => { console.warn('lightmap', e); return null; }) : null;
       const gltf = await loadGltf(L.model, (xhr) => { const ossz = xhr.total || L.meret; if (ossz) setProgress(Math.min(0.95, 0.95 * xhr.loaded / ossz)); });   // a tömörítve küldött fájlnál a böngésző nem tudja a teljes méretet → a szint ismert mérete (LEVELS.meret)
       tuneMaterials(gltf.scene, L.key);
+      if (AJTO_IGAZIT.has(L.key) && !QS.has('noajto')) { try { mosdoAjtokhoz(gltf.scene, data.pois); } catch (e) { console.warn('mosdó-ajtók', e); } }
       const lmTex = lmP && await lmP;
       if (lmTex) {
         try { c_lm = applyLightmap(gltf.scene, lmTex, Math.PI / data.lightmap.k); c_baked = true; }
