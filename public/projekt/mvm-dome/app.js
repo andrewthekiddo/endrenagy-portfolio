@@ -22,7 +22,7 @@ const LEVELS = {
   also:   { key: 'S1', name: 'Alsó körüljáró szint', model: 'models/S1.glb', meret: 5280968, data: 'data/S1.json', tier: 'Alsó lelátó (2xx)' },
   lobby:  { key: 'S0', name: 'Lobby – Bejárati szint', model: 'models/S0.glb', meret: 2526800, data: 'data/S0.json', tier: 'Küzdőtéri lelátó (1xx)' },
   // a teljes, megépített épület kívülről (homlokzat bekapcsolva, nyitott tető): a kezdőnézet, ha a fájljai megvannak (lásd VAN_EPULET)
-  epulet: { key: 'S4', name: 'MVM Dome', model: 'models/S4.glb', meret: 7419764, data: 'data/S4.json', tier: 'Lelátó' },
+  epulet: { key: 'S4', name: 'MVM Dome', model: 'models/S4.glb', meret: 7343328, data: 'data/S4.json', tier: 'Lelátó' },
 };
 
 // Pinek: funkciónként színes (a térkép-stílus palettája), az ikon fehér vagy sötét a jobb olvashatóságért
@@ -1369,8 +1369,9 @@ canvas.addEventListener('pointercancel', endDrag);
 // Nagyítás körút-módban (felhasználó, 2026-11-19): a kezdőnézet a LEGTÁGABB, onnan befelé lehet nagyítani a kép közepe (a kamera célpontja) felé –
 // egérgörgővel, két ujjas csípéssel és a + / − gombbal. A pálya (a körbeforgás) közben megmarad.
 const ZOOM_MIN = 0.2;
-// az MVM Dome (S4) kezdőnézetéből kifelé is lehet távolítani, 1,8-szorosig (felhasználó, 2026-11-21); a többi szinten a kezdőnézet a legtágabb
-const zoomMax = () => (current && LEVELS[current.level].key === 'S4' ? 1.8 : alapZoom());
+// az MVM Dome (S4) kezdőnézetéből kifelé is lehet távolítani, 2,8-szorosig (felhasználó, 2026-11-21: 1,8 → „még nagyobb is”); a többi szinten a kezdőnézet a legtágabb
+const zoomMax = () => (current && LEVELS[current.level].key === 'S4' ? 2.8 : alapZoom());
+if (SHOT && QS.has('zoom')) setTimeout(function zv() { if (!current) return setTimeout(zv, 300); zoomAllit(parseFloat(QS.get('zoom'))); }, 0);   // képernyőkép: kezdő nagyítás (pl. zoom=2.8)
 const zoomAllit = (z) => { tour.zoom = THREE.MathUtils.clamp(z, ZOOM_MIN, zoomMax()); };
 let zoomCel = null;   // a + / − gomb puha átmenete
 canvas.addEventListener('wheel', (e) => {
@@ -1786,6 +1787,7 @@ renderer.setAnimationLoop((now) => {
   if (Math.abs(cel - shiftK) > 0.001) { shiftK += (cel - shiftK) * (SHOT ? 1 : 0.08); applyShift(); camera.updateProjectionMatrix(); }
   if (mode === 'detail' && !anim) controls.update(); else camera.lookAt(controls.target);
   if (DBGFOV && camera.fov !== DBGFOV) { camera.fov = DBGFOV; camera.updateProjectionMatrix(); }
+  { const d = camera.position.distanceTo(controls.target); scene.fog.near = Math.max(320, d * 0.9); scene.fog.far = Math.max(700, d * 0.9 + 400); }   // nagy távolításnál a köd ne sötétítse el az épületet
   renderer.render(scene, camera);
   takarasFrissit();
   updateMarkers();
