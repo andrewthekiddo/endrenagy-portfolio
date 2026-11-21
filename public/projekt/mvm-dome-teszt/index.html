@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta name="robots" content="noindex, nofollow">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>MVM Dome térkép</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js">
+<script>
+// Gyors indulás (V2): a kezdőszint modellje és fénytérképe már a HTML beolvasásakor elkezd letöltődni, nem csak a kód elindulása után
+(function () {
+  var S = { lobby: 'S0', also: 'S1', paholy: 'S2', felso: 'S3', epulet: 'S4' }, q = new URLSearchParams(location.search), k = S[q.get('szint')] || 'S4';
+  // az oldal címe lehet /projekt/mvm-dome (perjel nélkül, a portfólióban) → a fájlok mappáját a címből számoljuk, nem relatívan
+  var p = location.pathname, B = /\/$/.test(p) ? p : /\.html?$/.test(p) ? p.replace(/[^/]*$/, '') : p + '/';
+  function elo(href, as) { var l = document.createElement('link'); l.rel = 'preload'; l.as = as; l.href = B + href; if (as === 'fetch') l.crossOrigin = 'anonymous'; document.head.appendChild(l); }
+  elo('models/' + k + '.glb', 'fetch'); if (!q.has('nolm')) elo('models/' + k + (q.has('lm8k') ? '_lm8k' : '_lm') + '.webp', 'image'); elo('data/' + k + '.json', 'fetch');
+})();
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* MVM Dome arculat a mvm-dome.hu szerint (2026-11-19): háttér #1D2939, kártya #101828, szöveg #FCFCFD, sárga #FCBF20, kék #007AC3; Nunito 400 / 900; gombok 8 px sarok, 44 px magas; kártyák 20 px sarok */
+    --bg:#1D2939; --navy:#101828; --panel:rgba(16,24,40,.88); --panel-border:rgba(252,252,253,.08);
+    --text:#FCFCFD; --muted:#98A2B3; --yellow:#FCBF20; --blue:#007AC3; --accent:var(--yellow);
+    --pin:var(--yellow); --pin-active:#F79009;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:Nunito,system-ui,-apple-system,sans-serif;overflow:hidden;-webkit-tap-highlight-color:transparent}
+  #c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+
+  /* --- brand bar --- */
+  .brand{position:fixed;top:0;left:0;right:0;height:72px;padding:0 24px;display:flex;align-items:center;gap:16px;z-index:9;pointer-events:none;background:linear-gradient(180deg,rgba(16,24,40,.92) 0%,rgba(16,24,40,.55) 60%,rgba(16,24,40,0) 100%)}
+  .brand img{height:26px;width:auto;display:block}
+  .brand .sep{width:1px;height:28px;background:rgba(252,252,253,.16)}
+  .brand h1{margin:0;font-size:16px;font-weight:900;letter-spacing:0;color:var(--text)}
+  .brand small{display:block;color:var(--muted);font-size:13px;font-weight:400;margin-top:1px}
+
+  /* --- level switcher: keskeny, magas pirula; az aktív szint hosszabb sárga gomb chevronnal --- */
+  .levels{position:fixed;right:22px;bottom:28px;z-index:10;display:flex;flex-direction:column-reverse;align-items:center;gap:14px;padding:6px;border-radius:999px;background:var(--panel);border:1.5px solid rgba(252,252,253,.16);backdrop-filter:blur(14px)}
+  .levels button{width:34px;height:64px;border-radius:999px;border:0;background:transparent;color:var(--text);font:600 22px Nunito,sans-serif;cursor:pointer;transition:height .25s,background .2s,color .2s;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+  .levels button:hover{color:var(--yellow)}
+  .levels button .chev{display:none;width:20px;height:20px;margin-bottom:-4px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+  .levels button.active{height:100px;background:var(--yellow);color:var(--navy)}
+  .levels button.active .chev{display:block}
+  .levels button .tip{position:absolute;right:48px;top:50%;transform:translateY(-50%);white-space:nowrap;background:var(--navy);border:1px solid var(--panel-border);color:var(--text);font-size:12px;font-weight:600;padding:6px 10px;border-radius:8px;opacity:0;pointer-events:none;transition:.15s}
+  .levels button:hover .tip{opacity:1}
+  .levels button .kis{font-size:9.5px;font-weight:800;line-height:1.1;letter-spacing:.01em;margin-top:-2px}
+  .levels button .kis.nagyobb{font-size:10.5px;margin-top:0}
+
+  /* --- filter panel --- */
+  /* „Mutasd csak”: EGY oszlop; ha nem fér ki, a panel görgethető (felhasználó, 2026-11-20) */
+  .filters{position:fixed;left:18px;bottom:24px;z-index:10;display:flex;flex-direction:column;gap:2px;padding:12px;border-radius:20px;background:var(--panel);border:1px solid var(--panel-border);backdrop-filter:blur(14px);width:min(250px,calc(100vw - 36px));max-height:min(60vh,430px);overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(252,252,253,.25) transparent}
+  .filters .title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);padding:2px 6px 6px;flex:none}
+  .filters .col{display:contents}
+  .chip{flex:none}
+  .chip{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;border:0;background:transparent;color:var(--text);font:600 13px Nunito,sans-serif;cursor:pointer;text-align:left;transition:.15s;width:100%}
+  .chip:hover{background:rgba(252,252,253,.05)}
+  .chip .dot{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;flex:none;background:rgba(252,252,253,.07);color:var(--text);font-size:12px;font-weight:800;transition:.15s}
+  .chip .dot svg{width:16px;height:16px;fill:none;stroke:var(--text);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+  .chip .dot svg{stroke:var(--col,var(--text))}
+  .chip.active .dot svg{stroke:var(--ink,var(--navy))}
+  .chip .n{margin-left:auto;color:var(--muted);font-size:12px}
+  .chip.active{background:rgba(252,252,253,.07);color:var(--col,var(--yellow))}
+  .chip.active .dot{background:var(--col,var(--yellow));color:var(--navy)}
+  .chip.none{display:none}
+  .chip.dim{opacity:.45}
+  .chip.off{opacity:.45}
+  .chip.all{grid-column:1/-1;justify-content:center;margin-top:6px;padding:10px;border-radius:10px;background:rgba(252,252,253,.04);font-weight:800}
+
+  /* --- sector search --- */
+  .search{position:fixed;top:18px;right:18px;z-index:10;display:flex;gap:6px;padding:6px;border-radius:12px;background:var(--panel);border:1px solid var(--panel-border);backdrop-filter:blur(14px)}
+  .search input{width:150px;background:transparent;border:0;color:var(--text);font:600 13px Nunito,sans-serif;padding:8px 10px;outline:0}
+  .search input::placeholder{color:var(--muted)}
+  .search button{border:0;border-radius:8px;background:var(--yellow);color:var(--navy);font:700 13px Nunito,sans-serif;padding:0 14px;cursor:pointer}
+
+  /* --- nézetgombok a sarokban (V2) --- */
+  .tools{position:fixed;top:14px;right:24px;z-index:10;display:flex;gap:8px;transition:transform .35s cubic-bezier(.2,.8,.2,1),opacity .2s}
+  .tools button{display:flex;align-items:center;gap:7px;height:44px;padding:0 16px;border:.8px solid rgba(252,252,253,.22);border-radius:8px;background:rgba(16,24,40,.7);backdrop-filter:blur(10px);color:var(--text);font:400 15px Nunito,sans-serif;cursor:pointer;white-space:nowrap;transition:border-color .15s,background .15s}
+  .tools button svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+  .tools button.negyzet{width:44px;padding:0;justify-content:center}
+  .tools button:hover{border-color:var(--yellow)}
+  .tools button.kapcs{color:var(--muted)}
+  .tools button.kapcs.on{color:var(--text);border-color:var(--yellow)}
+  .tools button.kapcs.on svg{color:var(--yellow)}
+  body.panel-open .tools{transform:translateX(calc(-1 * min(400px,100vw)))}
+  @media (min-width:641px) and (max-width:1500px){body.panel-open .tools{opacity:0;pointer-events:none}}   /* keskenyebb ablakban a nyitott panel mellett nem fér el a logó mellett */
+
+  /* --- markers --- */
+  #markers{position:fixed;inset:0;pointer-events:none;z-index:5}
+  .mk{position:absolute;left:0;top:0;transform:translate(-50%,-100%);pointer-events:auto;cursor:pointer;display:flex;flex-direction:column;align-items:center;transition:opacity .2s;will-change:transform}
+  .mk .pin{width:32px;height:32px;border-radius:50%;background:var(--pin);display:grid;place-items:center;box-shadow:0 0 0 3px rgba(16,24,40,.6),0 6px 18px rgba(0,0,0,.45),0 0 18px var(--pin);transition:transform .15s,background .2s}
+  .mk .pin svg{width:19px;height:19px;fill:none;stroke:var(--ink,var(--navy));stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+  .mk:not(.szektor) .pin{width:36px;height:36px;background:transparent;box-shadow:0 0 0 2.5px rgba(16,24,40,.75),0 6px 18px rgba(0,0,0,.45),0 0 16px var(--pin)}
+  .mk .pin .ik{width:36px;height:36px;display:block;border-radius:50%}
+  .chip .dot .ik{width:26px;height:26px;display:block;border-radius:50%}
+  .chip .dot:has(.ik){background:transparent}
+  .mk .stem{width:2px;height:12px;background:var(--pin);opacity:.8}
+    .mk.focus .pin{animation:pulse 2.6s ease-in-out infinite}
+  @keyframes pulse{0%,100%{transform:scale(1);box-shadow:0 0 0 3px rgba(16,24,40,.6),0 6px 18px rgba(0,0,0,.45),0 0 12px var(--pin)}50%{transform:scale(1.05);box-shadow:0 0 0 6px rgba(252,252,253,.12),0 6px 18px rgba(0,0,0,.45),0 0 22px var(--pin)}}
+  .mk:hover .pin,.mk.sel .pin{transform:scale(1.18)}
+  .mk .lbl{position:absolute;bottom:calc(100% + 6px);white-space:nowrap;background:var(--navy);border:1px solid var(--panel-border);padding:5px 9px;border-radius:7px;font-size:12px;font-weight:500;opacity:0;transition:.15s;pointer-events:none}
+  .mk:hover .lbl{opacity:1}
+  /* semleges alapállapot (sötét korong, sárga rajz); a kategória színe csak kijelöléskor (.focus / .sel) – az info és a lift mindig színes (.eredeti) */
+  .mk{--pin:rgba(252,191,32,.45)}
+  .mk.focus,.mk.sel,.mk.eredeti{--pin:var(--szin)}
+  .mk .pin .ik.szin{display:none}
+  .mk.focus .pin .ik.szin,.mk.sel .pin .ik.szin,.mk.eredeti .pin .ik.szin{display:block}
+  .mk.focus .pin .ik.sem,.mk.sel .pin .ik.sem,.mk.eredeti .pin .ik.sem{display:none}
+  .mk:not(.szektor):not(.focus):not(.sel):not(.eredeti) .pin{box-shadow:0 0 0 2px rgba(16,24,40,.7),0 4px 12px rgba(0,0,0,.45)}
+  .mk.hidden{opacity:0;pointer-events:none}
+  /* összevont pin (több azonos típus egy helyen): darabszám-jelvény; a beolvadt tagok rejtve */
+  .mk.osszevont{opacity:0;pointer-events:none}
+  /* a modell mögé került buborék (mélységpróba) */
+  .mk.takart{opacity:0;pointer-events:none}
+  .mk .pin{position:relative}
+  .mk .db{display:none;position:absolute;right:-7px;top:-7px;min-width:19px;height:19px;padding:0 5px;border-radius:999px;background:var(--text);color:var(--navy);font:800 12px/19px Nunito,sans-serif;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.5)}
+  .mk.csoport .db{display:block}
+  /* szűréskor: a többi halvány, a kijelölt típus kiemelkedik (V2) */
+  .mk.dim{opacity:.32;filter:saturate(.35)}
+  .mk.dim .pin{box-shadow:0 0 0 2px rgba(16,24,40,.6)}
+  .mk.focus{}
+  .mk.focus:not(.szektor) .pin{box-shadow:0 0 0 3px rgba(252,252,253,.85),0 6px 18px rgba(0,0,0,.45),0 0 30px 6px var(--pin)}
+  .mk.sel{z-index:5000!important}
+  .mk.szektor .pin{width:auto;height:22px;border-radius:6px;padding:0 7px;font-size:11px;font-weight:800;color:var(--yellow);background:var(--navy);border:1px solid rgba(252,191,32,.5);box-shadow:0 2px 8px rgba(0,0,0,.4);animation:none}
+  .mk.szektor.sel .pin{background:var(--yellow);color:var(--navy)}
+  .mk.szektor .stem{display:none}
+  /* közös mosdó-pin: a szár helyett elágazó vonal (svg) vezet az ajtókhoz */
+  .mk.agas .stem{display:none}
+  .agak{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+  .agak path{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:opacity .2s}
+
+  /* --- jobb oldali infópanel (Ziggo-stílus) --- */
+  .panel{position:fixed;top:0;right:0;bottom:0;width:min(400px,100vw);z-index:12;background:var(--navy);border-left:1px solid var(--panel-border);transform:translateX(100%);transition:transform .35s cubic-bezier(.2,.8,.2,1);display:flex;flex-direction:column;overflow:hidden}
+  .panel.show{transform:translateX(0)}
+  .panel .photo{aspect-ratio:16/10;background:#1D2939 center/cover no-repeat;flex:none;position:relative}
+  .panel .photo::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(16,24,40,0) 55%,var(--navy) 100%)}
+  .panel .x{position:absolute;top:14px;right:14px;z-index:2;width:36px;height:36px;border-radius:50%;border:0;background:rgba(16,24,40,.75);color:var(--text);font-size:20px;cursor:pointer;line-height:1;backdrop-filter:blur(8px)}
+  .panel .photo{transition:background-image .25s}
+  .panel .photo .cap{position:absolute;left:12px;top:14px;z-index:2;max-width:70%;padding:4px 9px;border-radius:7px;background:rgba(16,24,40,.7);color:var(--text);font-size:11px;font-weight:600;backdrop-filter:blur(8px)}
+  .panel .photo .cap:empty{display:none}
+  .panel .body{padding:22px 26px 26px;overflow:auto}
+  .panel .cat{font-size:13px;font-weight:800;color:var(--yellow);letter-spacing:.02em}
+  .panel h2{margin:6px 0 12px;font-size:30px;font-weight:900;letter-spacing:-.01em;line-height:1.15}
+  .panel p{margin:0 0 8px;color:#D0D5DD;font-size:15px;line-height:1.55}
+  .panel .photo2{aspect-ratio:16/10;border-radius:12px;background:#1D2939 center/cover no-repeat;margin:14px 0 4px}
+  .panel .near{margin:14px 0 0;font-size:13px;color:var(--muted)}
+  .panel .near b{color:var(--text);font-weight:700}
+  .panel .more{display:inline-flex;align-items:center;gap:10px;margin-top:22px;height:44px;padding:0 24px;border-radius:8px;border:0;color:var(--navy);font:400 16px Nunito,sans-serif;background:var(--yellow);cursor:pointer;text-decoration:none}
+  .panel .more:hover{filter:brightness(1.08)}
+  .panel .back{margin-top:12px;display:block;background:transparent;border:0;color:var(--muted);font:600 13px Nunito,sans-serif;cursor:pointer;padding:0}
+  .panel .back:hover{color:var(--text)}
+  body.panel-open .search,body.panel-open .levels{transform:translateX(calc(-1 * min(400px,100vw)))}
+  .search,.levels{transition:transform .35s cubic-bezier(.2,.8,.2,1)}
+
+  /* --- vissza az áttekintéshez (részletnézetben) --- */
+  .overview{position:fixed;left:50%;top:84px;transform:translateX(-50%);z-index:10;display:none;align-items:center;gap:8px;padding:9px 16px;border-radius:999px;background:var(--panel);border:1px solid var(--panel-border);color:var(--text);font:700 13px Nunito,sans-serif;cursor:pointer;backdrop-filter:blur(14px)}
+  .overview.show{display:inline-flex}
+  body.panel-open .overview{display:none}
+  .overview:hover{border-color:var(--yellow)}
+
+  /* --- loader --- */
+  .loader{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;transition:opacity .5s}
+  .loader.hide{opacity:0;pointer-events:none}
+  .loader .pct{font-size:56px;font-weight:900;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .loader .lvl{color:var(--muted);font-size:14px;font-weight:500}
+  .loader .bar{width:220px;height:3px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden}
+  .loader .bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .15s}
+  .loader .logo{width:min(220px,60vw);height:auto;display:block;margin-bottom:10px;animation:breathe 2.2s ease-in-out infinite}
+  @keyframes breathe{0%,100%{opacity:.75}50%{opacity:1}}
+
+  .forras{position:fixed;left:50%;bottom:6px;transform:translateX(-50%);z-index:8;font-size:10.5px;color:var(--muted);opacity:.8;white-space:nowrap}
+  .forras a{color:inherit}
+  .toast{position:fixed;top:80px;left:50%;transform:translateX(-50%);z-index:60;background:var(--navy);border:1px solid var(--panel-border);padding:10px 16px;border-radius:10px;font-size:13px;opacity:0;transition:.25s;pointer-events:none}
+  .toast.show{opacity:1}
+  .hint{position:fixed;left:50%;top:72px;transform:translateX(-50%);color:var(--muted);font-size:12px;z-index:9;pointer-events:none;transition:.4s}
+  .hint.hide{opacity:0}
+
+  @media (max-width:640px){
+    .filters{width:auto;left:12px;right:12px;bottom:12px;display:flex;flex-direction:row;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;max-height:none;padding:6px;border-radius:12px;gap:2px}
+    .filters .title{display:none}
+    .filters .col{display:contents}
+    .chip{width:auto;padding:6px 8px;white-space:nowrap}.chip .n{display:none}.chip.all{margin:0;padding:6px 10px;background:transparent}
+    .levels{bottom:78px;right:12px;flex-direction:row;gap:6px}
+    .levels button{width:46px;height:46px;font-size:18px}
+    .levels button.active{height:46px;width:64px}
+    .levels button .chev{display:none!important}
+    .levels button .tip{display:none}
+    .panel{top:auto;left:0;right:0;width:100%;height:62vh;border-left:0;border-top:1px solid var(--panel-border);border-radius:18px 18px 0 0;transform:translateY(100%)}
+    .panel.show{transform:translateY(0)}
+    .panel .photo{aspect-ratio:16/7}
+    .panel h2{font-size:22px}
+    body.panel-open .search,body.panel-open .levels{transform:none}
+    .overview{top:auto;bottom:140px}
+    .brand{height:56px;padding:0 12px;gap:10px}.brand img{height:22px}.brand h1{font-size:13.5px}.brand small{font-size:11.5px}.brand .sep{height:22px}
+    .hint{display:none}
+    .tools{top:58px;left:12px;right:12px;justify-content:space-between;gap:4px}
+    .tools button{padding:0 6px;font-size:11.5px;gap:0;height:34px;flex:1 1 auto;justify-content:center}
+    .tools button svg{display:none}
+    .tools button.negyzet{display:none}   /* telefonon két ujjas csípés nagyít */
+    body.panel-open .tools{transform:none}
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="markers"></div>
+
+<div class="brand">
+  <img src="logo.svg" alt="MVM Dome">
+  <div class="sep"></div>
+  <div><h1>Interaktív térkép</h1><small id="lvlSub">Lobby – Bejárati szint</small></div>
+</div>
+
+<div class="hint" id="hint" hidden></div>
+
+
+<div class="filters" id="filters">
+  <div class="title">Mutasd csak</div>
+</div>
+
+<div class="levels" id="levels">
+  <button data-level="epulet"><span class="tip">MVM Dome – a teljes épület</span><svg class="chev" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg><span class="kis nagyobb">MVM<br>Dome</span></button>
+  <button data-level="lobby" class="active"><span class="tip">Lobby – Bejárati szint</span><svg class="chev" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg>L</button>
+  <button data-level="also"><span class="tip">Alsó körüljáró szint</span><svg class="chev" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg>A</button>
+  <button data-level="paholy"><span class="tip">Páholy szint (VIP)</span><svg class="chev" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg>P<span class="kis">(VIP)</span></button>
+  <button data-level="felso"><span class="tip">Felső körüljáró szint</span><svg class="chev" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg>F</button>
+</div>
+
+<aside class="panel" id="panel">
+  <div class="photo" id="panelPhoto"><button class="x" id="panelX" aria-label="Bezárás">×</button>
+    <div class="cap" id="photoCap"></div></div>
+  <div class="body">
+    <div class="cat" id="panelCat"></div>
+    <h2 id="panelTitle"></h2>
+    <p id="panelText"></p>
+    <div class="photo2" id="panelPhoto2" style="display:none"></div>
+    <div class="near" id="panelNear"></div>
+    <a class="more" id="panelMore" href="https://mvm-dome.hu/hu/szolgaltatasok" target="_blank" rel="noopener">Bővebben <span>›</span></a>
+  </div>
+</aside>
+<div class="tools" id="tools">
+  <button id="tAlap" title="Vissza a szint kezdőnézetéhez"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>Alapnézet</button>
+  <button id="tFelul" title="Az egész szint felülről"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M12 8v8M8 12h8"/></svg>Felülnézet</button>
+  <button id="tSzektor" class="kapcs on" title="Szektorszámok ki / be"><svg viewBox="0 0 24 24"><path d="M9 4L7 20M17 4l-2 16M4 9h16M3 15h16"/></svg>Szektorszámok</button>
+  <button id="tForgas" class="kapcs on" title="A kamera forgása ki / be"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/></svg>Forgás</button>
+  <button id="tMinusz" class="negyzet" title="Távolítás" aria-label="Távolítás"><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button>
+  <button id="tPlusz" class="negyzet" title="Nagyítás" aria-label="Nagyítás"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+</div>
+<button class="overview" id="overviewBtn">‹ Vissza az áttekintéshez</button>
+
+<div class="loader" id="loader">
+  <img class="logo" src="loader-logo.png" alt="MVM Dome">
+  <div class="pct" id="pct">0%</div>
+  <div class="bar"><i id="barfill"></i></div>
+  <div class="lvl" id="lvlName">Térkép betöltése</div>
+</div>
+<div class="toast" id="toast"></div>
+<div class="forras" id="forras" style="display:none">Környékrajz: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> közreműködők</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+<script type="module" src="app.js"></script>
+</body>
+</html>
