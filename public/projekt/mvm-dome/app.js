@@ -20,9 +20,9 @@ const LEVELS = {
   felso:  { key: 'S3', name: 'Felső körüljáró szint', model: 'models/S3.glb', meret: 7017024, data: 'data/S3.json', tier: 'Felső lelátó (3xx)' },
   paholy: { key: 'S2', name: 'Páholy szint (VIP)', model: 'models/S2.glb', meret: 7293664, data: 'data/S2.json', tier: 'Alsó lelátó (2xx)' },
   also:   { key: 'S1', name: 'Alsó körüljáró szint', model: 'models/S1.glb', meret: 5280968, data: 'data/S1.json', tier: 'Alsó lelátó (2xx)' },
-  lobby:  { key: 'S0', name: 'Lobby – Bejárati szint', model: 'models/S0.glb', meret: 2526800, data: 'data/S0.json', tier: 'Küzdőtéri lelátó (1xx)' },
+  lobby:  { key: 'S0', name: 'Lobby – Bejárati szint', model: 'models/S0.glb', meret: 2488836, data: 'data/S0.json', tier: 'Küzdőtéri lelátó (1xx)' },
   // a teljes, megépített épület kívülről (homlokzat bekapcsolva, nyitott tető): a kezdőnézet, ha a fájljai megvannak (lásd VAN_EPULET)
-  epulet: { key: 'S4', name: 'MVM Dome', model: 'models/S4.glb', meret: 7343328, data: 'data/S4.json', tier: 'Lelátó' },
+  epulet: { key: 'S4', name: 'MVM Dome', model: 'models/S4.glb', meret: 7343352, data: 'data/S4.json', tier: 'Lelátó' },
 };
 
 // Pinek: funkciónként színes (a térkép-stílus palettája), az ikon fehér vagy sötét a jobb olvashatóságért
@@ -234,7 +234,9 @@ const RETEG_PADLO = /padlo|Padlo|terrazzo|fodem|beton/;
 const RETEG_FAL = /fal_|_fal|belso_sotet|hullam|teto|Teto|sav|labazat|piller/;
 function reteg(m) {
   const n = m.name || '';
-  const r = ((m.map && /tv_kep|TV_MVM|_foto|grafika|Logo_/.test(n)) || n.startsWith('W_nb_') || RETEG_ELO.test(n)) ? -2 : RETEG_PADLO.test(n) ? 2 : RETEG_FAL.test(n) ? 1 : 0;
+  // a kiemelő zóna-lapok (UJ_zona_*) a legelöl: ferde nézetből a közvetlenül alattuk fekvő (−2-vel előrehúzott) matricák
+  // – pl. a lobby büfé-grafikája 5 cm-rel a bár-lap alatt – különben „átszakítják” a kiemelést (felhasználó, 2026-11-21)
+  const r = /UJ_zona_/.test(n) ? -4 : ((m.map && /tv_kep|TV_MVM|_foto|grafika|Logo_/.test(n)) || n.startsWith('W_nb_') || RETEG_ELO.test(n)) ? -2 : RETEG_PADLO.test(n) ? 2 : RETEG_FAL.test(n) ? 1 : 0;
   if (r) { m.polygonOffset = true; m.polygonOffsetFactor = r; m.polygonOffsetUnits = r * 4; }
 }
 const UVEG_FEL = /^W_(TS_uveg_L2_uveg|VIP_uvegmellved)/;
@@ -950,6 +952,22 @@ function s4Jelolesek(root) {
     m.position.set(x, 0.12, z); m.rotation.order = 'YXZ'; m.rotation.set(-Math.PI / 2, Math.atan2(x, z), 0); m.renderOrder = 8; m.frustumCulled = false; csop.add(m);
   });
   root.add(csop);
+}
+// Lobby mozgólépcsők: a lábuknál a sötét fellépő lemez és a bronz burkolat alja pontosan a padló síkjában (vagy alatta) fekszik;
+// ferde nézetből „átütött” a padlón (felhasználó, 2026-11-21: „azt a bekarikázott részt nem szeretném látni”) → a padló szintje (y < 6 cm) alatti
+// részük nem rajzolódik, ott a padló látszik. A lépcsőfokok (y ≥ 0,13 m) maradnak.
+const PADLO_ALATT_REJT = { S0: /^W_(Lobby_mozgolepcso_fok|Mozgolepcso_burkolat_bronz)(\.\d+)?$/ };   // az alapNev-re (W_f20_… előtag nélkül)
+function padloAlattRejt(m) {
+  const elozo = m.onBeforeCompile, kulcs = m.customProgramCacheKey?.bind(m);
+  m.onBeforeCompile = (sh, r) => {
+    elozo?.call(m, sh, r);
+    if (!/varying vec3 vPaP;/.test(sh.vertexShader)) sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vPaP;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\nvPaP = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vPaP;')
+      .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\nif (vPaP.y < 0.06) discard;');
+  };
+  m.customProgramCacheKey = () => (kulcs ? kulcs() : '') + '|padloalatt';
+  m.needsUpdate = true;
 }
 function tuneMaterials(root, key) {
   const cut = FACADE_CUT[key] ? [new THREE.Plane(new THREE.Vector3(0, -1, 0), FACADE_CUT[key])] : null;
@@ -1683,6 +1701,8 @@ async function loadLevel(level) {
         try { animObj = setupAnim(await loadGltf(data.anim.model), data.anim.clip_top); } catch (e) { console.warn('animáció', e); }
       }
       if (LEPCSO_FADE[L.key] && !QS.has('nofade')) lepcsoFade(gltf.scene, LEPCSO_FADE[L.key]);
+      // a sütött anyagcsere (lightmap → MeshBasicMaterial) UTÁN: a mozgólépcsők padló alatti részei ne üssenek át a padlón
+      if (PADLO_ALATT_REJT[L.key] && !QS.has('nopadloalatt')) { const k = new Set(); gltf.scene.traverse((o) => { if (!o.isMesh) return; for (const m of (Array.isArray(o.material) ? o.material : [o.material])) if (!k.has(m) && PADLO_ALATT_REJT[L.key].test(alapNev(m.name))) { k.add(m); padloAlattRejt(m); } }); }
       if (WC_MENNY.has(L.key) && !QS.has('nowcmenny')) { try { const w = wcMennyezet(gltf.scene, data.pois); if (w) gltf.scene.add(w); } catch (e) { console.warn('wc-menny', e); } }
       if (WC_FAL.has(L.key) && !QS.has('nowcfal')) { try { const w = wcFalak(gltf.scene, data.pois); if (w) gltf.scene.add(w); } catch (e) { console.warn('wc-fal', e); } }
       if (HOMLOKZAT[L.key] && !QS.has('nohomlokzat')) { try { const h = homlokzatLapok(gltf.scene, L.key); if (h) gltf.scene.add(h); } catch (e) { console.warn('homlokzat', e); } }
