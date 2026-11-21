@@ -987,6 +987,9 @@ function tuneMaterials(root, key) {
       // áttetsző körben, a lap után rajzoljuk, így a lap színe nem mossa ki; a szín közel fekete sötétkék
       if (/UJ_zona_.*_betu/.test(m.name)) { m.color.setHex(0x070b14); if (m.emissive) m.emissive.setHex(0); m.map = null; m.transparent = true; m.opacity = 1; m.depthWrite = false; o.renderOrder = 20; }
       { const t = /UJ_zona_([a-z]+)_(teto|szegely)/.exec(m.name || ''); if (t && ZONA_PALETTA[t[1]] && m.color) { m.color.setHex(ZONA_PALETTA[t[1]]); if (m.emissive && t[2] === 'szegely') m.emissive.setHex(ZONA_PALETTA[t[1]]); if (t[2] === 'teto') { m.opacity = ZONA_FEDES; if (m.emissive) m.emissive.setHex(ZONA_PALETTA[t[1]]).multiplyScalar(0.45); } } }
+      // a színes zóna-lap a többi áttetsző anyag (pl. a lobby bárjainak üveg hűtőajtaja, W_Lobby_uveg) UTÁN rajzolódjon, különben
+      // azok szürkén „átütnek” a kiemelésen (felhasználó, 2026-11-21)
+      if (/UJ_zona_.*_teto/.test(m.name) && m.transparent && o.renderOrder < 4) o.renderOrder = 4;
       if (/UJ_zona_/.test(m.name)) { if ('roughness' in m) m.roughness = 1; if ('metalness' in m) m.metalness = 0; if ('envMapIntensity' in m) m.envMapIntensity = 0; if ('specularIntensity' in m) m.specularIntensity = 0; }
       if (m.map) m.map.anisotropy = 8;                 // csempézett anyagminták: lapos szögből se mosódjanak
       if (cut && FACADE.test(alapNev(m.name))) m.clippingPlanes = cut;
@@ -1029,7 +1032,10 @@ const poiWorld = (p) => new THREE.Vector3(p.x, p.z, -p.y);
 // amelynek a szára kétfelé ágazik, és az ágak az egyes ajtókhoz vezetnek le. Csak a nézőben történik – a data/S*.json érintetlen.
 // Az egy csoportba tartozó ajtók: 10,8 m-en belül láncolva; az akadálymentes mosdó külön pin marad.
 const WC_TAV = 10.8;
-function osszevonMosdo(pois) {
+// szintenként kézzel megadott ajtópárok (a csoport többi tagja nem kap külön pint) – lobby: a középső fal-szakaszok két ajtaja (x ≈ ±12,8 és ±20,1);
+// a női mosdó pontja (±8,7) a ruhatár mögé esik, ott nem látszik ajtó
+const WC_PAROK = { S0: [['wc_ferfi_01', 'wc_ferfi_02'], ['wc_ferfi_04', 'wc_ferfi_03']] };
+function osszevonMosdo(pois, szintKulcs) {
   const w = pois.filter((p) => p.ikon === 'wc_ferfi' || p.ikon === 'wc_noi');
   const szulo = w.map((_, i) => i), gy = (i) => { while (szulo[i] !== i) i = szulo[i]; return i; };
   for (let i = 0; i < w.length; i++) for (let j = 0; j < i; j++) if (Math.hypot(w[i].x - w[j].x, w[i].y - w[j].y) < WC_TAV) szulo[gy(i)] = gy(j);
@@ -1044,6 +1050,8 @@ function osszevonMosdo(pois) {
       if (a === b || (vegyes && !(a.ikon === 'wc_ferfi' && b.ikon === 'wc_noi'))) continue;
       const d = Math.hypot(a.x - b.x, a.y - b.y); if (d < pd) { pd = d; par = [a, b]; }
     }
+    // kézi ajtópár (felhasználó, 2026-11-21, lobby): az elágazás a fal-szakasz KÉT látható ajtajába fusson, a pin a szakasz közepén
+    { const kez = (WC_PAROK[szintKulcs] || []).find((q) => q.every((id) => t.some((p) => p.id === id))); if (kez) par = kez.map((id) => t.find((p) => p.id === id)); }
     const kp = (f) => (par[0][f] + par[1][f]) / 2;
     n++;
     ki.push({ id: `wc_${String(n).padStart(2, '0')}`, cat: 'wc', ikon: vegyes ? 'wc' : t[0].ikon, name: `${vegyes ? 'Mosdó' : t[0].ikon === 'wc_noi' ? 'Női mosdó' : 'Férfi mosdó'} ${n}`,
@@ -1684,7 +1692,7 @@ async function loadLevel(level) {
         for (let i = 0; i < bar.length; i++) for (let j = i + 1; j < bar.length; j++) { const a = bar[i], b = bar[j]; if (ki.has(a) || ki.has(b) || Math.hypot(a.x - b.x, a.y - b.y) > 9) continue;
           a.x = (a.x + b.x) / 2; a.y = (a.y + b.y) / 2; a.tagok = [a.id, b.id]; ki.add(b); }
         data.pois = data.pois.filter((p) => !ki.has(p)); }
-      if (!QS.has('kulonwc')) data.pois = osszevonMosdo(data.pois);   // férfi + női mosdó egy közös pin
+      if (!QS.has('kulonwc')) data.pois = osszevonMosdo(data.pois, L.key);   // férfi + női mosdó egy közös pin
       if (KAMERAK[L.key] && !QS.has('regikamera')) data.camera = KAMERAK[L.key];   // V2: tág áttekintő kamera (data/kamerak.json)
       let c_baked = false, c_lm = null;
       // a modell és a lightmap egyszerre töltődik (V2: gyorsabb betöltés), nem egymás után
