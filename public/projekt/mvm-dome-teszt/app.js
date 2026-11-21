@@ -17,10 +17,10 @@ if (SHOT) { addEventListener('error', (e) => { document.title = 'JSERR ' + e.mes
 // 4 szint + a teljes épület, mindegyik a saját padlóján (y = 0), az aréna középpontja az origó. A modellek a Blender showreel-fájlból
 // (00_Teljes_epulet/…_showreel_v01.blend) jönnek: _Blender_Projects/00_Web_export/scripts/export_web.py + web_adat.py
 const LEVELS = {
-  felso:  { key: 'S3', name: 'Felső körüljáró szint', model: 'models/S3.glb', meret: 6971788, data: 'data/S3.json', tier: 'Felső lelátó (3xx)' },
-  paholy: { key: 'S2', name: 'Páholy szint (VIP)', model: 'models/S2.glb', meret: 7253716, data: 'data/S2.json', tier: 'Alsó lelátó (2xx)' },
-  also:   { key: 'S1', name: 'Alsó körüljáró szint', model: 'models/S1.glb', meret: 5195396, data: 'data/S1.json', tier: 'Alsó lelátó (2xx)' },
-  lobby:  { key: 'S0', name: 'Lobby – Bejárati szint', model: 'models/S0.glb', meret: 2488548, data: 'data/S0.json', tier: 'Küzdőtéri lelátó (1xx)' },
+  felso:  { key: 'S3', name: 'Felső körüljáró szint', model: 'models/S3.glb', meret: 6971812, data: 'data/S3.json', tier: 'Felső lelátó (3xx)' },
+  paholy: { key: 'S2', name: 'Páholy szint (VIP)', model: 'models/S2.glb', meret: 7253740, data: 'data/S2.json', tier: 'Alsó lelátó (2xx)' },
+  also:   { key: 'S1', name: 'Alsó körüljáró szint', model: 'models/S1.glb', meret: 5196616, data: 'data/S1.json', tier: 'Alsó lelátó (2xx)' },
+  lobby:  { key: 'S0', name: 'Lobby – Bejárati szint', model: 'models/S0.glb', meret: 2488572, data: 'data/S0.json', tier: 'Küzdőtéri lelátó (1xx)' },
   // a teljes, megépített épület kívülről (homlokzat bekapcsolva, nyitott tető): a kezdőnézet, ha a fájljai megvannak (lásd VAN_EPULET)
   epulet: { key: 'S4', name: 'MVM Dome', model: 'models/S4.glb', meret: 7342972, data: 'data/S4.json', tier: 'Lelátó' },
 };
@@ -1032,8 +1032,35 @@ function zonaUjra(root, lista) {
 // MVM Dome (S4) földi jelölések (felhasználó, 2026-11-21): a kapunyilak nem kellenek (a jelölő hálóból a 7 csúcsú, lapos nyíl-darabok
 // kivéve), az utcai körvonalrajz 50 %-os, és a III. kapunál (főbejárat) íves „FŐBEJÁRAT” felirat a földön.
 // A kapunyilak a többi szinten sem kellenek (felhasználó, 2026-11-21): ugyanez a nyíl-szűrés fut az alsó, a P és a felső szinten is (csakNyil).
+// Kapuszámok (felhasználó, 2026-11-21: „nincs egy tengelyen … legyen az összes így körívelve, pont mint a főbejárat”): a modell külön-külön
+// forgatott római számai helyett minden szinten ugyanaz a webes réteg – egyetlen ellipszis-íven (az épület homlokzata + ~5 m), a betűk az ívet
+// követik, a tetejük az aréna felé. Szögek a Blender-koordinátákban (x tengelytől, +y felé), a modell eredeti számaiból mérve.
+const KAPUK = [['I', 141.6], ['II', 122.6], ['III', 90], ['IV', 57.4], ['V', 48.4], ['VI', 38.5], ['VII', -1.1], ['VIII', -30.5], ['IX', -42.3], ['X', -50.3], ['XI', -90], ['XII', -129.8], ['XIII', -138], ['XIV', -179.5]];
+const KAPU_A = 79.5, KAPU_B = 94, KAPU_H = 3.8;   // ellipszis fél-tengelyei (világ x, világ z), betűmagasság (m)
+function kapuSzamok(root, y) {
+  const csop = new THREE.Group(); csop.name = 'WEB_kapuszamok';
+  const font = '700 200px Georgia, "Times New Roman", serif', meres = document.createElement('canvas').getContext('2d'); meres.font = font;
+  const pont = (t) => [KAPU_A * Math.cos(t), KAPU_B * Math.sin(t)];
+  for (const [szam, fok] of KAPUK) {
+    const fi = -fok * Math.PI / 180, tk = Math.atan2(KAPU_A * Math.sin(fi), KAPU_B * Math.cos(fi));
+    const betuk = [...szam], sz = betuk.map((b) => meres.measureText(b).width / 200 * KAPU_H * 0.98), ossz = sz.reduce((a, b) => a + b, 0);
+    const ivh = (t) => Math.hypot(KAPU_A * Math.sin(t), KAPU_B * Math.cos(t));
+    let t = tk + (ossz / 2) / ivh(tk);
+    betuk.forEach((betu, i) => {
+      const tm = t - (sz[i] / 2) / ivh(t), [x, z] = pont(tm);
+      const c = document.createElement('canvas'), w = Math.max(64, Math.ceil(sz[i] / KAPU_H * 256)); c.width = w; c.height = 256; const gg = c.getContext('2d');
+      gg.font = font; gg.fillStyle = gg.strokeStyle = '#f4efe4'; gg.lineWidth = 12; gg.lineJoin = 'round'; gg.textAlign = 'center'; gg.textBaseline = 'middle'; gg.strokeText(betu, w / 2, 140); gg.fillText(betu, w / 2, 140);
+      const tx = new THREE.CanvasTexture(c); tx.colorSpace = THREE.SRGBColorSpace; tx.anisotropy = 8;
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(KAPU_H * w / 256, KAPU_H), new THREE.MeshBasicMaterial({ name: 'WEB_kapuszam', map: tx, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+      const nx = x / (KAPU_A * KAPU_A), nz = z / (KAPU_B * KAPU_B);   // az ellipszis normálisa
+      m.position.set(x, y + 0.06, z); m.rotation.order = 'YXZ'; m.rotation.set(-Math.PI / 2, Math.atan2(nx, nz), 0); m.renderOrder = 8; m.frustumCulled = false; csop.add(m);
+      t = tm - (sz[i] / 2) / ivh(tm);
+    });
+  }
+  root.add(csop);
+}
 function s4Jelolesek(root, csakNyil = false) {
-  root.updateMatrixWorld(true);
+  root.updateMatrixWorld(true); const szamY = [];
   root.traverse((o) => {
     if (!o.isMesh) return; const mats = Array.isArray(o.material) ? o.material : [o.material];
     if (!csakNyil && mats.some((m) => /UJ_vonalrajz/.test(m.name || ''))) for (const m of mats) { m.transparent = true; m.opacity = 0.5; m.depthWrite = false; m.needsUpdate = true; }
@@ -1042,13 +1069,19 @@ function s4Jelolesek(root, csakNyil = false) {
     const n = p.count, par = new Int32Array(n).map((_, i) => i), f = (i) => { while (par[i] !== i) { par[i] = par[par[i]]; i = par[i]; } return i; }, u = (a, b) => { a = f(a); b = f(b); if (a !== b) par[a] = b; };
     for (let t = 0; t < ix.count; t += 3) { u(ix.getX(t), ix.getX(t + 1)); u(ix.getX(t), ix.getX(t + 2)); }
     const kulcs = new Map(); for (let i = 0; i < n; i++) { const k = p.getX(i).toFixed(3) + ',' + p.getY(i).toFixed(3) + ',' + p.getZ(i).toFixed(3); if (kulcs.has(k)) u(i, kulcs.get(k)); else kulcs.set(k, i); }
-    const db = new Map(); for (let i = 0; i < n; i++) { const r = f(i); db.set(r, (db.get(r) || 0) + 1); }
-    const uj = []; for (let t = 0; t < ix.count; t += 3) { const a = ix.getX(t); if (db.get(f(a)) === 7) continue; uj.push(a, ix.getX(t + 1), ix.getX(t + 2)); }
+    const db = new Map(), sx = new Map(), sz = new Map(), sy = new Map(), e = o.matrixWorld.elements;
+    for (let i = 0; i < n; i++) { const r = f(i), x = p.getX(i), y = p.getY(i), z = p.getZ(i); db.set(r, (db.get(r) || 0) + 1);
+      sx.set(r, (sx.get(r) || 0) + e[0] * x + e[4] * y + e[8] * z + e[12]); sy.set(r, (sy.get(r) || 0) + e[1] * x + e[5] * y + e[9] * z + e[13]); sz.set(r, (sz.get(r) || 0) + e[2] * x + e[6] * y + e[10] * z + e[14]); }
+    // a kapuszámok (az épület körüli 100 m-en belüli darabok) is kimennek: helyettük a web rajzolja őket egy íven (kapuSzamok)
+    const szamDarab = (r) => !QS.has('noivszam') && Math.hypot(sx.get(r) / db.get(r), sz.get(r) / db.get(r)) < 100;
+    for (const [r, k] of db) if (k !== 7 && szamDarab(r)) szamY.push(sy.get(r) / k);
+    const uj = []; for (let t = 0; t < ix.count; t += 3) { const a = ix.getX(t), r = f(a); if (db.get(r) === 7 || szamDarab(r)) continue; uj.push(a, ix.getX(t + 1), ix.getX(t + 2)); }
     g.setIndex(uj);
   });
+  if (szamY.length) { szamY.sort((a, b) => a - b); kapuSzamok(root, szamY[szamY.length >> 1]); }
   if (csakNyil) return;
   // íves felirat: a III. kapu (Blender y + 87 → világ z −87) előtt, az épület ívén kívül, a betűk teteje az aréna felé
-  const szo = 'FŐBEJÁRAT', R = 92, h = 3.2, csop = new THREE.Group(); csop.name = 'WEB_fobejarat';
+  const szo = 'FŐBEJÁRAT', R = QS.has('noivszam') ? 92 : 99, h = 3.2, csop = new THREE.Group(); csop.name = 'WEB_fobejarat';
   const kozep = Math.atan2(-87, 0), lep = (h * 0.78) / R, kezd = kozep + lep * (szo.length - 1) / 2;
   [...szo].forEach((betu, i) => {
     const c = document.createElement('canvas'); c.width = c.height = 256; const gg = c.getContext('2d');
@@ -1845,8 +1878,10 @@ async function loadLevel(level) {
       if (TETOBLOKK[L.key] && !QS.has('noblokk')) { try { const b = tetoBlokkok(gltf.scene, L.key); if (b) { gltf.scene.add(b); tbRejt = b.userData.rejt; } } catch (e) { console.warn('tetőblokk', e); } }
       // lobby, páholy, felső szint: a modell feliratai (fehér háttérlapon, kicsi) helyett ugyanaz a nagy, sötét, egyforma felirat, mint az alsó szinten;
       // a merch-dobozba eső büfé átszínezve, MERCH SHOP felirattal
-      if (/^S[123]$/.test(L.key) && !QS.has('nonyil')) { try { s4Jelolesek(gltf.scene, true); } catch (e) { console.warn('kapunyilak', e); } }
+      if (/^S[0123]$/.test(L.key) && !QS.has('nonyil')) { try { s4Jelolesek(gltf.scene, true); } catch (e) { console.warn('kapunyilak', e); } }
       if (L.key === 'S4' && !QS.has('nos4jel')) { try { s4Jelolesek(gltf.scene); } catch (e) { console.warn('s4-jelölések', e); } }
+      // alsó szint: a modell saját fehér hátterű „BAR” stb. feliratai sehol sem kellenek (felhasználó, 2026-11-21: „az kurvára nem kell”) – a néző a sajátját rajzolja
+      if (L.key === 'S1' && !QS.has('nofelirat')) gltf.scene.traverse((o) => { if (o.isMesh) for (const m of (Array.isArray(o.material) ? o.material : [o.material])) if (/UJ_zona_[a-z]+_(betu|felirathatter)/.test(m.name || '') || (!QS.has('nomodellap') && /UJ_zona_(bar|ruhatar|merch)_(teto|szegely)/.test(m.name || ''))) m.visible = false; });
       if (['S0', 'S2', 'S3'].includes(L.key) && !QS.has('nofelirat')) {
         const mh = MERCH_HELY[L.key];
         gltf.scene.traverse((o) => { if (o.isMesh) for (const m of (Array.isArray(o.material) ? o.material : [o.material])) {
