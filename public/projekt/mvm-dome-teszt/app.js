@@ -1691,17 +1691,32 @@ function selectPoi(p, anchor) {
   $('#panelText').textContent = p.cat === 'szektor'
     ? `${TIER[p.id[8]] || LEVELS[current.level].tier}. A szektor bejárata a körüljáróról nyílik; a legközelebbi mosdó és büfé a bejárat közelében található.`
     : (p.szoveg || c.text);
-  const near = nearestSectors(p, current.pois);
-  $('#panelNear').innerHTML = p.cat === 'szektor' || !near.length ? '' : `Legközelebbi szektorok: <b>${near.join(', ')}</b>`;
+  $('#panelNear').innerHTML = '';
+  // Újratervezés (2026-11-22): szektornál tényadatok + a legközelebbi szolgáltatások; szolgáltatásnál a legközelebbi szektorok – mind kattintható
+  const szek = p.cat === 'szektor';
+  $('#panelFacts').innerHTML = szek ? [['Lelátó', TIER[p.id[8]] || LEVELS[current.level].tier], ['Oldal', side(p)]]
+    .map(([k, v]) => `<div class="fact"><small>${k}</small><b>${v}</b></div>`).join('') : '';
+  const lista = $('#panelList'); lista.innerHTML = '';
+  const tav = (q) => Math.hypot(q.x - p.x, q.y - p.y);
+  const kozeli = szek
+    ? ['wc', 'bar', 'lift', 'ruhatar'].map((k) => current.pois.filter((q) => q.cat === k).sort((a, b) => tav(a) - tav(b))[0]).filter(Boolean)
+    : current.pois.filter((q) => q.cat === 'szektor').sort((a, b) => tav(a) - tav(b)).slice(0, 3);
+  if (kozeli.length) {
+    lista.insertAdjacentHTML('beforeend', `<div class="cim">${szek ? 'Legközelebbi szolgáltatások' : 'Legközelebbi szektorok'}</div>`);
+    for (const q of kozeli) lista.appendChild(sorGomb(q, () => selectPoi(q)));
+  }
+  $('#panelMore').style.display = szek ? 'none' : '';   // szektorhoz nincs külső oldal (jegylink később, ha lesz)
+  selSec = szek ? p : null; syncSorok();
+  if (innerWidth <= 640) document.body.classList.add('side-closed');   // telefonon egyszerre egy lap
   panel.classList.add('show'); document.body.classList.add('panel-open');
   const at = anchor ? anchor.clone() : poiWorld(p);
-  enterDetail(at, p.cat === 'szektor' ? 46 : 30, p.cat === 'szektor' ? 30 : 20);
-  highlightSector(p.cat === 'szektor' ? p : null);
+  enterDetail(at, szek ? 46 : 30, szek ? 30 : 20);
+  hlFrissit();
 }
 function closePanel(backToTour = true) {
   panel.classList.remove('show'); document.body.classList.remove('panel-open');
   selectedEl?.classList.remove('sel'); selectedEl = null;
-  highlightSector(null);
+  selSec = null; syncSorok(); hlFrissit();
   if (backToTour) enterTour();
 }
 // Bezárásra azonnal vissza a körútra – onnan folytatja, ahol a kamera éppen áll
@@ -1715,6 +1730,116 @@ function highlightSector(s) {
   HL.n.value = Math.min(rects.length, SZ_MAX); HL.padlo.value = current.data.padlo || 0;
   HL.on.value = 1;
 }
+
+// ---------- Újratervezés (2026-11-22, jegyoldal-stílus): rámutatásra kiemelt szektor, egy kattintással kiválasztás,
+// bal oldali szektorlista + szolgáltatások + kereső, a térkép és a lista összekötve ----------
+let selSec = null, hovSec = null;
+const hovtip = $('#hovtip');
+const hlFrissit = () => highlightSector(hovSec || selSec);
+const szamSor = (p) => p.name.replace('Szektor ', '');
+const normal = (s) => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+function syncSorok() {
+  document.querySelectorAll('.srow[data-id]').forEach((r) => { r.classList.toggle('hov', r.dataset.id === hovSec?.id); r.classList.toggle('on', r.dataset.id === selSec?.id); });
+  current?.markers.forEach((m) => m.p.cat === 'szektor' && m.el.classList.toggle('hov', m.p === hovSec));
+}
+function setHover(s, pont) {
+  if (s !== hovSec) { hovSec = s; hlFrissit(); syncSorok(); }
+  canvas.style.cursor = s && pont ? 'pointer' : '';
+  if (s && pont) {
+    hovtip.innerHTML = `${s.name}<small>${TIER[s.id[8]] || LEVELS[current.level].tier} · ${side(s)}</small>`;
+    hovtip.style.transform = `translate(${pont.x + 16}px, ${pont.y - 52}px)`; hovtip.classList.add('show');
+  } else hovtip.classList.remove('show');
+}
+// a képernyőpont alatti szektor (csak ha a sugár először a lelátót éri; mögötte lévő lelátó nem számít)
+function szektorKepponton(x, y) {
+  if (!current || !current.pois.some((p) => p.cat === 'szektor')) return null;
+  ndc.set((x / innerWidth) * 2 - 1, -(y / innerHeight) * 2 + 1);
+  raycaster.setFromCamera(ndc, camera);
+  const hit = raycaster.intersectObject(current.root, true).find((h) => !(h.object.material?.transparent) && h.object.visible);
+  if (!hit || !STAND.test(alapNev(hit.object.material?.name))) return null;
+  const s = sectorAt(hit.point, true);
+  return s ? { s, pont: hit.point } : null;
+}
+let hovVar = false, hovPoz = null, hovIdo = 0;
+function hovNez() {
+  hovVar = false;
+  if (!hovPoz || loading || anim || tour.drag) return;
+  const t0 = performance.now(), r = szektorKepponton(hovPoz.x, hovPoz.y); hovIdo = performance.now() - t0;
+  setHover(r?.s || null, r ? hovPoz : null);
+}
+canvas.addEventListener('pointermove', (e) => {
+  if (e.pointerType !== 'mouse') return;
+  if (e.buttons) { if (hovSec) setHover(null); return; }
+  hovPoz = { x: e.clientX, y: e.clientY };
+  if (!hovVar) { hovVar = true; setTimeout(hovNez, Math.max(50, hovIdo * 2)); }
+});
+canvas.addEventListener('pointerleave', () => { hovPoz = null; setHover(null); });
+// egy kattintás / koppintás a lelátón = a szektor kiválasztása (húzás nem számít)
+let lenyom = null;
+canvas.addEventListener('pointerdown', (e) => { lenyom = { x: e.clientX, y: e.clientY, t: performance.now() }; });
+canvas.addEventListener('pointerup', (e) => {
+  const l = lenyom; lenyom = null;
+  if (!l || Math.hypot(e.clientX - l.x, e.clientY - l.y) > 6 || performance.now() - l.t > 450 || anim) return;
+  const r = szektorKepponton(e.clientX, e.clientY);
+  if (r) { setHover(null); selectPoi(r.s, r.pont); }
+});
+function sorGomb(p, katt) {
+  const b = document.createElement('button'); b.className = 'srow'; b.dataset.id = p.id;
+  if (p.cat === 'szektor') b.innerHTML = `<span class="n">${szamSor(p)}</span><span class="t">${side(p)}</span>`;
+  else b.innerHTML = `<span class="ik2">${ICON2(p.cat, p.ikon)}</span><span class="t">${p.name}<small>${CATS[p.cat]?.label || ''} · ${side(p)}</small></span>`;
+  b.addEventListener('click', katt);
+  if (p.cat === 'szektor') { b.addEventListener('mouseenter', () => setHover(p)); b.addEventListener('mouseleave', () => setHover(null)); }
+  return b;
+}
+let aktivFul = 'szektor';
+function fulValt(f) {
+  aktivFul = f;
+  document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === f));
+  const q = $('#kereso').value.trim();
+  $('#paneSzektor').hidden = !!q || f !== 'szektor'; $('#paneSzolg').hidden = !!q || f !== 'szolg'; $('#paneTalalat').hidden = !q;
+}
+function buildSide() {
+  const pane = $('#paneSzektor'); pane.innerHTML = '';
+  const secs = current.pois.filter((p) => p.cat === 'szektor').sort((a, b) => parseInt(szamSor(a), 10) - parseInt(szamSor(b), 10));
+  let csop = null;
+  for (const p of secs) {
+    const t = TIER[p.id[8]] || LEVELS[current.level].tier;
+    if (t !== csop) { csop = t; pane.insertAdjacentHTML('beforeend', `<div class="grp">${t}</div>`); }
+    pane.appendChild(sorGomb(p, () => selectPoi(p)));
+  }
+  if (!secs.length) pane.innerHTML = '<div class="ures">Ezen a szinten nincs lelátószektor.</div>';
+  document.body.classList.toggle('no-side', !current.pois.length);
+  $('#kereso').value = ''; fulValt(secs.length ? aktivFul : 'szolg');
+  selSec = hovSec = null; syncSorok(); hlFrissit();
+}
+function keres() {
+  const q = normal($('#kereso').value.trim()), pane = $('#paneTalalat'); pane.innerHTML = '';
+  fulValt(aktivFul); if (!q) return;
+  const lat = new Set(), talal = [];
+  for (const p of current.pois) {
+    if (!isVisible(p.cat) && p.cat !== 'szektor') continue;
+    const kulcs = p.cat === 'szektor' ? 'szektor:' + p.id : p.cat === 'wc' ? 'wc:' + p.name : p.id;
+    if (lat.has(kulcs)) continue;
+    if ((normal(p.name) + ' ' + normal(CATS[p.cat]?.label)).includes(q)) { lat.add(kulcs); talal.push(p); }
+  }
+  talal.sort((a, b) => (a.cat === 'szektor') === (b.cat === 'szektor') ? a.name.localeCompare(b.name, 'hu', { numeric: true }) : a.cat === 'szektor' ? -1 : 1);
+  talal.slice(0, 40).forEach((p) => pane.appendChild(sorGomb(p, () => selectPoi(p))));
+  if (!talal.length) pane.innerHTML = '<div class="ures">Nincs találat ezen a szinten.</div>';
+  syncSorok();
+}
+$('#kereso').addEventListener('input', keres);
+$('#kereso').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#paneTalalat .srow')?.click(); if (e.key === 'Escape') { e.target.value = ''; keres(); } });
+document.querySelectorAll('#tabs button').forEach((b) => b.addEventListener('click', () => fulValt(b.dataset.tab)));
+$('#sideX').addEventListener('click', () => document.body.classList.add('side-closed'));
+$('#sideOpen').addEventListener('click', () => { document.body.classList.remove('side-closed'); if (innerWidth <= 640 && panel.classList.contains('show')) closePanel(false); });
+if (innerWidth <= 640) document.body.classList.add('side-closed');
+// a bal oldali panel (és a jobb oldali adatlap) mellett a 3D kép a szabad terület közepére kerül: vízszintes képeltolás (px)
+let uiEltol = 0, uiEltolY = 0;
+const B = document.body.classList;
+const uiCel = () => innerWidth <= 640 ? 0 : (!B.contains('no-side') && !B.contains('side-closed') ? 158 : 0) - (B.contains('panel-open') ? Math.min(400, innerWidth) / 2 : 0);
+// telefonon az alsó lap (62 vh) fölötti szabad sávba kerül a kép: függőleges eltolás felfelé
+const uiCelY = () => innerWidth > 640 ? 0 : ((!B.contains('no-side') && !B.contains('side-closed')) || B.contains('panel-open') ? innerHeight * 0.3 : 0);
+if (innerWidth <= 640) $('#sideX').textContent = '×';
 
 // ---------- Szűrőpanel: egy kategória kiválasztása = csak az látszik; újra kattintva vissza az összes ----------
 const FILTER_COLUMNS = [
@@ -1924,7 +2049,7 @@ async function loadLevel(level) {
     hfov = 2 * Math.atan(c.data.camera.sensor / 2 / c.data.camera.lens) * 180 / Math.PI;
     resize();
     fillCounts(current.pois);
-    if (!QS.has('tiszta')) $('#filters').style.display = current.pois.length ? '' : 'none';   // a teljes épületen nincs pin → üres szűrőpanel se legyen
+    buildSide();   // a teljes épületen nincs pin → a bal oldali panel rejtve (no-side)
     $('#lvlSub').textContent = L.name;
     $('#forras').style.display = L.key === 'S4' ? '' : 'none';   // a teljes épület környékrajza OpenStreetMap-adatból készült → forrásmegjelölés (ODbL)
     document.querySelectorAll('#levels button').forEach(b => b.classList.toggle('active', b.dataset.level === level));
@@ -1951,7 +2076,8 @@ function showToast(msg) { toast.textContent = msg; toast.classList.add('show'); 
 let shiftK = 1; let DBGFOV = 0;
 function applyShift() {
   const w = innerWidth, h = innerHeight, M = Math.max(w, h);
-  if ((camShift[0] || camShift[1]) && shiftK > 0.001) camera.setViewOffset(w, h, camShift[0] * M * shiftK, -camShift[1] * M * shiftK, w, h);
+  const ox = camShift[0] * M * shiftK - uiEltol, oy = -camShift[1] * M * shiftK + uiEltolY;
+  if (Math.abs(ox) > 0.01 || Math.abs(oy) > 0.01) camera.setViewOffset(w, h, ox, oy, w, h);
   else if (camera.view) camera.clearViewOffset();
 }
 function resize() {
@@ -1974,6 +2100,7 @@ renderer.setAnimationLoop((now) => {
   if (HL.on.value) HL.k.value = QS.has('hlk') ? Number(QS.get('hlk')) : 0.5 + 0.32 * Math.sin(now / 320);
   const cel = mode === 'tour' ? 1 : 0;
   if (Math.abs(cel - shiftK) > 0.001) { shiftK += (cel - shiftK) * (SHOT ? 1 : 0.08); applyShift(); camera.updateProjectionMatrix(); }
+  { const u = uiCel(), v = uiCelY(); if (Math.abs(u - uiEltol) > 0.5 || Math.abs(v - uiEltolY) > 0.5) { uiEltol += (u - uiEltol) * (SHOT ? 1 : 0.1); uiEltolY += (v - uiEltolY) * (SHOT ? 1 : 0.1); applyShift(); camera.updateProjectionMatrix(); } }
   if (mode === 'detail' && !anim) controls.update(); else camera.lookAt(controls.target);
   if (DBGFOV && camera.fov !== DBGFOV) { camera.fov = DBGFOV; camera.updateProjectionMatrix(); }
   { const d = camera.position.distanceTo(controls.target); scene.fog.near = Math.max(320, d * 0.9); scene.fog.far = Math.max(700, d * 0.9 + 400); }   // nagy távolításnál a köd ne sötétítse el az épületet
@@ -1991,7 +2118,7 @@ $('#tForgas').addEventListener('click', () => { forog = !forog; syncChips(); });
 $('#tPlusz').addEventListener('click', () => zoomGomb(0.75));
 $('#tMinusz').addEventListener('click', () => zoomGomb(1 / 0.75));
 syncChips();
-if (QS.has('tiszta')) ['#filters', '#levels', '#tools', '#panel', '#hint', '#overviewBtn', '#toast'].forEach((q) => { const e = $(q); if (e) e.style.display = 'none'; });   // hibakeresés: kezelőfelület nélküli kép
+if (QS.has('tiszta')) ['#side', '#sideOpen', '#hovtip', '#filters', '#levels','#tools', '#panel', '#hint', '#overviewBtn', '#toast'].forEach((q) => { const e = $(q); if (e) e.style.display = 'none'; });   // hibakeresés: kezelőfelület nélküli kép
 setTimeout(() => hint.classList.add('hide'), 9000);
 const start = QS.get('szint');
 // A teljes épület (S4) a kezdőnézet és a szintváltó legalsó gombja (felhasználó, 2026-11-19) – de csak ha a fájljai már kint vannak;
