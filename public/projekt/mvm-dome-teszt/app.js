@@ -18,7 +18,7 @@ if (SHOT) { addEventListener('error', (e) => { document.title = 'JSERR ' + e.mes
 // (00_Teljes_epulet/…_showreel_v01.blend) jönnek: _Blender_Projects/00_Web_export/scripts/export_web.py + web_adat.py
 const LEVELS = {
   felso:  { key: 'S3', name: 'Felső körüljáró szint', model: 'models/S3.glb', meret: 6971812, data: 'data/S3.json', tier: 'Felső lelátó (3xx)' },
-  paholy: { key: 'S2', name: 'Páholy szint (VIP)', model: 'models/S2.glb', meret: 7253740, data: 'data/S2.json', tier: 'Alsó lelátó (2xx)' },
+  paholy: { key: 'S2', name: 'Páholy szint (VIP)', model: 'models/S2.glb', meret: 7254760, data: 'data/S2.json', tier: 'Alsó lelátó (2xx)' },
   also:   { key: 'S1', name: 'Alsó körüljáró szint', model: 'models/S1.glb', meret: 5196616, data: 'data/S1.json', tier: 'Alsó lelátó (2xx)' },
   lobby:  { key: 'S0', name: 'Lobby – Bejárati szint', model: 'models/S0.glb', meret: 2488572, data: 'data/S0.json', tier: 'Küzdőtéri lelátó (1xx)' },
   // a teljes, megépített épület kívülről (homlokzat bekapcsolva, nyitott tető): a kezdőnézet, ha a fájljai megvannak (lásd VAN_EPULET)
@@ -31,7 +31,7 @@ const CATS = {
   baba:       { label: 'Baba-mama szoba', color: '#009EE2', ink: '#fff',    photo: 'img/arena.jpg',  icon: '<circle cx="12" cy="8" r="4"/><path d="M6 21a6 6 0 0 1 12 0"/>', text: 'Pelenkázó és szoptatóhelyiség, csendes, elkülönített térben.' },
   bar:        { label: 'Büfé, bár',       color: '#F79431', ink: '#101828', photo: 'img/pult.jpg',   icon: '<path d="M4 4h16l-6 8v6h-4v-6z"/><path d="M8 20h8"/>', text: 'Italok, snackek, kávé. Kártyás és mobilos fizetés. A rendezvény kezdete előtt egy órával nyit.' },
   ruhatar:    { label: 'Ruhatár',         color: '#F9B701', ink: '#101828', photo: 'img/arena.jpg',  icon: '<path d="M12 4a2 2 0 1 0 0 4v2"/><path d="M12 10 3 16h18z"/>', text: 'Kabát- és táskamegőrzés a rendezvény teljes ideje alatt. A ruhatárjegyet őrizd meg.' },
-  merch:      { label: 'Merch shop',      color: '#00E5B4', ink: '#101828', photo: 'img/arena.jpg',  icon: '', text: 'Ajándék- és rajongói termékek (merch) árusítása. A helyét a mennyezet türkiz kiemelése mutatja.' },   // a merch-zónákból (2026-11-22)
+  merch:      { label: 'Merch shop',      color: '#9B5CFF', ink: '#ffffff', photo: 'img/arena.jpg',  icon: '', text: 'Ajándék- és rajongói termékek (merch) árusítása. A helyét a mennyezet lila kiemelése mutatja.' },   // a merch-zónákból (2026-11-22)
   lift:       { label: 'Lift',            color: '#038A8B', ink: '#fff',    photo: 'img/arena.jpg',  icon: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 11l3-3 3 3"/><path d="M9 14l3 3 3-3"/>', text: 'Akadálymentes közlekedés a szintek között. Kerekesszékkel és babakocsival is használható.' },
   vip:        { label: 'VIP',             color: '#038A8B', ink: '#fff',    photo: 'img/arena.jpg',  icon: '<path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/>', text: 'VIP bejárat és fogadótér a páholyvendégeknek.' },
   elsosegely: { label: 'Elsősegély',      color: '#E2384F', ink: '#fff',    photo: 'img/arena.jpg',  icon: '<path d="M12 5v14"/><path d="M5 12h14"/>', text: 'Egészségügyi ügyelet a rendezvény ideje alatt. Sürgős esetben szólj a legközelebbi teremőrnek.' },
@@ -461,9 +461,9 @@ const ZONA_ROVID = { 'MERCH SHOP': 'MERCH' };
 const ZONA_IKON = { CLOAKROOM: 'ruhatar', TOILET_IKON: 'wc' };   // TOILET_IKON: a lobbyn a TOILET szöveg helyett a kék mosdó-piktogram (felhasználó, 2026-11-21)   // felirat helyett piktogram
 // Szintenként legalább EGY merch shop (felhasználó, 2026-11-20: „valamelyiket véletlenszerűen válaszd ki, egy darab legyen legalább minden szinten”).
 // A lobbyn a modellben van; a többi szinten egy-egy büfé lesz merch shop, a lobby merch-színével (türkizzöld). Világkoordináta (x, z) doboz.
-const MERCH_SZIN = 0x00e5b4;
+const MERCH_SZIN = 0x9b5cff;   // lila (felhasználó, 2026-11-22: a zöld a páholy szinten a „szabad” színe, ne keveredjen; előtte 0x00e5b4)
 // Telítettebb, kontrasztosabb kiemelő színek (felhasználó, 2026-11-20): csak a jelölő lapok / szegélyek színe, minden szinten
-const ZONA_PALETTA = { bar: 0xff1468, wc: 0x168dff, ruhatar: 0xffb000, merch: 0x00e5b4 }, ZONA_FEDES = 0.74;
+const ZONA_PALETTA = { bar: 0xff1468, wc: 0x168dff, ruhatar: 0xffb000, merch: 0x9b5cff }, ZONA_FEDES = 0.74;
 // CSAK ruhatár helyén lehet merch shop, szintenként egy (felhasználó, 2026-11-20) – S1: a keleti (Blender x 46, y 7) ruhatár, S3: a keleti-északi ruhatár;
 // a páholy szinten nincs ruhatár, ott nincs merch shop.
 const MERCH_HELY = { S1: { x0: 38, x1: 54, z0: -16, z1: 1 }, S3: { x0: 48, x1: 58, z0: -16, z1: -2 } };
@@ -1056,6 +1056,7 @@ function kapuSzamok(root, y) {
       const m = new THREE.Mesh(new THREE.PlaneGeometry(KAPU_H * w / 256, KAPU_H), new THREE.MeshBasicMaterial({ name: 'WEB_kapuszam', map: tx, transparent: true, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));
       const nx = x / (KAPU_A * KAPU_A), nz = z / (KAPU_B * KAPU_B);   // az ellipszis normálisa
       m.position.set(x, y + 0.06, z); m.rotation.order = 'YXZ'; m.rotation.set(-Math.PI / 2, Math.atan2(nx, nz), 0); m.renderOrder = 8; m.frustumCulled = false; csop.add(m);
+      m.userData.kapu = kapuPoi(szam, y); m.userData.kapu.halok.push(m);
       t = tm - (sz[i] / 2) / ivh(tm);
     });
   }
@@ -1462,12 +1463,12 @@ function enterTour(dur = 1600) {
   const p = new THREE.Vector3(), tg = new THREE.Vector3(); pathAt(tour.u, p, tg);
   anim = { from: { p: camera.position.clone(), t: controls.target.clone() }, to: { p, t: tg }, t0: performance.now(), dur };
 }
-function enterDetail(anchor, distance = 34, height = 24) {
+function enterDetail(anchor, distance = 34, height = 24, irany = null) {
   mode = 'detail'; nincsUresjarat = false; controls.maxDistance = 160; controls.minPolarAngle = Math.PI * 0.08;
   controls.enabled = true;
   overviewBtn.classList.add('show');
   const from = { p: camera.position.clone(), t: controls.target.clone() };
-  const dir = new THREE.Vector3().subVectors(camera.position, controls.target).setY(0).normalize();
+  const dir = irany ? irany.clone() : new THREE.Vector3().subVectors(camera.position, controls.target).setY(0).normalize();   // kapunál: kívülről, az épület felől nézve (felhasználó, 2026-11-22)
   if (dir.lengthSq() < 0.01) dir.set(1, 0, 1).normalize();
   const to = { t: anchor.clone(), p: anchor.clone().add(dir.multiplyScalar(distance)).add(new THREE.Vector3(0, height, 0)) };
   anim = { from, to, t0: performance.now(), dur: 1100 };
@@ -1692,6 +1693,7 @@ const SZINTNEV = Object.fromEntries(Object.values(LEVELS).map((l) => [l.key, l.n
 const SAJAT_POI = { S2: [{ id: 'bar_platinum', cat: 'bar', ikon: 'bufe', name: 'Visa Platinum Lounge bár', x: 0, y: 64, z: 3.94,
   fotok: ['DSC00559.jpg', 'DSC00532.jpg'], szoveg: 'A Visa Platinum Lounge központi bárpultja: italok és snackek a lounge vendégeinek. A lounge a páholy szint északi oldalán található.' }] };
 function setPhotos(p, c) {
+  if (p.cat === 'kapu' && !p.fotok) { $('#panelPhoto2').style.display = 'none'; $('#panelPhoto').style.backgroundImage = `url(${asset('img/arena.jpg')})`; $('#photoCap').textContent = 'Erről a kapuról még nincs fotó'; return; }
   $('#panelPhoto2').style.display = p.fotok?.[1] ? '' : 'none';
   if (p.fotok?.length) {
     $('#panelPhoto').style.backgroundImage = `url(${asset('img/fotok/' + p.fotok[0])})`; $('#photoCap').textContent = '';
@@ -1729,12 +1731,13 @@ function selectPoi(p, anchor) {
     lista.insertAdjacentHTML('beforeend', `<div class="cim">${szek ? 'Legközelebbi szolgáltatások' : 'Legközelebbi szektorok'}</div>`);
     for (const q of kozeli) lista.appendChild(sorGomb(q, () => selectPoi(q)));
   }
-  $('#panelMore').style.display = szek ? 'none' : '';   // szektorhoz nincs külső oldal (jegylink később, ha lesz)
+  $('#panelMore').style.display = szek || p.cat === 'kapu' ? 'none' : '';   // szektorhoz nincs külső oldal (jegylink később, ha lesz)
   selSec = szek ? p : null; syncSorok();
   if (innerWidth <= 640) document.body.classList.add('side-closed');   // telefonon egyszerre egy lap
   panel.classList.add('show'); document.body.classList.add('panel-open');
   const at = anchor ? anchor.clone() : poiWorld(p);
-  enterDetail(at, pahoz ? 34 : szek ? 46 : 30, pahoz ? 30 : szek ? 30 : 20);
+  if (p.cat === 'kapu') enterDetail(at, 42, 22, new THREE.Vector3(at.x, 0, at.z).normalize());
+  else enterDetail(at, pahoz ? 34 : szek ? 46 : 30, pahoz ? 30 : szek ? 30 : 20);
   hlFrissit();
 }
 function closePanel(backToTour = true) {
@@ -1763,17 +1766,9 @@ let selSec = null, hovSec = null;
 // (a modell ajtótábláiból; az ÁLLAPOT MOST MINTAADAT). A páholy úgy viselkedik, mint egy szektor: rámutatás, kattintás, lista, adatlap.
 CATS.paholy = { label: 'VIP páholy', color: '#12B76A', ink: '#fff', photo: 'img/arena.jpg', icon: '', text: '' };
 // áttetsző (felhasználó, 2026-11-22: „túl tömör … picit átlátszóbb”), fekete számokkal; az elkelt világosszürke, hogy a fekete szám rajta is olvasható legyen
-const PAHOLY_SZIN = { szabad: 0x12b76a, elkelt: 0x6b7482 }, PAHOLY_KIEM = 0xfcbf20, PAHOLY_FEDES = 0.55, PAHOLY_FEDES_ELKELT = 0.8;
-// elkelt páholy: sötétebb szürke, keresztben áthúzva (felhasználó, 2026-11-22) – ismétlődő csíkminta, kb. fél méterenként
-let PAHOLY_CSIK = null;
-function paholyCsik() {
-  if (PAHOLY_CSIK) return PAHOLY_CSIK;
-  const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
-  g.fillStyle = '#ffffff'; g.fillRect(0, 0, 64, 64); g.strokeStyle = '#2b3240'; g.lineWidth = 7; g.lineCap = 'square';
-  for (const o of [-64, 0, 64]) { g.beginPath(); g.moveTo(o, 0); g.lineTo(o + 64, 64); g.stroke(); g.beginPath(); g.moveTo(o + 64, 0); g.lineTo(o, 64); g.stroke(); }
-  PAHOLY_CSIK = new THREE.CanvasTexture(c); PAHOLY_CSIK.colorSpace = THREE.SRGBColorSpace; PAHOLY_CSIK.wrapS = PAHOLY_CSIK.wrapT = THREE.RepeatWrapping; PAHOLY_CSIK.repeat.set(0.9, 0.9); PAHOLY_CSIK.anisotropy = 8;
-  return PAHOLY_CSIK;
-}
+const PAHOLY_SZIN = { szabad: 0x12b76a, elkelt: 0x4a5261 }, PAHOLY_KIEM = 0xfcbf20, PAHOLY_FEDES = 0.55, PAHOLY_FEDES_ELKELT = 0.8;
+// elkelt páholy: sötétebb, tömör szürke; a száma is kicsit szürkébb (felhasználó, 2026-11-22: a keresztcsíkozás nem kell)
+const PAHOLY_SZAM_SZIN = { szabad: '#ffffff', elkelt: '#b3bac6' };
 let PAHOLYOK = [];
 async function paholyBlokkok(root) {
   const d = await fetch(asset('data/pahelyek.json')).then((r) => r.json());
@@ -1781,14 +1776,14 @@ async function paholyBlokkok(root) {
   PAHOLYOK = d.paholyok.map((b) => {
     const sh = new THREE.Shape(b.sarkok.map(([x, yy]) => new THREE.Vector2(x, yy)));
     const g = new THREE.ShapeGeometry(sh); g.rotateX(-Math.PI / 2);   // Blender (x, y) → világ (x, −z): a forgatás után z = −y
-    const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ name: 'WEB_paholy', color: PAHOLY_SZIN[b.allapot], map: b.allapot === 'elkelt' ? paholyCsik() : null, transparent: true, opacity: b.allapot === 'elkelt' ? PAHOLY_FEDES_ELKELT : PAHOLY_FEDES, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 }));
+    const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ name: 'WEB_paholy', color: PAHOLY_SZIN[b.allapot], transparent: true, opacity: b.allapot === 'elkelt' ? PAHOLY_FEDES_ELKELT : PAHOLY_FEDES, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, toneMapped: false }));
     m.position.y = y; m.renderOrder = 6;
     const cx = b.sarkok.reduce((s, c) => s + c[0], 0) / 4, cy = b.sarkok.reduce((s, c) => s + c[1], 0) / 4;
     const p = { id: 'paholy_' + b.szam, cat: 'paholy', ikon: 'vip', name: `Páholy ${b.szam}`, x: cx, y: cy, z: 3.94, szam: b.szam, allapot: b.allapot, szelesseg: b.szelesseg, mesh: m };
     m.userData.paholy = p; csop.add(m); PAHOLY_HALOK.push(m);
     // szám a tetőn: a betű teteje az aréna közepe felé (a körbejáró kamera felől egyenesen olvasható)
     const c = document.createElement('canvas'); c.width = 256; c.height = 128; const gg = c.getContext('2d');
-    gg.font = '900 96px Nunito, "Arial Black", Arial, sans-serif'; gg.textAlign = 'center'; gg.textBaseline = 'middle'; gg.shadowColor = 'rgba(11,18,32,.55)'; gg.shadowBlur = 8; gg.fillStyle = '#ffffff'; gg.fillText(String(b.szam), 128, 70);   // fehér (felhasználó, 2026-11-22: a fekete „nagyon sötét”), enyhe sötét árnyékkal az olvashatóságért
+    gg.font = '900 96px Nunito, "Arial Black", Arial, sans-serif'; gg.textAlign = 'center'; gg.textBaseline = 'middle'; gg.shadowColor = 'rgba(11,18,32,.55)'; gg.shadowBlur = 8; gg.fillStyle = PAHOLY_SZAM_SZIN[b.allapot] || '#ffffff'; gg.fillText(String(b.szam), 128, 70);   // fehér (felhasználó, 2026-11-22: a fekete „nagyon sötét”), enyhe sötét árnyékkal az olvashatóságért
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
     const h = Math.min(3.2, b.szelesseg * 0.62), lap = new THREE.Mesh(new THREE.PlaneGeometry(h * 2, h), new THREE.MeshBasicMaterial({ name: 'WEB_paholyszam', map: t, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6 }));
     lap.position.set(cx, y + 0.12, -cy);   // a blokk polygonOffsetje ferde nézetben „feljebb húzza” a blokkot → a szám ennél is feljebb
@@ -1814,7 +1809,7 @@ function setHover(s, pont) {
   if (s !== hovSec) { hovSec = s; hlFrissit(); syncSorok(); }
   canvas.style.cursor = s && pont ? 'pointer' : '';
   if (s && pont) {
-    hovtip.innerHTML = s.cat === 'paholy' ? `${s.name}<small>VIP páholy · ${ALLAPOT[s.allapot]}</small>` : s.cat !== 'szektor' ? `${s.name}<small>${CATS[s.cat]?.label || ''} · ${side(s)}</small>` : `${s.name}<small>${TIER[s.id[8]] || LEVELS[current.level].tier} · ${side(s)}</small>`;
+    hovtip.innerHTML = s.cat === 'paholy' ? `${s.name}<small>VIP páholy · ${ALLAPOT[s.allapot]}</small>` : s.cat === 'kapu' ? `${s.name}<small>Bejárat · ${side(s)}${s.fotok ? ' · fotó' : ''}</small>` : s.cat !== 'szektor' ? `${s.name}<small>${CATS[s.cat]?.label || ''} · ${side(s)}</small>` : `${s.name}<small>${TIER[s.id[8]] || LEVELS[current.level].tier} · ${side(s)}</small>`;
     hovtip.style.transform = `translate(${pont.x + 16}px, ${pont.y - 52}px)`; hovtip.classList.add('show');
   } else hovtip.classList.remove('show');
 }
@@ -1839,7 +1834,40 @@ function paholyGyors(x, y) {
   const h = raycaster.intersectObjects(PAHOLY_HALOK, false)[0];
   return h ? { s: h.object.userData.paholy, pont: h.point } : null;
 }
-const kepponton = (x, y) => paholyGyors(x, y) || szektorKepponton(x, y) || zonaKepponton(x, y);
+
+// Kattintható kapuszámok (felhasználó, 2026-11-22): minden kapuhoz adatlap a PROFI fotóval (2026-10-14-es fotózás, _INDEX_profi_fotok szerint;
+// web/img/fotok/kapu_*.jpg). Ha egy kapuhoz nincs fotó (KAPU_FOTO), az adatlap ezt jelzi.
+CATS.kapu = { label: 'Bejárat', color: '#FCBF20', ink: '#101828', photo: 'img/arena.jpg', icon: '', text: 'Bejárat a csarnokba.' };
+const KAPU_FOTO = new Set(['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV']);
+const KAPU_PLUSZ = { III: 'Főbejárat.', VII: 'VIP-bejárat.', XI: 'Rakodókapu.', IX: 'Rakodókapu.', XIII: 'Rakodókapu.' };
+const KAPU_POIK = new Map();   // szintenként (padlómagasság szerint) kapunként egy
+function kapuPoi(szam, y) {
+  const kulcs = szam + '|' + y; if (KAPU_POIK.has(kulcs)) return KAPU_POIK.get(kulcs);
+  const [, fok] = KAPUK.find((k) => k[0] === szam), fi = -fok * Math.PI / 180;
+  const tk = Math.atan2(KAPU_A * Math.sin(fi), KAPU_B * Math.cos(fi)), x = KAPU_A * Math.cos(tk), z = KAPU_B * Math.sin(tk);   // a szám közepe az íven (világ x, z)
+  const p = { id: 'kapu_' + szam, cat: 'kapu', name: `${szam}. kapu`, x, y: -z, z: y, szam, halok: [],
+    ...(KAPU_FOTO.has(szam) ? { fotok: [`kapu_${szam}.jpg`] } : {}),
+    szoveg: (KAPU_PLUSZ[szam] || '') + (KAPU_FOTO.has(szam) ? '' : 'Erről a kapuról még nincs közeli fotó.') };
+  KAPU_POIK.set(kulcs, p); return p;
+}
+let hovKapu = null;
+function kapuKiemel(k) {
+  if (hovKapu === k) return;
+  for (const m of hovKapu?.halok || []) m.scale.setScalar(1);
+  hovKapu = k;
+  for (const m of k?.halok || []) m.scale.setScalar(1.18);
+}
+function kapuKepponton(x, y) {
+  if (!current) return null;
+  for (const h of sugarTalalatok(x, y)) {
+    if (!h.object.visible) continue;
+    if (h.object.userData.kapu) return { s: h.object.userData.kapu, pont: h.point };
+    const m = h.object.material; if (Array.isArray(m) || m?.transparent) continue;
+    return null;
+  }
+  return null;
+}
+const kepponton = (x, y) => paholyGyors(x, y) || kapuKepponton(x, y) || szektorKepponton(x, y) || zonaKepponton(x, y);
 function szektorKepponton(x, y) {
   if (!current || !(current.pois.some((p) => p.cat === 'szektor') || pahLista().length)) return null;
   const hit = sugarTalalatok(x, y).find((h) => (h.object.userData.paholy || !(h.object.material?.transparent)) && h.object.visible);
@@ -1877,7 +1905,7 @@ function zonaKepponton(x, y) {
   return null;
 }
 
-// Merch shop helyek (felhasználó, 2026-11-22): a türkiz merch-mennyezetekből (a modell UJ_zona_merch_teto anyaga, vagy a ruhatárból merch-re
+// Merch shop helyek (felhasználó, 2026-11-22): a lila merch-mennyezetekből (a modell UJ_zona_merch_teto anyaga, vagy a ruhatárból merch-re
 // színezett webes lap) összefüggő darabonként egy „Merch shop” POI lesz; az alatta álló ruhatár-pin (ugyanaz a pult) helyette eltűnik.
 function merchPoik(root, pois) {
   root.updateMatrixWorld(true);
@@ -1965,7 +1993,7 @@ function hovNez() {
   hovVar = false;
   if (!hovPoz || loading || anim || tour.drag) return;
   const t0 = performance.now(), r = kepponton(hovPoz.x, hovPoz.y); hovIdo = performance.now() - t0;
-  hovZona = r?.zona ? { ...r.zona, s: r.s } : null;
+  hovZona = r?.zona ? { ...r.zona, s: r.s } : null; kapuKiemel(r?.s?.cat === 'kapu' ? r.s : null);
   setHover(r?.s || null, r ? hovPoz : null); zonaKiemFrissit();
 }
 canvas.addEventListener('pointermove', (e) => {
@@ -1974,7 +2002,7 @@ canvas.addEventListener('pointermove', (e) => {
   hovPoz = { x: e.clientX, y: e.clientY };
   if (!hovVar) { hovVar = true; setTimeout(hovNez, Math.min(120, Math.max(16, hovIdo * 1.5))); }
 });
-canvas.addEventListener('pointerleave', () => { hovPoz = null; hovZona = null; setHover(null); zonaKiemFrissit(); });
+canvas.addEventListener('pointerleave', () => { hovPoz = null; hovZona = null; setHover(null); zonaKiemFrissit(); kapuKiemel(null); });
 // egy kattintás / koppintás a lelátón = a szektor kiválasztása (húzás nem számít)
 let lenyom = null;
 canvas.addEventListener('pointerdown', (e) => { lenyom = { x: e.clientX, y: e.clientY, t: performance.now() }; });
@@ -2226,6 +2254,7 @@ async function loadLevel(level) {
         const mh = MERCH_HELY[L.key];
         gltf.scene.traverse((o) => { if (o.isMesh) for (const m of (Array.isArray(o.material) ? o.material : [o.material])) {
           if (/UJ_zona_[a-z]+_(betu|felirathatter)/.test(m.name || '')) m.visible = false;
+          else if (/UJ_zona_merch_(teto|szegely)/.test(m.name || '')) m.color.setHex(MERCH_SZIN);   // a modell saját (türkiz) merch-anyaga is lila
           else if (mh && /UJ_zona_ruhatar_(teto|szegely)/.test(m.name || '') && !String(m.customProgramCacheKey?.() || '').includes('|atszinez')) zonaAtszinez(m, mh, MERCH_SZIN);
         } });
         const g = new THREE.Group(); g.name = 'WEB_feliratok'; const kozep = (pp) => { let x = 0, z = 0; for (const [a, b] of pp) { x += a; z += b; } return [x / pp.length, z / pp.length]; };
@@ -2404,7 +2433,9 @@ const EN = [
   ['Egészségügyi ügyelet a rendezvény ideje alatt. Sürgős esetben szólj a legközelebbi teremőrnek.', 'Medical service during the event. In an emergency, tell the nearest steward.'],
   ['Információs pult: jegyügyek, elveszett tárgyak, segítség a tájékozódásban.', 'Information desk: ticket questions, lost property and help finding your way.'],
   ['A Visa Platinum Lounge központi bárpultja: italok és snackek a lounge vendégeinek. A lounge a páholy szint északi oldalán található.', 'The central bar of the Visa Platinum Lounge: drinks and snacks for lounge guests. The lounge is on the north side of the box level.'],
-  ['Ajándék- és rajongói termékek (merch) árusítása. A helyét a mennyezet türkiz kiemelése mutatja.', 'Merchandise and fan products. Its location is shown by the turquoise ceiling highlight.'],
+  ['Ajándék- és rajongói termékek (merch) árusítása. A helyét a mennyezet lila kiemelése mutatja.', 'Merchandise and fan products. Its location is shown by the purple ceiling highlight.'],
+  ['A kép a kapuról kívülről készült.', 'Photo of the gate from outside.'], ['Erről a kapuról még nincs közeli fotó.', 'No close-up photo of this gate yet.'], ['Erről a kapuról még nincs fotó', 'No photo of this gate yet'],
+  ['Bejárat a csarnokba.', 'Entrance to the arena.'], ['Főbejárat.', 'Main entrance.'], ['VIP-bejárat.', 'VIP entrance.'], ['Rakodókapu.', 'Loading gate.'], [' · fotó', ' · photo'], ['Bejárat', 'Entrance'], ['. kapu', ' gate'],
   ['Ezen a szinten nincs lelátószektor.', 'There are no stand sectors on this level.'],
   ['Nincs találat ezen a szinten.', 'No results on this level.'],
   [': a modell pár percen belül érkezik.', ': the model will arrive in a few minutes.'],
