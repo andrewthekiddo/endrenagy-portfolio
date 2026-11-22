@@ -39,7 +39,9 @@
   /* --- brand bar --- */
   /* fejléc a mvm-dome.hu szerint (mérve 2026-11-22, 1440 px; az igazi lap tetején 160 px, legörgetve 96 px – a felhasználó ez utóbbihoz igazította: 96 px, logó 35 px-nél, HU 29, menüfelirat 39); 1056 px széles, középre igazított sáv; logó 149×26, mellette 40 px-re a HU/EN gomb;
      a menü 16 px közzel, Nunito 500 14 px, rámutatáskor sárga */
-  .brand{position:fixed;top:0;left:0;right:0;height:96px;padding:0 calc(max(0px,(100vw - 1056px)/2) + 24px);display:flex;align-items:center;gap:40px;z-index:9;pointer-events:none;background:linear-gradient(180deg,rgba(29,41,57,.94) 0%,rgba(29,41,57,.88) 62%,rgba(29,41,57,0) 100%);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);-webkit-mask-image:linear-gradient(180deg,#000 75%,transparent);mask-image:linear-gradient(180deg,#000 75%,transparent)}
+  .brand{position:fixed;top:0;left:0;right:0;height:96px;padding:0 calc(max(0px,(100vw - 1056px)/2) + 24px);display:flex;align-items:center;gap:40px;z-index:12;pointer-events:none}
+  /* a háttér (szín + elmosás + lefelé elhalványulás) külön rétegen, hogy a halványítás ne vágja le a lenyíló nyelvválasztót (felhasználó, 2026-11-22) */
+  .brand::before{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(180deg,rgba(29,41,57,.94) 0%,rgba(29,41,57,.88) 62%,rgba(29,41,57,0) 100%);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);-webkit-mask-image:linear-gradient(180deg,#000 75%,transparent);mask-image:linear-gradient(180deg,#000 75%,transparent)}
   .brand img{width:149px;height:26px;display:block;object-fit:contain}
   .brand .sep,.brand .cim{display:none}
   /* nyelvválasztó: sárga keretes gomb (8 px sarok, 8/24 px belső margó, Nunito 900 14 px), rámutatáskor kék #3BC3EE; lenyíló: #344054 háttér, 8 px-re alatta */
@@ -66,7 +68,7 @@
   .levels button:hover,.levels button.active{color:var(--yellow)}
   /* keskenyebb képernyőn (az igazi oldalon is 90 px a fejléc): logó és nyelvgomb fent, a szintmenü alattuk, oldalra görgethető */
   /* 1024 px alatt (az igazi oldalon is itt vált): 90 px-es fejléc, logó 16/32 px-nél, nyelvgomb mellette 40 px-re; a szintmenü a fejléc alatt, oldalra görgethető */
-  @media (max-width:1023px){.brand{height:140px;padding:26px 16px 0;align-items:flex-start;background:linear-gradient(180deg,rgba(29,41,57,.95) 0%,rgba(29,41,57,.9) 64%,rgba(29,41,57,0) 100%)}.brand img{margin-top:6px}
+  @media (max-width:1023px){.brand{height:140px;padding:26px 16px 0;align-items:flex-start}.brand::before{background:linear-gradient(180deg,rgba(29,41,57,.95) 0%,rgba(29,41,57,.9) 64%,rgba(29,41,57,0) 100%)}.brand img{margin-top:6px}
     .levels{position:fixed;top:92px;left:16px;right:16px;margin:0;gap:22px;overflow-x:auto;scrollbar-width:none}.levels::-webkit-scrollbar{display:none}.levels button{height:36px;flex:none}}
   @media (min-width:641px) and (max-width:1023px){.side,.sideOpen{top:140px}}
   @media (min-width:641px) and (max-width:1860px){body.panel-open .levels{opacity:0;pointer-events:none}}
