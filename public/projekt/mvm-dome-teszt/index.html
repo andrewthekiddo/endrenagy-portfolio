@@ -59,7 +59,7 @@
   /* --- Újratervezés (2026-11-22, jegyoldal-stílus, csak a tesztoldalon): szintváltó fent, teljes nevekkel; bal oldali panel szektorlistával,
      szolgáltatásokkal és keresővel; kis vezérlőgombok jobb alul; a szektor rámutatásra kiemelődik --- */
   /* a menü első gombja ott kezdődik, ahol az igazi oldalon az „Események”: a sáv bal szélétől 383,5 px-re (mérve 1440 px-en) */
-  .levels{pointer-events:auto;position:absolute;top:37px;left:calc(100vw - max(0px,(100vw - 1056px)/2) - 24px - 672.5px);display:flex;gap:16px;transition:opacity .2s}
+  .levels{pointer-events:auto;position:absolute;top:37px;left:calc(100vw - max(0px,(100vw - 1056px)/2) - 24px - 672.5px);display:flex;gap:16px;transition:opacity .2s,transform .35s cubic-bezier(.2,.8,.2,1)}
   /* az igazi oldal sávja: 1056 px, 1280 px alatt 24 px belső margóval, 1280 px-től margó nélkül; a menü a sáv jobb szélétől 672,5 px-re kezdődik
      (ott van az „Események”, mert utána még a menü és a Jegyek gomb jön) – mérve 1024 / 1100 / 1180 / 1280 / 1366 / 1440 px-en */
   @media (min-width:1280px){.brand{padding:0 calc((100vw - 1056px)/2)}.levels{left:calc(50vw - 144.5px)}}
@@ -71,7 +71,10 @@
   @media (max-width:1023px){.brand{height:140px;padding:26px 16px 0;align-items:flex-start}.brand::before{background:linear-gradient(180deg,rgba(29,41,57,.95) 0%,rgba(29,41,57,.9) 64%,rgba(29,41,57,0) 100%)}.brand img{margin-top:6px}
     .levels{position:fixed;top:92px;left:16px;right:16px;margin:0;gap:22px;overflow-x:auto;scrollbar-width:none}.levels::-webkit-scrollbar{display:none}.levels button{height:36px;flex:none}}
   @media (min-width:641px) and (max-width:1023px){.side,.sideOpen{top:140px}}
-  @media (min-width:641px) and (max-width:1860px){body.panel-open .levels{opacity:0;pointer-events:none}}
+  /* nyitott adatlapnál a szintmenü látható marad (felhasználó, 2026-11-22): ha ütközne az adatlappal, a JS balra tolja (navIgazit);
+     a fejléc háttere az adatlap széléig tart, az adatlap a fejléc alatt van */
+  @media (min-width:641px){body.panel-open .brand::before{right:min(400px,100vw)}}
+  @media (min-width:641px) and (max-width:1023px){body.panel-open .levels{right:416px}}
 
   /* --- bal oldali panel: kereső + Szektorok / Szolgáltatások fül --- */
   .side{position:fixed;left:16px;top:104px;bottom:16px;width:300px;z-index:11;display:flex;flex-direction:column;gap:10px;padding:14px;border-radius:18px;background:var(--panel);border:1px solid var(--panel-border);backdrop-filter:blur(14px);transition:transform .35s cubic-bezier(.2,.8,.2,1),opacity .25s}
@@ -99,10 +102,10 @@
   .srow .n.pah{min-width:40px;color:#fff;border-color:transparent}
   .srow .n.pah.szabad{background:#12B76A}
   .srow .n.pah{color:var(--navy)}
-  .srow .n.pah.elkelt{background:#a0a8b5;color:var(--navy)}
+  .srow .n.pah.elkelt{background:repeating-linear-gradient(45deg,transparent 0 4px,rgba(16,24,40,.55) 4px 6px),repeating-linear-gradient(-45deg,transparent 0 4px,rgba(16,24,40,.55) 4px 6px),#6b7482;color:#fff}
   .jelm{display:flex;align-items:center;gap:6px;padding:0 4px 6px;font-size:12px;font-weight:700;color:#D0D5DD}
   .jelm i{width:12px;height:12px;border-radius:3px;margin-left:6px}.jelm i:first-child{margin-left:0}
-  .jelm i.szabad{background:#12B76A}.jelm i.elkelt{background:#a0a8b5}
+  .jelm i.szabad{background:#12B76A}.jelm i.elkelt{background:repeating-linear-gradient(45deg,transparent 0 3px,rgba(16,24,40,.6) 3px 4.5px),repeating-linear-gradient(-45deg,transparent 0 3px,rgba(16,24,40,.6) 3px 4.5px),#6b7482}
   .jelm span{margin-left:auto;color:var(--muted);font-weight:600;font-style:italic}
   .srow .ik2{width:28px;height:28px;flex:none;display:grid;place-items:center}
   .srow .ik2 .ik{width:28px;height:28px;display:block;border-radius:50%}
@@ -200,7 +203,7 @@
   .agak path{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:opacity .2s}
 
   /* --- jobb oldali infópanel (Ziggo-stílus) --- */
-  .panel{position:fixed;top:0;right:0;bottom:0;width:min(400px,100vw);z-index:12;background:var(--navy);border-left:1px solid var(--panel-border);transform:translateX(100%);transition:transform .35s cubic-bezier(.2,.8,.2,1);display:flex;flex-direction:column;overflow:hidden}
+  .panel{position:fixed;top:0;right:0;bottom:0;width:min(400px,100vw);z-index:11;background:var(--navy);border-left:1px solid var(--panel-border);transform:translateX(100%);transition:transform .35s cubic-bezier(.2,.8,.2,1);display:flex;flex-direction:column;overflow:hidden}
   .panel.show{transform:translateX(0)}
   .panel .photo{aspect-ratio:16/10;background:#1D2939 center/cover no-repeat;flex:none;position:relative}
   .panel .photo::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(16,24,40,0) 55%,var(--navy) 100%)}
