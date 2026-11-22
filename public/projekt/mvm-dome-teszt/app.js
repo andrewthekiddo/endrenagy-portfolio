@@ -31,6 +31,7 @@ const CATS = {
   baba:       { label: 'Baba-mama szoba', color: '#009EE2', ink: '#fff',    photo: 'img/arena.jpg',  icon: '<circle cx="12" cy="8" r="4"/><path d="M6 21a6 6 0 0 1 12 0"/>', text: 'Pelenkázó és szoptatóhelyiség, csendes, elkülönített térben.' },
   bar:        { label: 'Büfé, bár',       color: '#F79431', ink: '#101828', photo: 'img/pult.jpg',   icon: '<path d="M4 4h16l-6 8v6h-4v-6z"/><path d="M8 20h8"/>', text: 'Italok, snackek, kávé. Kártyás és mobilos fizetés. A rendezvény kezdete előtt egy órával nyit.' },
   ruhatar:    { label: 'Ruhatár',         color: '#F9B701', ink: '#101828', photo: 'img/arena.jpg',  icon: '<path d="M12 4a2 2 0 1 0 0 4v2"/><path d="M12 10 3 16h18z"/>', text: 'Kabát- és táskamegőrzés a rendezvény teljes ideje alatt. A ruhatárjegyet őrizd meg.' },
+  merch:      { label: 'Merch shop',      color: '#00E5B4', ink: '#101828', photo: 'img/arena.jpg',  icon: '', text: 'Ajándék- és rajongói termékek (merch) árusítása. A helyét a mennyezet türkiz kiemelése mutatja.' },   // a merch-zónákból (2026-11-22)
   lift:       { label: 'Lift',            color: '#038A8B', ink: '#fff',    photo: 'img/arena.jpg',  icon: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 11l3-3 3 3"/><path d="M9 14l3 3 3-3"/>', text: 'Akadálymentes közlekedés a szintek között. Kerekesszékkel és babakocsival is használható.' },
   vip:        { label: 'VIP',             color: '#038A8B', ink: '#fff',    photo: 'img/arena.jpg',  icon: '<path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/>', text: 'VIP bejárat és fogadótér a páholyvendégeknek.' },
   elsosegely: { label: 'Elsősegély',      color: '#E2384F', ink: '#fff',    photo: 'img/arena.jpg',  icon: '<path d="M12 5v14"/><path d="M5 12h14"/>', text: 'Egészségügyi ügyelet a rendezvény ideje alatt. Sürgős esetben szólj a legközelebbi teremőrnek.' },
@@ -38,10 +39,10 @@ const CATS = {
   szektor:    { label: 'Szektor',         color: '#FCBF20', ink: '#101828', photo: 'img/lelato.jpg', icon: '', text: '' },
 };
 // A pinek és a szűrő piktogramjai a Blenderben használt v1-es ikonok (ALAPRAJZ/v1 → textures/ikonok → img/ikonok), változatlan színnel/formával
-const IKONFAJL = { wc: 'wc', baba: 'baba', bar: 'bufe', ruhatar: 'ruhatar', lift: 'lift', vip: 'vip', elsosegely: 'elsosegely', info: 'info' };
+const IKONFAJL = { wc: 'wc', baba: 'baba', bar: 'bufe', ruhatar: 'ruhatar', merch: 'merch', lift: 'lift', vip: 'vip', elsosegely: 'elsosegely', info: 'info' };
 const ikonUrl = (nev) => asset(`img/ikonok/ikon_${nev}.${nev === 'info' ? 'png' : 'svg'}`);
 // Az ikonok már induláskor letöltődnek és dekódolódnak (a modell letöltése alatt), hogy a pinek ne üres körként jelenjenek meg, amibe később ugrik be a rajz (felhasználó, 2026-11-19)
-const IKON_ELO = ['wc', 'wc_ferfi', 'wc_noi', 'akadalymentes', 'baba', 'bufe', 'ruhatar', 'lift', 'vip', 'elsosegely', 'info', 'wc_s', 'wc_ferfi_s', 'wc_noi_s', 'akadalymentes_s', 'baba_s', 'bufe_s', 'ruhatar_s', 'vip_s', 'elsosegely_s'].map((n) => { const k = new Image(); k.src = ikonUrl(n); k.decode?.().catch(() => {}); return k; });
+const IKON_ELO = ['wc', 'wc_ferfi', 'wc_noi', 'akadalymentes', 'baba', 'bufe', 'ruhatar', 'merch', 'lift', 'vip', 'elsosegely', 'info', 'wc_s', 'merch_s', 'wc_ferfi_s', 'wc_noi_s', 'akadalymentes_s', 'baba_s', 'bufe_s', 'ruhatar_s', 'vip_s', 'elsosegely_s'].map((n) => { const k = new Image(); k.src = ikonUrl(n); k.decode?.().catch(() => {}); return k; });
 // Szűrés: null = minden szolgáltatás látszik; egy kategória = csak az látszik (pulzálva). A szektorszámok külön kapcsolhatók.
 let activeCat = null;
 let showSectors = true;
@@ -523,7 +524,7 @@ function zonaFeliratPontokra(pontok, y, szoveg, szin = 0x0b1220, haromszogek = n
       for (const [cx, cz] of [[dx, dz], [-dz, dx], [-dx, -dz], [dz, -dx]]) { const s = cx * tx + cz * tz; if (s > bd) { bd = s; bx = cx; bz = cz; } }
       dx = bx; dz = bz; if (dz * -kx + -dx * -kz < 0) { dx = -dx; dz = -dz; } }
     const t = texLoader.load(ikonUrl(ZONA_IKON[szoveg])); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(d, d), new THREE.MeshBasicMaterial({ name: 'WEB_zona_ikon', map: t, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(d, d), new THREE.MeshBasicMaterial({ name: 'WEB_zona_ikon', map: t, transparent: true, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));   // toneMapped:false – a mennyezeti ikon ugyanolyan színű legyen, mint a menüben (az AgX színkezelés kifakította – felhasználó, 2026-11-22)
     m.renderOrder = 8; m.frustumCulled = false; m.rotation.order = 'YXZ'; m.rotation.set(-Math.PI / 2, Math.atan2(-dz, dx), 0);
     m.position.set(kx, y + 0.06, kz);
     return m;
@@ -935,7 +936,7 @@ function homlokzatLapok(root, key) {
         f.renderOrder = 8; f.frustumCulled = false; f.position.set(ux * (rk + 0.06) + tx * (t0 + t1) / 2, (ya + yb) / 2, uz * (rk + 0.06) + tz * (t0 + t1) / 2); f.lookAt(f.position.x + ux, f.position.y, f.position.z + uz); csop.add(f);
       } else if (ZONA_IKON[ZONA_SZOVEG[tipus]]) {
         const d = Math.min(1.4 * FELIRAT_M, (yb - ya) * 0.8, (t1 - t0) * 0.8), tex = texLoader.load(ikonUrl(ZONA_IKON[ZONA_SZOVEG[tipus]])); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
-        const ik = new THREE.Mesh(new THREE.PlaneGeometry(d, d), new THREE.MeshBasicMaterial({ name: 'WEB_zona_ikon', map: tex, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+        const ik = new THREE.Mesh(new THREE.PlaneGeometry(d, d), new THREE.MeshBasicMaterial({ name: 'WEB_zona_ikon', map: tex, transparent: true, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));   // toneMapped:false – a mennyezeti ikon ugyanolyan színű legyen, mint a menüben (az AgX színkezelés kifakította – felhasználó, 2026-11-22)
         ik.renderOrder = 8; ik.frustumCulled = false; ik.position.set(ux * (rk + 0.06) + tx * (t0 + t1) / 2, (ya + yb) / 2, uz * (rk + 0.06) + tz * (t0 + t1) / 2); ik.lookAt(ik.position.x + ux, ik.position.y, ik.position.z + uz); csop.add(ik);
       }
     }
@@ -1147,7 +1148,7 @@ function tuneMaterials(root, key) {
 }
 
 // Fényfoltok a szolgáltatások fölé – a pin színével (a végleges verzióban kisütött fény)
-const LIGHT = { bar: 300, wc: 160, ruhatar: 160, lift: 120, elsosegely: 120, baba: 100, vip: 140, info: 140 };
+const LIGHT = { bar: 300, wc: 160, ruhatar: 160, merch: 140, lift: 120, elsosegely: 120, baba: 100, vip: 140, info: 140 };
 function addPoiLights(pois) {
   const lights = [];
   for (const p of pois) {
@@ -1805,7 +1806,7 @@ function szektorKepponton(x, y) {
 // (ami ehhez a POI-hoz van a legközelebb), így a lobbin sem gyullad ki egyszerre az összes bár.
 const ZONA_TETO = /(UJ_zona_(bar|wc|ruhatar|merch)_teto|WEB_(zona_teto|zona_ujra_teto|zona|tetoblokk|menny_teljes|wc_menny|wc_fal|wc_teto|homlokzat))(\.\d+)?$/;
 const ZONA_SZIN_TIPUS = Object.fromEntries(Object.entries(ZONA_PALETTA).map(([k, v]) => [v, k]));
-const ZONA_CAT = { bar: 'bar', wc: 'wc', ruhatar: 'ruhatar' };   // a merch-nek nincs adatlapja
+const ZONA_CAT = { bar: 'bar', wc: 'wc', ruhatar: 'ruhatar', merch: 'merch' };
 function zonaAnyag(h) { const m = h.object.material; return Array.isArray(m) ? m[h.face?.materialIndex ?? 0] : m; }
 function zonaKepponton(x, y) {
   if (!current) return null;
@@ -1827,6 +1828,47 @@ function zonaKepponton(x, y) {
     return null;   // átlátszatlan felület van előtte
   }
   return null;
+}
+
+// Merch shop helyek (felhasználó, 2026-11-22): a türkiz merch-mennyezetekből (a modell UJ_zona_merch_teto anyaga, vagy a ruhatárból merch-re
+// színezett webes lap) összefüggő darabonként egy „Merch shop” POI lesz; az alatta álló ruhatár-pin (ugyanaz a pult) helyette eltűnik.
+function merchPoik(root, pois) {
+  root.updateMatrixWorld(true);
+  const darabok = [], a = new THREE.Vector3();
+  root.traverse((o) => {
+    if (!o.isMesh || o.userData.zonaKiem) return;
+    const ms = Array.isArray(o.material) ? o.material : [o.material];
+    ms.forEach((m, i) => {
+      const nev = alapNev(m?.name || '');
+      if (!m || !ZONA_TETO.test(nev) || !(/UJ_zona_merch_/.test(nev) || m.color?.getHex() === MERCH_SZIN)) return;
+      const mi = Array.isArray(o.material) ? i : -1, komp = zonaKomponensek(o, mi), g = o.geometry, pos = g.attributes.position, idx = g.index, gy = new Map();
+      for (const [t, c] of komp) {
+        let d = gy.get(c); if (!d) gy.set(c, d = { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity, h: -Infinity, sx: 0, sy: 0, sa: 0 });
+        const P = [];
+        for (let j = 0; j < 3; j++) { a.fromBufferAttribute(pos, idx ? idx.getX(t * 3 + j) : t * 3 + j).applyMatrix4(o.matrixWorld); P.push([a.x, -a.z]);
+          d.x0 = Math.min(d.x0, a.x); d.x1 = Math.max(d.x1, a.x); d.y0 = Math.min(d.y0, -a.z); d.y1 = Math.max(d.y1, -a.z); d.h = Math.max(d.h, a.y); }
+        const ter = Math.abs((P[1][0] - P[0][0]) * (P[2][1] - P[0][1]) - (P[2][0] - P[0][0]) * (P[1][1] - P[0][1])) / 2;   // felülnézeti terület → súlypont
+        d.sx += ter * (P[0][0] + P[1][0] + P[2][0]) / 3; d.sy += ter * (P[0][1] + P[1][1] + P[2][1]) / 3; d.sa += ter;
+      }
+      darabok.push(...gy.values());
+    });
+  });
+  // egymáshoz közeli darabok (egy pult több lapja) összevonása
+  const egys = [];
+  for (const d of darabok.filter((d) => (d.x1 - d.x0) * (d.y1 - d.y0) > 0.5)) {
+    const e = egys.find((u) => d.x0 < u.x1 + 3 && d.x1 > u.x0 - 3 && d.y0 < u.y1 + 3 && d.y1 > u.y0 - 3);
+    if (e) { e.x0 = Math.min(e.x0, d.x0); e.x1 = Math.max(e.x1, d.x1); e.y0 = Math.min(e.y0, d.y0); e.y1 = Math.max(e.y1, d.y1); e.h = Math.max(e.h, d.h); e.sx += d.sx; e.sy += d.sy; e.sa += d.sa; } else egys.push({ ...d });
+  }
+  if (!egys.length) return pois;
+  const benne = (p, u) => p.x > u.x0 - 1 && p.x < u.x1 + 1 && p.y > u.y0 - 1 && p.y < u.y1 + 1;
+  const ki = new Set(), uj = [];
+  egys.forEach((u, i) => {
+    const r = pois.filter((p) => p.cat === 'ruhatar' && benne(p, u)); r.forEach((p) => ki.add(p));
+    const szolg = pois.filter((p) => !['szektor', 'paholy'].includes(p.cat)), z = r[0]?.z ?? (szolg.length ? szolg[0].z : 0);
+    uj.push({ id: `merch_${i + 1}`, cat: 'merch', ikon: 'merch', name: egys.length > 1 ? `Merch shop ${i + 1}` : 'Merch shop', x: r[0]?.x ?? (u.sa > 0 ? u.sx / u.sa : (u.x0 + u.x1) / 2), y: r[0]?.y ?? (u.sa > 0 ? u.sy / u.sa : (u.y0 + u.y1) / 2), z,   // ha volt alatta ruhatár-pin, annak a helyén (az a pult)
+      ...(r[0]?.fotok ? { fotok: r[0].fotok } : {}) });
+  });
+  return [...pois.filter((p) => !ki.has(p)), ...uj];
 }
 const zonaKiemCache = new Map();
 let zonaKiemMesh = null, zonaKiemKulcs = '', hovZona = null, selZona = null;
@@ -1967,7 +2009,7 @@ if (innerWidth <= 640) $('#sideX').textContent = '×';
 
 // ---------- Szűrőpanel: egy kategória kiválasztása = csak az látszik; újra kattintva vissza az összes ----------
 const FILTER_COLUMNS = [
-  ['wc', 'baba', 'bar', 'ruhatar'],          // szolgáltatások
+  ['wc', 'baba', 'bar', 'ruhatar', 'merch'], // szolgáltatások (a merch a ruhatár után – felhasználó, 2026-11-22)
   ['lift', 'elsosegely', 'info', 'szektor'], // közlekedés, biztonság, tájékozódás
 ];
 function buildFilters() {
@@ -2160,6 +2202,7 @@ async function loadLevel(level) {
       // a sütött-fény átalakítás új anyagpéldányt adhat, a szektor-kiemelő shader pedig felülírja az onBeforeCompile-t → a zóna-elrejtést a végleges anyagokra újra rátesszük
       if (ZONA_REJT[L.key] && !QS.has('norejt')) gltf.scene.traverse((o) => { if (!o.isMesh) return; for (const m of (Array.isArray(o.material) ? o.material : [o.material])) { const d = ZONA_REJT[L.key].filter((d) => d.minta.test(m.name || '')); if (d.length && !String(m.customProgramCacheKey?.() || '').includes('|zonarejt')) zonaRejt(m, d); } });
       c = cache[level] = { level, baked: c_baked, lm: c_lm, root: gltf.scene, anim: animObj, data, path: buildPath(data.camera) };
+      try { c.pois = merchPoik(gltf.scene, data.pois); } catch (e) { console.warn('merch', e); c.pois = data.pois; }
       setProgress(1);
     }
     if (current) {
@@ -2169,7 +2212,8 @@ async function loadLevel(level) {
       markersEl.innerHTML = '';
     }
     scene.add(c.root); if (c.anim) scene.add(c.anim.root);
-    current = { ...c, pois: c.data.pois, markers: buildMarkers(c.data.pois, c.data.padlo || 0), lights: c.baked ? [] : addPoiLights(c.data.pois) };
+    const pk = c.pois || c.data.pois;
+    current = { ...c, pois: pk, markers: buildMarkers(pk, c.data.padlo || 0), lights: c.baked ? [] : addPoiLights(pk) };
     camShift = [c.data.camera.shift_x || 0, c.data.camera.shift_y || 0];
     LM.gain.value = Number(QS.get('lmg')) || c.data.lightmap?.gain || 1; LM.gamma.value = Number(QS.get('lmgam')) || c.data.lightmap?.gamma || 1;
     hfov = 2 * Math.atan(c.data.camera.sensor / 2 / c.data.camera.lens) * 180 / Math.PI;
@@ -2313,6 +2357,7 @@ const EN = [
   ['Egészségügyi ügyelet a rendezvény ideje alatt. Sürgős esetben szólj a legközelebbi teremőrnek.', 'Medical service during the event. In an emergency, tell the nearest steward.'],
   ['Információs pult: jegyügyek, elveszett tárgyak, segítség a tájékozódásban.', 'Information desk: ticket questions, lost property and help finding your way.'],
   ['A Visa Platinum Lounge központi bárpultja: italok és snackek a lounge vendégeinek. A lounge a páholy szint északi oldalán található.', 'The central bar of the Visa Platinum Lounge: drinks and snacks for lounge guests. The lounge is on the north side of the box level.'],
+  ['Ajándék- és rajongói termékek (merch) árusítása. A helyét a mennyezet türkiz kiemelése mutatja.', 'Merchandise and fan products. Its location is shown by the turquoise ceiling highlight.'],
   ['Ezen a szinten nincs lelátószektor.', 'There are no stand sectors on this level.'],
   ['Nincs találat ezen a szinten.', 'No results on this level.'],
   [': a modell pár percen belül érkezik.', ': the model will arrive in a few minutes.'],

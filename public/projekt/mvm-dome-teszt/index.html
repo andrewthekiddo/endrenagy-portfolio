@@ -37,9 +37,9 @@
   input{-webkit-user-select:text;user-select:text}
 
   /* --- brand bar --- */
-  /* fejléc a mvm-dome.hu szerint (mérve 2026-11-22, 1440 px): 160 px magas; 1056 px széles, középre igazított sáv; logó 149×26, mellette 40 px-re a HU/EN gomb;
+  /* fejléc a mvm-dome.hu szerint (mérve 2026-11-22, 1440 px; az igazi lap tetején 160 px, legörgetve 96 px – a felhasználó ez utóbbihoz igazította: 96 px, logó 35 px-nél, HU 29, menüfelirat 39); 1056 px széles, középre igazított sáv; logó 149×26, mellette 40 px-re a HU/EN gomb;
      a menü 16 px közzel, Nunito 500 14 px, rámutatáskor sárga */
-  .brand{position:fixed;top:0;left:0;right:0;height:160px;padding:0 calc(max(0px,(100vw - 1056px)/2) + 24px);display:flex;align-items:center;gap:40px;z-index:9;pointer-events:none;background:linear-gradient(180deg,rgba(29,41,57,.94) 0%,rgba(29,41,57,.88) 62%,rgba(29,41,57,0) 100%);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);-webkit-mask-image:linear-gradient(180deg,#000 75%,transparent);mask-image:linear-gradient(180deg,#000 75%,transparent)}
+  .brand{position:fixed;top:0;left:0;right:0;height:96px;padding:0 calc(max(0px,(100vw - 1056px)/2) + 24px);display:flex;align-items:center;gap:40px;z-index:9;pointer-events:none;background:linear-gradient(180deg,rgba(29,41,57,.94) 0%,rgba(29,41,57,.88) 62%,rgba(29,41,57,0) 100%);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);-webkit-mask-image:linear-gradient(180deg,#000 75%,transparent);mask-image:linear-gradient(180deg,#000 75%,transparent)}
   .brand img{width:149px;height:26px;display:block;object-fit:contain}
   .brand .sep,.brand .cim{display:none}
   /* nyelvválasztó: sárga keretes gomb (8 px sarok, 8/24 px belső margó, Nunito 900 14 px), rámutatáskor kék #3BC3EE; lenyíló: #344054 háttér, 8 px-re alatta */
@@ -57,7 +57,7 @@
   /* --- Újratervezés (2026-11-22, jegyoldal-stílus, csak a tesztoldalon): szintváltó fent, teljes nevekkel; bal oldali panel szektorlistával,
      szolgáltatásokkal és keresővel; kis vezérlőgombok jobb alul; a szektor rámutatásra kiemelődik --- */
   /* a menü első gombja ott kezdődik, ahol az igazi oldalon az „Események”: a sáv bal szélétől 383,5 px-re (mérve 1440 px-en) */
-  .levels{pointer-events:auto;position:absolute;top:68px;left:calc(100vw - max(0px,(100vw - 1056px)/2) - 24px - 672.5px);display:flex;gap:16px;transition:opacity .2s}
+  .levels{pointer-events:auto;position:absolute;top:37px;left:calc(100vw - max(0px,(100vw - 1056px)/2) - 24px - 672.5px);display:flex;gap:16px;transition:opacity .2s}
   /* az igazi oldal sávja: 1056 px, 1280 px alatt 24 px belső margóval, 1280 px-től margó nélkül; a menü a sáv jobb szélétől 672,5 px-re kezdődik
      (ott van az „Események”, mert utána még a menü és a Jegyek gomb jön) – mérve 1024 / 1100 / 1180 / 1280 / 1366 / 1440 px-en */
   @media (min-width:1280px){.brand{padding:0 calc((100vw - 1056px)/2)}.levels{left:calc(50vw - 144.5px)}}
@@ -72,7 +72,7 @@
   @media (min-width:641px) and (max-width:1860px){body.panel-open .levels{opacity:0;pointer-events:none}}
 
   /* --- bal oldali panel: kereső + Szektorok / Szolgáltatások fül --- */
-  .side{position:fixed;left:16px;top:128px;bottom:16px;width:300px;z-index:11;display:flex;flex-direction:column;gap:10px;padding:14px;border-radius:18px;background:var(--panel);border:1px solid var(--panel-border);backdrop-filter:blur(14px);transition:transform .35s cubic-bezier(.2,.8,.2,1),opacity .25s}
+  .side{position:fixed;left:16px;top:104px;bottom:16px;width:300px;z-index:11;display:flex;flex-direction:column;gap:10px;padding:14px;border-radius:18px;background:var(--panel);border:1px solid var(--panel-border);backdrop-filter:blur(14px);transition:transform .35s cubic-bezier(.2,.8,.2,1),opacity .25s}
   body.side-closed .side{transform:translateX(calc(-100% - 24px));opacity:0;pointer-events:none}
   body.no-side .side,body.no-side .sideOpen{display:none!important}
   .sideHead{display:flex;gap:8px;align-items:center}
@@ -108,7 +108,7 @@
   .srow .t{display:flex;flex-direction:column;line-height:1.2;min-width:0}
   .srow .t small{color:var(--muted);font-weight:600;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .ures{color:var(--muted);font-size:13px;padding:12px 6px}
-  .sideOpen{position:fixed;left:16px;top:128px;z-index:11;display:none;align-items:center;gap:8px;height:42px;padding:0 16px;border-radius:12px;background:var(--panel);border:1px solid var(--panel-border);color:var(--text);font:800 13.5px Nunito,sans-serif;cursor:pointer;backdrop-filter:blur(14px)}
+  .sideOpen{position:fixed;left:16px;top:104px;z-index:11;display:none;align-items:center;gap:8px;height:42px;padding:0 16px;border-radius:12px;background:var(--panel);border:1px solid var(--panel-border);color:var(--text);font:800 13.5px Nunito,sans-serif;cursor:pointer;backdrop-filter:blur(14px)}
   .sideOpen:hover{border-color:var(--yellow)}
   body.side-closed .sideOpen{display:inline-flex}
   .hovtip{position:fixed;left:0;top:0;z-index:20;pointer-events:none;background:#fff;color:var(--navy);border-radius:10px;padding:8px 12px;font:800 14px Nunito,sans-serif;box-shadow:0 10px 28px rgba(0,0,0,.45);white-space:nowrap;opacity:0;transition:opacity .12s}
@@ -227,7 +227,7 @@
   .panel .plist .cim{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);padding:6px 8px 4px}
 
   /* --- vissza az áttekintéshez (részletnézetben) --- */
-  .overview{position:fixed;left:50%;top:128px;transform:translateX(-50%);z-index:10;display:none;align-items:center;gap:8px;padding:9px 16px;border-radius:999px;background:var(--panel);border:1px solid var(--panel-border);color:var(--text);font:700 13px Nunito,sans-serif;cursor:pointer;backdrop-filter:blur(14px)}
+  .overview{position:fixed;left:50%;top:104px;transform:translateX(-50%);z-index:10;display:none;align-items:center;gap:8px;padding:9px 16px;border-radius:999px;background:var(--panel);border:1px solid var(--panel-border);color:var(--text);font:700 13px Nunito,sans-serif;cursor:pointer;backdrop-filter:blur(14px)}
   .overview.show{display:inline-flex}
   body.panel-open .overview{display:none}
   .overview:hover{border-color:var(--yellow)}
@@ -244,9 +244,9 @@
 
   .forras{position:fixed;left:50%;bottom:6px;transform:translateX(-50%);z-index:8;font-size:10.5px;color:var(--muted);opacity:.8;white-space:nowrap}
   .forras a{color:inherit}
-  .toast{position:fixed;top:128px;left:50%;transform:translateX(-50%);z-index:60;background:var(--navy);border:1px solid var(--panel-border);padding:10px 16px;border-radius:10px;font-size:13px;opacity:0;transition:.25s;pointer-events:none}
+  .toast{position:fixed;top:104px;left:50%;transform:translateX(-50%);z-index:60;background:var(--navy);border:1px solid var(--panel-border);padding:10px 16px;border-radius:10px;font-size:13px;opacity:0;transition:.25s;pointer-events:none}
   .toast.show{opacity:1}
-  .hint{position:fixed;left:50%;top:128px;transform:translateX(-50%);color:var(--muted);font-size:12px;z-index:9;pointer-events:none;transition:.4s}
+  .hint{position:fixed;left:50%;top:104px;transform:translateX(-50%);color:var(--muted);font-size:12px;z-index:9;pointer-events:none;transition:.4s}
   .hint.hide{opacity:0}
 
   @media (max-width:640px){
