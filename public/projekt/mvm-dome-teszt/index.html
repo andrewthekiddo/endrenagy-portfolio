@@ -9,11 +9,15 @@
 <link rel="modulepreload" href="/projekt/mvm-dome-teszt/vendor/three/build/three.module.js">
 <script>
 // Gyors indulás (V2): a kezdőszint modellje és fénytérképe már a HTML beolvasásakor elkezd letöltődni, nem csak a kód elindulása után
+// MVM_VER: a modellek/adatok verziója – minden modellcserénél EMELNI kell, így a böngésző (iPad Safari is) biztosan az újat tölti
+window.MVM_VER = '2026-11-23a';
 (function () {
+  var V = window.MVM_VER;
   var S = { lobby: 'S0', also: 'S1', paholy: 'S2', felso: 'S3', epulet: 'S4' }, q = new URLSearchParams(location.search), k = S[q.get('szint')] || 'S4';
   // az oldal címe lehet /projekt/mvm-dome (perjel nélkül, a portfólióban) → a fájlok mappáját a címből számoljuk, nem relatívan
   var p = location.pathname, B = /\/$/.test(p) ? p : /\.html?$/.test(p) ? p.replace(/[^/]*$/, '') : p + '/';
-  function elo(href, as) { var l = document.createElement('link'); l.rel = 'preload'; l.as = as; l.href = B + href; l.crossOrigin = 'anonymous';   // a képet is így kéri a TextureLoader – különben kétszer töltődne le document.head.appendChild(l); }
+  // l.crossOrigin: a képet is így kéri a TextureLoader – különben kétszer töltődne le. A ?v= ugyanaz, mint az app.js asset()-jében (MVM_VER).
+  function elo(href, as) { var l = document.createElement('link'); l.rel = 'preload'; l.as = as; l.href = B + href + (V ? '?v=' + V : ''); l.crossOrigin = 'anonymous'; document.head.appendChild(l); }
   elo('models/' + k + '.glb', 'fetch'); if (!q.has('nolm')) elo('models/' + k + (q.has('lm8k') ? '_lm8k' : q.has('nokicsi') ? '_lm' : '_lm_kicsi') + '.webp', 'image'); elo('data/' + k + '.json', 'fetch');
 })();
 </script>
