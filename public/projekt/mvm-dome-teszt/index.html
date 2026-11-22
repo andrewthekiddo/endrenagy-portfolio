@@ -245,6 +245,15 @@
   .loader .bar{width:220px;height:3px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden}
   .loader .bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .15s}
   .loader .logo{width:min(220px,60vw);height:auto;display:block;margin-bottom:10px;animation:breathe 2.2s ease-in-out infinite}
+  /* betöltő (felhasználó, 2026-11-22; ötlet: a Ziggo Dome térképének betöltője, de saját): a fehér MVM DOME logó alulról töltődik fel
+     narancssárgával, a felszínén hullám fut; a magasság a valódi betöltési százalék (--p, az app.js írja) */
+  .ltolt{position:relative;width:min(280px,66vw);aspect-ratio:800/362;margin-bottom:4px}
+  .ltolt .alap{width:100%;height:100%;display:block;opacity:.16}
+  .ltolt .tolt{position:absolute;inset:0;-webkit-mask-size:100% 100%;mask-size:100% 100%;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;overflow:hidden}
+  .ltolt .hullam{position:absolute;left:0;right:0;bottom:0;height:calc(var(--p,0) * 1%);opacity:min(1,var(--p,0));background:linear-gradient(180deg,#FCBF20 0%,#F79009 100%);transition:height .25s ease-out}
+  .ltolt .hullam::before{content:"";position:absolute;left:0;bottom:100%;width:200%;height:14px;margin-bottom:-1px;animation:hullam 1.4s linear infinite;
+    background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 14' preserveAspectRatio='none'%3E%3Cpath d='M0 7 C20 0 40 0 60 7 S100 14 120 7 V14 H0Z' fill='%23FCBF20'/%3E%3C/svg%3E") repeat-x;background-size:50% 100%}
+  @keyframes hullam{to{transform:translateX(-50%)}}
   @keyframes breathe{0%,100%{opacity:.75}50%{opacity:1}}
 
   .forras{position:fixed;left:50%;bottom:6px;transform:translateX(-50%);z-index:8;font-size:10.5px;color:var(--muted);opacity:.8;white-space:nowrap}
@@ -335,9 +344,16 @@
 <button class="overview" id="overviewBtn">‹ Vissza az áttekintéshez</button>
 
 <div class="loader" id="loader">
-  <img class="logo" src="/projekt/mvm-dome-teszt/loader-logo.png" alt="MVM Dome">
+  <div class="ltolt" id="ltolt"><img class="alap" src="/projekt/mvm-dome-teszt/loader-logo.png" alt="MVM Dome" fetchpriority="high"><div class="tolt" id="tolt"><i class="hullam"></i></div></div>
   <div class="pct" id="pct">0%</div>
-  <div class="bar"><i id="barfill"></i></div>
+  <script>
+  // a logó maszkja + előszámláló: amíg a program és a 3D-motor töltődik (első látogatáskor lassú kapcsolaton több másodperc), a százalék
+  // már halad (legfeljebb 18%-ig); az app.js innen veszi át, és a modell letöltését erre építi rá (felhasználó, 2026-11-22)
+  (function(){var i=document.querySelector('#ltolt .alap'),t=document.getElementById('tolt'),u='url("'+i.src+'")';t.style.webkitMaskImage=t.style.maskImage=u;
+    var L=document.getElementById('loader'),P=document.getElementById('pct'),E=window.__elo={p:0,kesz:false},t0=performance.now();
+    (function lep(){if(E.kesz)return;var s=(performance.now()-t0)/1000;E.p=18*(1-Math.exp(-s/2.5));var k=Math.round(E.p);P.textContent=k+'%';L.style.setProperty('--p',k);requestAnimationFrame(lep);})();})();
+  </script>
+  <div class="bar" hidden><i id="barfill"></i></div>
   <div class="lvl" id="lvlName">Térkép betöltése</div>
 </div>
 <div class="toast" id="toast"></div>

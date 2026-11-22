@@ -2155,11 +2155,12 @@ function setupAnim(gltf, clipTop) {
 // ---------- Szintbetöltés ----------
 function showLoader(name) {
   lvlNameEl.textContent = `${name} betöltése`;
+  if (window.__elo && !window.__elo.kesz) { window.__elo.kesz = true; pctAlap = window.__elo.p / 100; } else pctAlap = 0;
   loaderEl.classList.remove('hide'); setProgress(0);
 }
 // A százalék folyamatosan számol föl (felhasználó, V2): a cél a tényleges letöltés, a kiírt szám egyesével követi – nem ugrik 0-ról 100-ra
-let pctCel = 0, pctMost = 0, pctFut = false, pctT = 0;
-function pctRajz() { const p = Math.round(pctMost * 100); pctEl.textContent = `${p}%`; barEl.style.width = `${p}%`; }
+let pctCel = 0, pctMost = 0, pctFut = false, pctT = 0, pctAlap = 0;   // pctAlap: az első betöltésnél az index.html előszámlálójának állása (0–0.18)
+function pctRajz() { const p = Math.round((pctAlap + (1 - pctAlap) * pctMost) * 100); pctEl.textContent = `${p}%`; barEl.style.width = `${p}%`; loaderEl.style.setProperty('--p', p); }   // --p: a logó feltöltése
 function pctLep(now) {
   const dt = Math.min(0.1, (now - pctT) / 1000); pctT = now;
   // letöltés közben lassan előre is kúszik (hogy akkor is mozogjon, ha a böngésző ritkán jelent), a cél fölé legfeljebb 3%-kal
