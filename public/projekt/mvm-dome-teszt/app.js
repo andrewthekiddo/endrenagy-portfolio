@@ -18,7 +18,7 @@ if (SHOT) { addEventListener('error', (e) => { document.title = 'JSERR ' + e.mes
 // (00_Teljes_epulet/…_showreel_v01.blend) jönnek: _Blender_Projects/00_Web_export/scripts/export_web.py + web_adat.py
 const LEVELS = {
   felso:  { key: 'S3', name: 'Felső körüljáró szint', model: 'models/S3.glb', meret: 5628720, data: 'data/S3.json', tier: 'Felső lelátó (3xx)' },
-  paholy: { key: 'S2', name: 'Páholy szint (VIP)', model: 'models/S2.glb', meret: 6082076, data: 'data/S2.json', tier: 'Alsó lelátó (2xx)' },
+  paholy: { key: 'S2', name: 'Páholy szint (VIP)', model: 'models/S2.glb', meret: 6082436, data: 'data/S2.json', tier: 'Alsó lelátó (2xx)' },
   also:   { key: 'S1', name: 'Alsó körüljáró szint', model: 'models/S1.glb', meret: 4082992, data: 'data/S1.json', tier: 'Alsó lelátó (2xx)' },
   lobby:  { key: 'S0', name: 'Lobby – Bejárati szint', model: 'models/S0.glb', meret: 1660196, data: 'data/S0.json', tier: 'Küzdőtéri lelátó (1xx)' },
   // a teljes, megépített épület kívülről (homlokzat bekapcsolva, nyitott tető): a kezdőnézet, ha a fájljai megvannak (lásd VAN_EPULET)
