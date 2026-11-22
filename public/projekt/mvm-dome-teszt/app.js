@@ -1693,9 +1693,11 @@ function selectPoi(p, anchor) {
     : (p.szoveg || c.text);
   $('#panelNear').innerHTML = '';
   // Újratervezés (2026-11-22): szektornál tényadatok + a legközelebbi szolgáltatások; szolgáltatásnál a legközelebbi szektorok – mind kattintható
-  const szek = p.cat === 'szektor';
-  $('#panelFacts').innerHTML = szek ? [['Lelátó', TIER[p.id[8]] || LEVELS[current.level].tier], ['Oldal', side(p)]]
-    .map(([k, v]) => `<div class="fact"><small>${k}</small><b>${v}</b></div>`).join('') : '';
+  const pahoz = p.cat === 'paholy', szek = p.cat === 'szektor' || pahoz;
+  if (pahoz) $('#panelText').textContent = 'Privát VIP páholy a páholy szinten, saját bejárattal a körüljáróról és saját erkéllyel a küzdőtér felé. A foglaltság most mintaadat.';
+  $('#panelFacts').innerHTML = (pahoz ? [['Állapot', ALLAPOT[p.allapot]], ['Szélesség', `${String(p.szelesseg).replace('.', ',')} m`]]
+    : szek ? [['Lelátó', TIER[p.id[8]] || LEVELS[current.level].tier], ['Oldal', side(p)]] : [])
+    .map(([k, v]) => `<div class="fact"><small>${k}</small><b>${v}</b></div>`).join('');
   const lista = $('#panelList'); lista.innerHTML = '';
   const tav = (q) => Math.hypot(q.x - p.x, q.y - p.y);
   const kozeli = szek
@@ -1710,7 +1712,7 @@ function selectPoi(p, anchor) {
   if (innerWidth <= 640) document.body.classList.add('side-closed');   // telefonon egyszerre egy lap
   panel.classList.add('show'); document.body.classList.add('panel-open');
   const at = anchor ? anchor.clone() : poiWorld(p);
-  enterDetail(at, szek ? 46 : 30, szek ? 30 : 20);
+  enterDetail(at, pahoz ? 34 : szek ? 46 : 30, pahoz ? 30 : szek ? 30 : 20);
   hlFrissit();
 }
 function closePanel(backToTour = true) {
@@ -1734,8 +1736,42 @@ function highlightSector(s) {
 // ---------- Újratervezés (2026-11-22, jegyoldal-stílus): rámutatásra kiemelt szektor, egy kattintással kiválasztás,
 // bal oldali szektorlista + szolgáltatások + kereső, a térkép és a lista összekötve ----------
 let selSec = null, hovSec = null;
+// ---------- VIP-páholyok (S2, felhasználó ötlete 2026-11-22): minden páholy külön blokk a mennyezetén (a folyosó felől nyitott
+// fülke teteje), a száma felülről olvasható, a színe a foglaltság: szabad = zöld, elkelt = sötétszürke. Adat: data/pahelyek.json
+// (a modell ajtótábláiból; az ÁLLAPOT MOST MINTAADAT). A páholy úgy viselkedik, mint egy szektor: rámutatás, kattintás, lista, adatlap.
+CATS.paholy = { label: 'VIP páholy', color: '#12B76A', ink: '#fff', photo: 'img/arena.jpg', icon: '', text: '' };
+// áttetsző (felhasználó, 2026-11-22: „túl tömör … picit átlátszóbb”), fekete számokkal; az elkelt világosszürke, hogy a fekete szám rajta is olvasható legyen
+const PAHOLY_SZIN = { szabad: 0x12b76a, elkelt: 0xa0a8b5 }, PAHOLY_KIEM = 0xfcbf20, PAHOLY_FEDES = 0.55;
+let PAHOLYOK = [];
+async function paholyBlokkok(root) {
+  const d = await fetch(asset('data/pahelyek.json')).then((r) => r.json());
+  const y = (d.padlo_teto ?? 3) + 0.04, csop = new THREE.Group(); csop.name = 'WEB_paholyok';
+  PAHOLYOK = d.paholyok.map((b) => {
+    const sh = new THREE.Shape(b.sarkok.map(([x, yy]) => new THREE.Vector2(x, yy)));
+    const g = new THREE.ShapeGeometry(sh); g.rotateX(-Math.PI / 2);   // Blender (x, y) → világ (x, −z): a forgatás után z = −y
+    const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ name: 'WEB_paholy', color: PAHOLY_SZIN[b.allapot], transparent: true, opacity: PAHOLY_FEDES, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 }));
+    m.position.y = y; m.renderOrder = 6;
+    const cx = b.sarkok.reduce((s, c) => s + c[0], 0) / 4, cy = b.sarkok.reduce((s, c) => s + c[1], 0) / 4;
+    const p = { id: 'paholy_' + b.szam, cat: 'paholy', ikon: 'vip', name: `Páholy ${b.szam}`, x: cx, y: cy, z: 3.94, szam: b.szam, allapot: b.allapot, szelesseg: b.szelesseg, mesh: m };
+    m.userData.paholy = p; csop.add(m);
+    // szám a tetőn: a betű teteje az aréna közepe felé (a körbejáró kamera felől egyenesen olvasható)
+    const c = document.createElement('canvas'); c.width = 256; c.height = 128; const gg = c.getContext('2d');
+    gg.font = '900 96px Nunito, "Arial Black", Arial, sans-serif'; gg.textAlign = 'center'; gg.textBaseline = 'middle'; gg.shadowColor = 'rgba(11,18,32,.55)'; gg.shadowBlur = 8; gg.fillStyle = '#ffffff'; gg.fillText(String(b.szam), 128, 70);   // fehér (felhasználó, 2026-11-22: a fekete „nagyon sötét”), enyhe sötét árnyékkal az olvashatóságért
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+    const h = Math.min(3.2, b.szelesseg * 0.62), lap = new THREE.Mesh(new THREE.PlaneGeometry(h * 2, h), new THREE.MeshBasicMaterial({ name: 'WEB_paholyszam', map: t, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6 }));
+    lap.position.set(cx, y + 0.12, -cy);   // a blokk polygonOffsetje ferde nézetben „feljebb húzza” a blokkot → a szám ennél is feljebb
+    lap.rotation.order = 'YXZ'; lap.rotation.set(-Math.PI / 2, Math.atan2(cx, -cy), 0); lap.renderOrder = 7; csop.add(lap);
+    return p;
+  });
+  root.add(csop);
+}
+const pahLista = () => (current && LEVELS[current.level].key === 'S2' ? PAHOLYOK : []);
+const ALLAPOT = { szabad: 'Szabad', elkelt: 'Elkelt' };
+function paholySzinek() {
+  for (const p of PAHOLYOK) { const k = p === hovSec || p === selSec; p.mesh.material.color.setHex(k ? PAHOLY_KIEM : PAHOLY_SZIN[p.allapot]); p.mesh.material.opacity = k ? 0.8 : PAHOLY_FEDES; }
+}
 const hovtip = $('#hovtip');
-const hlFrissit = () => highlightSector(hovSec || selSec);
+const hlFrissit = () => { const s = hovSec || selSec; highlightSector(s?.cat === 'szektor' ? s : null); paholySzinek(); };
 const szamSor = (p) => p.name.replace('Szektor ', '');
 const normal = (s) => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 function syncSorok() {
@@ -1746,16 +1782,17 @@ function setHover(s, pont) {
   if (s !== hovSec) { hovSec = s; hlFrissit(); syncSorok(); }
   canvas.style.cursor = s && pont ? 'pointer' : '';
   if (s && pont) {
-    hovtip.innerHTML = `${s.name}<small>${TIER[s.id[8]] || LEVELS[current.level].tier} · ${side(s)}</small>`;
+    hovtip.innerHTML = s.cat === 'paholy' ? `${s.name}<small>VIP páholy · ${ALLAPOT[s.allapot]}</small>` : `${s.name}<small>${TIER[s.id[8]] || LEVELS[current.level].tier} · ${side(s)}</small>`;
     hovtip.style.transform = `translate(${pont.x + 16}px, ${pont.y - 52}px)`; hovtip.classList.add('show');
   } else hovtip.classList.remove('show');
 }
 // a képernyőpont alatti szektor (csak ha a sugár először a lelátót éri; mögötte lévő lelátó nem számít)
 function szektorKepponton(x, y) {
-  if (!current || !current.pois.some((p) => p.cat === 'szektor')) return null;
+  if (!current || !(current.pois.some((p) => p.cat === 'szektor') || pahLista().length)) return null;
   ndc.set((x / innerWidth) * 2 - 1, -(y / innerHeight) * 2 + 1);
   raycaster.setFromCamera(ndc, camera);
-  const hit = raycaster.intersectObject(current.root, true).find((h) => !(h.object.material?.transparent) && h.object.visible);
+  const hit = raycaster.intersectObject(current.root, true).find((h) => (h.object.userData.paholy || !(h.object.material?.transparent)) && h.object.visible);
+  if (hit?.object.userData.paholy) return { s: hit.object.userData.paholy, pont: hit.point };
   if (!hit || !STAND.test(alapNev(hit.object.material?.name))) return null;
   const s = sectorAt(hit.point, true);
   return s ? { s, pont: hit.point } : null;
@@ -1786,9 +1823,10 @@ canvas.addEventListener('pointerup', (e) => {
 function sorGomb(p, katt) {
   const b = document.createElement('button'); b.className = 'srow'; b.dataset.id = p.id;
   if (p.cat === 'szektor') b.innerHTML = `<span class="n">${szamSor(p)}</span><span class="t">${side(p)}</span>`;
+  else if (p.cat === 'paholy') b.innerHTML = `<span class="n pah ${p.allapot}">${p.szam}</span><span class="t">${ALLAPOT[p.allapot]}<small>VIP páholy · ${side(p)}</small></span>`;
   else b.innerHTML = `<span class="ik2">${ICON2(p.cat, p.ikon)}</span><span class="t">${p.name}<small>${CATS[p.cat]?.label || ''} · ${side(p)}</small></span>`;
   b.addEventListener('click', katt);
-  if (p.cat === 'szektor') { b.addEventListener('mouseenter', () => setHover(p)); b.addEventListener('mouseleave', () => setHover(null)); }
+  if (p.cat === 'szektor' || p.cat === 'paholy') { b.addEventListener('mouseenter', () => setHover(p)); b.addEventListener('mouseleave', () => setHover(null)); }
   return b;
 }
 let aktivFul = 'szektor';
@@ -1802,12 +1840,22 @@ function buildSide() {
   const pane = $('#paneSzektor'); pane.innerHTML = '';
   const secs = current.pois.filter((p) => p.cat === 'szektor').sort((a, b) => parseInt(szamSor(a), 10) - parseInt(szamSor(b), 10));
   let csop = null;
+  const pahElol = pahLista().length > 0;   // a VIP-szinten a páholyok a legfontosabbak (felhasználó) → a lista elején
+  if (pahElol) pane.insertAdjacentHTML('beforeend', '<div id="pahHely"></div>');
   for (const p of secs) {
     const t = TIER[p.id[8]] || LEVELS[current.level].tier;
     if (t !== csop) { csop = t; pane.insertAdjacentHTML('beforeend', `<div class="grp">${t}</div>`); }
     pane.appendChild(sorGomb(p, () => selectPoi(p)));
   }
-  if (!secs.length) pane.innerHTML = '<div class="ures">Ezen a szinten nincs lelátószektor.</div>';
+  const pah = pahLista().slice().sort((a, b) => a.szam - b.szam);
+  if (pah.length) {
+    const hely = $('#pahHely'), fr = document.createDocumentFragment(), tmp = document.createElement('div');
+    tmp.innerHTML = `<div class="grp">VIP páholyok · ${pah.filter((p) => p.allapot === 'szabad').length} szabad</div><div class="jelm"><i class="szabad"></i>Szabad<i class="elkelt"></i>Elkelt<span>mintaadat</span></div>`;
+    fr.append(...tmp.children);
+    for (const p of pah) fr.appendChild(sorGomb(p, () => selectPoi(p)));
+    hely.replaceWith(fr);
+  }
+  if (!secs.length && !pah.length) pane.innerHTML = '<div class="ures">Ezen a szinten nincs lelátószektor.</div>';
   document.body.classList.toggle('no-side', !current.pois.length);
   $('#kereso').value = ''; fulValt(secs.length ? aktivFul : 'szolg');
   selSec = hovSec = null; syncSorok(); hlFrissit();
@@ -1822,6 +1870,7 @@ function keres() {
     if (lat.has(kulcs)) continue;
     if ((normal(p.name) + ' ' + normal(CATS[p.cat]?.label)).includes(q)) { lat.add(kulcs); talal.push(p); }
   }
+  for (const p of pahLista()) if ((normal(p.name) + ' vip ' + normal(ALLAPOT[p.allapot])).includes(q)) talal.push(p);
   talal.sort((a, b) => (a.cat === 'szektor') === (b.cat === 'szektor') ? a.name.localeCompare(b.name, 'hu', { numeric: true }) : a.cat === 'szektor' ? -1 : 1);
   talal.slice(0, 40).forEach((p) => pane.appendChild(sorGomb(p, () => selectPoi(p))));
   if (!talal.length) pane.innerHTML = '<div class="ures">Nincs találat ezen a szinten.</div>';
@@ -2005,6 +2054,7 @@ async function loadLevel(level) {
       // a merch-dobozba eső büfé átszínezve, MERCH SHOP felirattal
       if (/^S[0123]$/.test(L.key) && !QS.has('nonyil')) { try { s4Jelolesek(gltf.scene, true); } catch (e) { console.warn('kapunyilak', e); } }
       if (L.key === 'S4' && !QS.has('nos4jel')) { try { s4Jelolesek(gltf.scene); } catch (e) { console.warn('s4-jelölések', e); } }
+      if (L.key === 'S2' && !QS.has('nopaholy')) { try { await paholyBlokkok(gltf.scene); } catch (e) { console.warn('páholyok', e); } }
       // alsó szint: a modell saját fehér hátterű „BAR” stb. feliratai sehol sem kellenek (felhasználó, 2026-11-21: „az kurvára nem kell”) – a néző a sajátját rajzolja
       if (L.key === 'S1' && !QS.has('nofelirat')) gltf.scene.traverse((o) => { if (o.isMesh) for (const m of (Array.isArray(o.material) ? o.material : [o.material])) if (/UJ_zona_[a-z]+_(betu|felirathatter)/.test(m.name || '') || (!QS.has('nomodellap') && /UJ_zona_(bar|ruhatar|merch)_(teto|szegely)/.test(m.name || ''))) m.visible = false; });
       if (['S0', 'S2', 'S3'].includes(L.key) && !QS.has('nofelirat')) {
