@@ -286,7 +286,8 @@ function lepcsoFade(root, v) {
   root.traverse((o) => {
     if (!o.isMesh || !o.material) return;
     for (const m of (Array.isArray(o.material) ? o.material : [o.material])) {
-      if (kesz.has(m) || FACADE.test(alapNev(m.name)) || /UJ_/.test(m.name)) continue; kesz.add(m);
+      // a külső homlokzat (f36 osztály: EF_/KA_Kulso, Kulter, homlokzati üveg/fém, záróoszlop) NEM halványul (felhasználó, 2026-11-22: a II. kapunál átlátszott)
+      if (kesz.has(m) || FACADE.test(alapNev(m.name)) || /^W_f36_|_(Kulso|Kulter)_/.test(m.name || '') || /UJ_/.test(m.name)) continue; kesz.add(m);
       const elozo = m.onBeforeCompile, kulcs = m.customProgramCacheKey?.bind(m);
       m.onBeforeCompile = (sh, r) => {
         elozo?.call(m, sh, r);
