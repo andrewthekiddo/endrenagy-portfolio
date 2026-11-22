@@ -195,7 +195,11 @@ async function loadLightmap(info, kicsi = false) {
   const nagy = info.nagy && QS.has('lm8k') && renderer.capabilities.maxTextureSize >= 8192;
   const tex = await texLoader.loadAsync(await forras(kicsi ? kicsiLm(info.file) : nagy ? info.nagy : info.file));
   tex.flipY = false; tex.colorSpace = THREE.SRGBColorSpace; tex.channel = 1;
-  tex.generateMipmaps = false; tex.minFilter = THREE.LinearFilter; tex.magFilter = THREE.LinearFilter;
+  // simított kicsinyítés (felhasználó, 2026-11-22: a lépcsők, mozgólépcsők pixelesek): mipmap + anizotróp szűrés – távolról a lépcsőfokok
+  // sötét-világos sávjai nem esnek szét recés pöttyökre (~+33% videómemória a fénytérképre). ?nomip: a régi, szűretlen út
+  if (QS.has('nomip')) { tex.generateMipmaps = false; tex.minFilter = THREE.LinearFilter; }
+  else { tex.generateMipmaps = true; tex.minFilter = THREE.LinearMipmapLinearFilter; tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy()); }
+  tex.magFilter = THREE.LinearFilter;
   return tex;
 }
 const HOML = Number(QS.get('homl')) || 0.06;           // a külső homlokzat (f36 osztály) sötétítése
@@ -290,10 +294,18 @@ function lepcsoFade(root, v) {
           .replace('#include <project_vertex>', '#include <project_vertex>\nvFadeP = (modelMatrix * vec4(transformed, 1.0)).xyz;');
         sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vFadeP;')
           .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n' +
-            `if (abs(vFadeP.x) > ${v.xMin.toFixed(1)} && abs(vFadeP.x) < ${v.xMax.toFixed(1)} && vFadeP.z > ${v.zMin.toFixed(1)} && vFadeP.z < ${v.zMax.toFixed(1)}) {` +
-            ` float fk = smoothstep(${v.y0.toFixed(1)}, ${v.y1.toFixed(1)}, vFadeP.y); if (fk > 0.0 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) < fk) discard; }`);
+            `float lepcsoFk = 0.0; if (abs(vFadeP.x) > ${v.xMin.toFixed(1)} && abs(vFadeP.x) < ${v.xMax.toFixed(1)} && vFadeP.z > ${v.zMin.toFixed(1)} && vFadeP.z < ${v.zMax.toFixed(1)}) {` +
+            // sima átmenet (felhasználó, 2026-11-22: a pöttyös, „pixeles” elhalványulás rossz): a lépcső fölfelé a háttérszínbe olvad,
+            // a teteje fölött eltűnik – nincs rácsos pontkihagyás (dither). ?regifade: a régi, pöttyös út
+            (QS.has('regifade')
+              ? ` float fk = smoothstep(${v.y0.toFixed(1)}, ${v.y1.toFixed(1)}, vFadeP.y); if (fk > 0.0 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) < fk) discard; }`
+              : ` lepcsoFk = smoothstep(${v.y0.toFixed(1)}, ${v.y1.toFixed(1)}, vFadeP.y); if (lepcsoFk > 0.985) discard; }`))
+          // az élsimítás (MSAA) mintáin át halványul (alpha-to-coverage): képpontnál finomabb lépések, nincs látható pöttyrács
+          .replace('#include <dithering_fragment>', `#include <dithering_fragment>
+            gl_FragColor.a = min(gl_FragColor.a, 1.0 - lepcsoFk);`);
       };
       m.customProgramCacheKey = () => (kulcs ? kulcs() : '') + '|lepcsofade';
+      if (!QS.has('regifade') && !m.transparent) m.alphaToCoverage = true;
       m.needsUpdate = true;
     }
   });
@@ -1129,6 +1141,23 @@ function padloAlattRejt(m) {
   m.customProgramCacheKey = () => (kulcs ? kulcs() : '') + '|padloalatt';
   m.needsUpdate = true;
 }
+// Lágyított anyagminta: a kép kontrasztja a saját átlagszíne felé húzva (k = 0..1). A terrazzo szemcséi a sütött fény erős foltjaiban
+// (lépcsők, mozgólépcsők mellett) apró, éles pöttyökként „raszteresnek” látszottak – így a burkolat megmarad, csak nyugodtabb.
+const LAGY = new Map();
+function lagyMinta(t, k) {
+  if (LAGY.has(t)) return LAGY.get(t);
+  const img = t.image; if (!img || !img.width) return t;
+  const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const g = c.getContext('2d');
+  g.drawImage(img, 0, 0); const d = g.getImageData(0, 0, c.width, c.height), p = d.data; let r = 0, gg = 0, b = 0;
+  for (let i = 0; i < p.length; i += 4) { r += p[i]; gg += p[i + 1]; b += p[i + 2]; }
+  const n = p.length / 4; r /= n; gg /= n; b /= n;
+  for (let i = 0; i < p.length; i += 4) { p[i] = r + (p[i] - r) * k; p[i + 1] = gg + (p[i + 1] - gg) * k; p[i + 2] = b + (p[i + 2] - b) * k; }
+  g.putImageData(d, 0, 0);
+  const u = new THREE.CanvasTexture(c);
+  for (const kk of ['wrapS', 'wrapT', 'flipY', 'colorSpace', 'channel', 'rotation', 'matrixAutoUpdate']) u[kk] = t[kk];
+  u.offset.copy(t.offset); u.repeat.copy(t.repeat); u.center.copy(t.center); u.matrix.copy(t.matrix); u.anisotropy = 4; u.needsUpdate = true;
+  LAGY.set(t, u); return u;
+}
 function tuneMaterials(root, key) {
   const cut = FACADE_CUT[key] ? [new THREE.Plane(new THREE.Vector3(0, -1, 0), FACADE_CUT[key])] : null;
   const done = new Set();
@@ -1152,6 +1181,7 @@ function tuneMaterials(root, key) {
       if (/UJ_zona_.*_teto/.test(m.name) && m.transparent && o.renderOrder < 4) o.renderOrder = 4;
       if (/UJ_zona_/.test(m.name)) { if ('roughness' in m) m.roughness = 1; if ('metalness' in m) m.metalness = 0; if ('envMapIntensity' in m) m.envMapIntensity = 0; if ('specularIntensity' in m) m.specularIntensity = 0; }
       if (m.map) m.map.anisotropy = 8;                 // csempézett anyagminták: lapos szögből se mosódjanak
+      if (/terrazzo/i.test(m.name || '') && m.map && !QS.has('eredetiterrazzo')) m.map = lagyMinta(m.map, Number(QS.get('terrazzo')) || 0.35);   // a szemcsés padló erős fényben raszteres pöttyöknek hatott (felhasználó, 2026-11-22)
       if (cut && FACADE.test(alapNev(m.name))) m.clippingPlanes = cut;
       const t = Object.entries(MAT).find(([k, v]) => v.exact ? alapNev(m.name) === k : alapNev(m.name).startsWith(k))?.[1];
       if (t) {
