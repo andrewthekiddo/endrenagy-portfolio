@@ -6,15 +6,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>MVM Dome térkép</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js">
+<link rel="modulepreload" href="/projekt/mvm-dome-teszt/vendor/three/build/three.module.js">
 <script>
 // Gyors indulás (V2): a kezdőszint modellje és fénytérképe már a HTML beolvasásakor elkezd letöltődni, nem csak a kód elindulása után
 (function () {
   var S = { lobby: 'S0', also: 'S1', paholy: 'S2', felso: 'S3', epulet: 'S4' }, q = new URLSearchParams(location.search), k = S[q.get('szint')] || 'S4';
   // az oldal címe lehet /projekt/mvm-dome (perjel nélkül, a portfólióban) → a fájlok mappáját a címből számoljuk, nem relatívan
   var p = location.pathname, B = /\/$/.test(p) ? p : /\.html?$/.test(p) ? p.replace(/[^/]*$/, '') : p + '/';
-  function elo(href, as) { var l = document.createElement('link'); l.rel = 'preload'; l.as = as; l.href = B + href; if (as === 'fetch') l.crossOrigin = 'anonymous'; document.head.appendChild(l); }
+  function elo(href, as) { var l = document.createElement('link'); l.rel = 'preload'; l.as = as; l.href = B + href; l.crossOrigin = 'anonymous';   // a képet is így kéri a TextureLoader – különben kétszer töltődne le document.head.appendChild(l); }
   elo('models/' + k + '.glb', 'fetch'); if (!q.has('nolm')) elo('models/' + k + (q.has('lm8k') ? '_lm8k' : q.has('nokicsi') ? '_lm' : '_lm_kicsi') + '.webp', 'image'); elo('data/' + k + '.json', 'fetch');
 })();
 </script>
@@ -372,8 +371,8 @@
 
 <script type="importmap">
 { "imports": {
-  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
-  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  "three": "/projekt/mvm-dome-teszt/vendor/three/build/three.module.js",
+  "three/addons/": "/projekt/mvm-dome-teszt/vendor/three/examples/jsm/"
 } }
 </script>
 <script type="module" src="/projekt/mvm-dome-teszt/app.js"></script>
