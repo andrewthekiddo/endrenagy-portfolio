@@ -1682,6 +1682,7 @@ function setPhotos(p, c) {
   $('#photoCap').textContent = !f ? '' : f.alt ? 'Kép a szintről' : (f.szint !== kulcs ? `A kép másik szinten készült: ${SZINTNEV[f.szint]}` : '');
 }
 function selectPoi(p, anchor) {
+  if (selZona && selZona.s !== p) { selZona = null; zonaKiemFrissit(); }
   const m = current.markers.find(x => x.p === p);
   selectedEl?.classList.remove('sel'); selectedEl = m?.el || null; selectedEl?.classList.add('sel');
   const c = CATS[p.cat];
@@ -1718,7 +1719,7 @@ function selectPoi(p, anchor) {
 function closePanel(backToTour = true) {
   panel.classList.remove('show'); document.body.classList.remove('panel-open');
   selectedEl?.classList.remove('sel'); selectedEl = null;
-  selSec = null; syncSorok(); hlFrissit();
+  selSec = null; selZona = null; zonaKiemFrissit(); syncSorok(); hlFrissit();
   if (backToTour) enterTour();
 }
 // Bezárásra azonnal vissza a körútra – onnan folytatja, ahol a kamera éppen áll
@@ -1782,7 +1783,7 @@ function setHover(s, pont) {
   if (s !== hovSec) { hovSec = s; hlFrissit(); syncSorok(); }
   canvas.style.cursor = s && pont ? 'pointer' : '';
   if (s && pont) {
-    hovtip.innerHTML = s.cat === 'paholy' ? `${s.name}<small>VIP páholy · ${ALLAPOT[s.allapot]}</small>` : `${s.name}<small>${TIER[s.id[8]] || LEVELS[current.level].tier} · ${side(s)}</small>`;
+    hovtip.innerHTML = s.cat === 'paholy' ? `${s.name}<small>VIP páholy · ${ALLAPOT[s.allapot]}</small>` : s.cat !== 'szektor' ? `${s.name}<small>${CATS[s.cat]?.label || ''} · ${side(s)}</small>` : `${s.name}<small>${TIER[s.id[8]] || LEVELS[current.level].tier} · ${side(s)}</small>`;
     hovtip.style.transform = `translate(${pont.x + 16}px, ${pont.y - 52}px)`; hovtip.classList.add('show');
   } else hovtip.classList.remove('show');
 }
@@ -1797,12 +1798,86 @@ function szektorKepponton(x, y) {
   const s = sectorAt(hit.point, true);
   return s ? { s, pont: hit.point } : null;
 }
+
+// --- Mennyezeti kiemelések kattinthatók (felhasználó, 2026-11-22): a bár / mosdó / ruhatár színes mennyezete rámutatásra felvillan,
+// kattintásra ugyanaz történik, mint a gombjára kattintva. A kurzor alatti színes lapból (webes lap vagy a modell UJ_zona_*_teto anyaga)
+// a típus jön, a hozzá tartozó hely pedig a legközelebbi ilyen POI. A villanás csak annak az egy egységnek a háromszögeit rajzolja ki
+// (ami ehhez a POI-hoz van a legközelebb), így a lobbin sem gyullad ki egyszerre az összes bár.
+const ZONA_TETO = /(UJ_zona_(bar|wc|ruhatar|merch)_teto|WEB_(zona_teto|zona_ujra_teto|zona|tetoblokk|menny_teljes|wc_menny|wc_fal|wc_teto|homlokzat))(\.\d+)?$/;
+const ZONA_SZIN_TIPUS = Object.fromEntries(Object.entries(ZONA_PALETTA).map(([k, v]) => [v, k]));
+const ZONA_CAT = { bar: 'bar', wc: 'wc', ruhatar: 'ruhatar' };   // a merch-nek nincs adatlapja
+function zonaAnyag(h) { const m = h.object.material; return Array.isArray(m) ? m[h.face?.materialIndex ?? 0] : m; }
+function zonaKepponton(x, y) {
+  if (!current) return null;
+  ndc.set((x / innerWidth) * 2 - 1, -(y / innerHeight) * 2 + 1);
+  raycaster.setFromCamera(ndc, camera);
+  for (const h of raycaster.intersectObject(current.root, true)) {
+    if (!h.object.visible || !h.object.isMesh || h.object.userData.zonaKiem) continue;
+    const m = zonaAnyag(h); if (!m || m.visible === false) continue;
+    const nev = alapNev(m.name || '');
+    if (ZONA_TETO.test(nev)) {
+      const t = (nev.match(/UJ_zona_(bar|wc|ruhatar|merch)_/) || [])[1] || ZONA_SZIN_TIPUS[m.color?.getHex()];
+      const cat = ZONA_CAT[t]; if (!cat) return null;
+      const bx = h.point.x, by = -h.point.z;
+      let s = null, bd = 30;   // 30 m-en belül legyen a hely
+      for (const p of current.pois) if (p.cat === cat) { const d = Math.hypot(p.x - bx, p.y - by); if (d < bd) { bd = d; s = p; } }
+      return s ? { s, pont: h.point, zona: { obj: h.object, mi: Array.isArray(h.object.material) ? h.face.materialIndex : -1, face: h.faceIndex, szin: m.color?.getHex() ?? 0xffffff } } : null;
+    }
+    if (m.transparent || /felirat|ikon|szegely|kapuszam|paholyszam|betu|felirathatter/.test(nev)) continue;   // átlátszó / felirat: tovább a sugáron
+    return null;   // átlátszatlan felület van előtte
+  }
+  return null;
+}
+const zonaKiemCache = new Map();
+let zonaKiemMesh = null, zonaKiemKulcs = '', hovZona = null, selZona = null;
+const zonaKomp = new Map();   // (háló, anyag) → háromszögenként az összefüggő darab sorszáma (közös csúcsokon át)
+function zonaKomponensek(o, mi) {
+  const k = `${o.uuid}|${mi}`; if (zonaKomp.has(k)) return zonaKomp.get(k);
+  const g = o.geometry, pos = g.attributes.position, idx = g.index, n = (idx ? idx.count : pos.count) / 3;
+  const ranges = mi >= 0 ? g.groups.filter((gr) => gr.materialIndex === mi) : [{ start: 0, count: n * 3 }];
+  const kulcs = (v) => `${Math.round(pos.getX(v) * 50)},${Math.round(pos.getY(v) * 50)},${Math.round(pos.getZ(v) * 50)}`;
+  const tris = [], csucs = new Map();
+  for (const r of ranges) for (let i = r.start; i < r.start + r.count; i += 3) {
+    const t = i / 3; tris.push(t);
+    for (let j = 0; j < 3; j++) { const q = kulcs(idx ? idx.getX(i + j) : i + j); if (!csucs.has(q)) csucs.set(q, []); csucs.get(q).push(t); }
+  }
+  const komp = new Map(); let db = 0;
+  for (const t0 of tris) {
+    if (komp.has(t0)) continue;
+    const sor = [t0]; komp.set(t0, db);
+    while (sor.length) { const t = sor.pop(); for (let j = 0; j < 3; j++) for (const u of csucs.get(kulcs(idx ? idx.getX(t * 3 + j) : t * 3 + j))) if (!komp.has(u)) { komp.set(u, db); sor.push(u); } }
+    db++;
+  }
+  zonaKomp.set(k, komp); return komp;
+}
+function zonaKiemelesEpit(z) {
+  const o = z.obj, g = o.geometry, pos = g.attributes.position, idx = g.index, komp = zonaKomponensek(o, z.mi), cel = komp.get(z.face);
+  o.updateWorldMatrix(true, false);
+  const M = new THREE.Matrix4().multiplyMatrices(new THREE.Matrix4().copy(current.root.matrixWorld).invert(), o.matrixWorld), a = new THREE.Vector3(), out = [];
+  for (const [t, c] of komp) if (c === cel) for (let j = 0; j < 3; j++) { a.fromBufferAttribute(pos, idx ? idx.getX(t * 3 + j) : t * 3 + j).applyMatrix4(M); out.push(a.x, a.y, a.z); }
+  if (!out.length) return null;
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(out, 3));
+  // ráadásként hozzáadva: a saját színében izzik fel, nem fakul ki (a világos kék mosdónál kisebb erővel, különben kifehéredik)
+  const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ name: 'WEB_zona_kiem', color: z.szin, transparent: true, opacity: z.szin === ZONA_PALETTA.wc ? 0.38 : 0.55, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }));
+  mesh.renderOrder = 6; mesh.frustumCulled = false; mesh.userData.zonaKiem = true; mesh.raycast = () => {};
+  return mesh;
+}
+function zonaKiemFrissit() {
+  const z = hovZona || selZona, kulcs = z ? `${z.obj.uuid}|${z.mi}|${zonaKomponensek(z.obj, z.mi).get(z.face)}` : '';
+  if (kulcs === zonaKiemKulcs) return;
+  if (zonaKiemMesh) zonaKiemMesh.parent?.remove(zonaKiemMesh);
+  zonaKiemMesh = null; zonaKiemKulcs = kulcs;
+  if (!z || !current) return;
+  if (!zonaKiemCache.has(kulcs)) zonaKiemCache.set(kulcs, zonaKiemelesEpit(z));
+  zonaKiemMesh = zonaKiemCache.get(kulcs); if (zonaKiemMesh) current.root.add(zonaKiemMesh);
+}
 let hovVar = false, hovPoz = null, hovIdo = 0;
 function hovNez() {
   hovVar = false;
   if (!hovPoz || loading || anim || tour.drag) return;
-  const t0 = performance.now(), r = szektorKepponton(hovPoz.x, hovPoz.y); hovIdo = performance.now() - t0;
-  setHover(r?.s || null, r ? hovPoz : null);
+  const t0 = performance.now(), r = szektorKepponton(hovPoz.x, hovPoz.y) || zonaKepponton(hovPoz.x, hovPoz.y); hovIdo = performance.now() - t0;
+  hovZona = r?.zona ? { ...r.zona, s: r.s } : null;
+  setHover(r?.s || null, r ? hovPoz : null); zonaKiemFrissit();
 }
 canvas.addEventListener('pointermove', (e) => {
   if (e.pointerType !== 'mouse') return;
@@ -1810,15 +1885,15 @@ canvas.addEventListener('pointermove', (e) => {
   hovPoz = { x: e.clientX, y: e.clientY };
   if (!hovVar) { hovVar = true; setTimeout(hovNez, Math.max(50, hovIdo * 2)); }
 });
-canvas.addEventListener('pointerleave', () => { hovPoz = null; setHover(null); });
+canvas.addEventListener('pointerleave', () => { hovPoz = null; hovZona = null; setHover(null); zonaKiemFrissit(); });
 // egy kattintás / koppintás a lelátón = a szektor kiválasztása (húzás nem számít)
 let lenyom = null;
 canvas.addEventListener('pointerdown', (e) => { lenyom = { x: e.clientX, y: e.clientY, t: performance.now() }; });
 canvas.addEventListener('pointerup', (e) => {
   const l = lenyom; lenyom = null;
   if (!l || Math.hypot(e.clientX - l.x, e.clientY - l.y) > 6 || performance.now() - l.t > 450 || anim) return;
-  const r = szektorKepponton(e.clientX, e.clientY);
-  if (r) { setHover(null); selectPoi(r.s, r.pont); }
+  const r = szektorKepponton(e.clientX, e.clientY) || zonaKepponton(e.clientX, e.clientY);
+  if (r) { hovZona = null; setHover(null); selectPoi(r.s, r.pont); selZona = r.zona ? { ...r.zona, s: r.s } : null; zonaKiemFrissit(); }
 });
 function sorGomb(p, katt) {
   const b = document.createElement('button'); b.className = 'srow'; b.dataset.id = p.id;
@@ -2005,6 +2080,7 @@ const loadGltf = async (url, onProg) => { const f = await forras(url); return ne
 const KAMERAK = await ELO.kamerak.then((r) => r.json()).catch(() => ({}));
 let loading = false;
 async function loadLevel(level) {
+  zonaKiemMesh?.parent?.remove(zonaKiemMesh); zonaKiemMesh = null; zonaKiemKulcs = ''; hovZona = selZona = null; zonaKiemCache.clear(); zonaKomp.clear();   // mennyezeti kiemelés: szintváltáskor újra
   if (loading || current?.level === level) return;
   loading = true;
   const L = LEVELS[level];
