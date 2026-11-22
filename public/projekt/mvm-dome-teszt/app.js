@@ -64,8 +64,8 @@ renderer.localClippingEnabled = true;
 renderer.debug.onShaderError = (gl, prog, vs, fs) => { document.title = 'SHADERERR ' + (gl.getShaderInfoLog(fs) || '') + ' || ' + (gl.getShaderInfoLog(vs) || ''); };
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x141d2b);
-scene.fog = new THREE.Fog(0x141d2b, 320, 700);
+scene.background = new THREE.Color(0x1d2939);   // a mvm-dome.hu oldalháttere (grey-800, 2026-11-22; előtte 0x141d2b)
+scene.fog = new THREE.Fog(0x1d2939, 320, 700);
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 scene.environmentIntensity = 0.35;
@@ -1868,9 +1868,9 @@ function keres() {
     if (!isVisible(p.cat) && p.cat !== 'szektor') continue;
     const kulcs = p.cat === 'szektor' ? 'szektor:' + p.id : p.cat === 'wc' ? 'wc:' + p.name : p.id;
     if (lat.has(kulcs)) continue;
-    if ((normal(p.name) + ' ' + normal(CATS[p.cat]?.label)).includes(q)) { lat.add(kulcs); talal.push(p); }
+    if ((normal(p.name) + ' ' + normal(CATS[p.cat]?.label) + ' ' + normal(tr(p.name + ' ' + (CATS[p.cat]?.label || '')))).includes(q)) { lat.add(kulcs); talal.push(p); }
   }
-  for (const p of pahLista()) if ((normal(p.name) + ' vip ' + normal(ALLAPOT[p.allapot])).includes(q)) talal.push(p);
+  for (const p of pahLista()) if ((normal(p.name) + ' vip ' + normal(ALLAPOT[p.allapot]) + ' ' + normal(tr(p.name + ' ' + ALLAPOT[p.allapot]))).includes(q)) talal.push(p);
   talal.sort((a, b) => (a.cat === 'szektor') === (b.cat === 'szektor') ? a.name.localeCompare(b.name, 'hu', { numeric: true }) : a.cat === 'szektor' ? -1 : 1);
   talal.slice(0, 40).forEach((p) => pane.appendChild(sorGomb(p, () => selectPoi(p))));
   if (!talal.length) pane.innerHTML = '<div class="ures">Nincs találat ezen a szinten.</div>';
@@ -2219,3 +2219,100 @@ loadLevel(LEVELS[start] && (start !== 'epulet' || VAN_EPULET) ? start : ALAP)
 });
 
 window.__mvm = { scene, camera, controls, THREE, loadLevel, modellLapFeliratok, zonaFeliratPontokra, magTerkep: () => wcMagassagTerkep(current.root), WC_N, WC_R, get current() { return current; }, get mode() { return mode; } };
+
+// ---------------------------------------------------------------------------------------------
+// Nyelvválasztó HU / EN (2026-11-22, a mvm-dome.hu fejléce szerint). A felület feliratait egy szótár fordítja:
+// minden megjelenő szövegcsomópontot (és a placeholder / title / aria-label attribútumot) lecserél, az eredetit megjegyzi,
+// így vissza is lehet váltani. A 3D-be égetett feliratok (BAR, MERCH, kapuszámok) maradnak. ?lang=en mély link is működik.
+const EN = [
+  // mondatok (szolgáltatás- és szektorleírások)
+  ['A szektor bejárata a körüljáróról nyílik; a legközelebbi mosdó és büfé a bejárat közelében található.', 'The sector entrance opens from the concourse; the nearest toilets and bar are close to the entrance.'],
+  ['Privát VIP páholy a páholy szinten, saját bejárattal a körüljáróról és saját erkéllyel a küzdőtér felé. A foglaltság most mintaadat.', 'Private VIP box on the box level, with its own entrance from the concourse and its own balcony facing the arena. Availability is sample data for now.'],
+  ['Női, férfi és akadálymentes mosdó. A mosdók a körüljáróról nyílnak, a szektorbejáratok közelében.', 'Women’s, men’s and accessible toilets. The toilets open from the concourse, close to the sector entrances.'],
+  ['Pelenkázó és szoptatóhelyiség, csendes, elkülönített térben.', 'Baby changing and nursing room in a quiet, separate space.'],
+  ['Italok, snackek, kávé. Kártyás és mobilos fizetés. A rendezvény kezdete előtt egy órával nyit.', 'Drinks, snacks and coffee. Card and mobile payment. Opens one hour before the event starts.'],
+  ['Kabát- és táskamegőrzés a rendezvény teljes ideje alatt. A ruhatárjegyet őrizd meg.', 'Coat and bag storage for the whole event. Please keep your cloakroom ticket.'],
+  ['Akadálymentes közlekedés a szintek között. Kerekesszékkel és babakocsival is használható.', 'Step-free access between levels. Suitable for wheelchairs and prams.'],
+  ['VIP bejárat és fogadótér a páholyvendégeknek.', 'VIP entrance and reception area for box guests.'],
+  ['Egészségügyi ügyelet a rendezvény ideje alatt. Sürgős esetben szólj a legközelebbi teremőrnek.', 'Medical service during the event. In an emergency, tell the nearest steward.'],
+  ['Információs pult: jegyügyek, elveszett tárgyak, segítség a tájékozódásban.', 'Information desk: ticket questions, lost property and help finding your way.'],
+  ['A Visa Platinum Lounge központi bárpultja: italok és snackek a lounge vendégeinek. A lounge a páholy szint északi oldalán található.', 'The central bar of the Visa Platinum Lounge: drinks and snacks for lounge guests. The lounge is on the north side of the box level.'],
+  ['Ezen a szinten nincs lelátószektor.', 'There are no stand sectors on this level.'],
+  ['Nincs találat ezen a szinten.', 'No results on this level.'],
+  [': a modell pár percen belül érkezik.', ': the model will arrive in a few minutes.'],
+  ['Hiba a modell betöltésekor', 'Error while loading the model'],
+  ['A kép másik szinten készült: ', 'Photo taken on another level: '],
+  ['koppints a közelítéshez', 'tap to zoom in'],
+  // felület
+  ['Keresés: 206, mosdó, büfé…', 'Search: 206, toilet, bar…'], ['Szektorok és szolgáltatások', 'Sectors and services'], ['Szektorszámok ki / be', 'Sector numbers on / off'],
+  ['Forgás ki / be', 'Rotation on / off'], ['‹ Vissza az áttekintéshez', '‹ Back to overview'], ['A teljes épület kívülről', 'The whole building from outside'],
+  ['Legközelebbi szolgáltatások', 'Nearest services'], ['Legközelebbi szektorok', 'Nearest sectors'], ['Térkép betöltése', 'Loading map'], ['Panel elrejtése', 'Hide panel'],
+  ['Szolgáltatások', 'Services'], ['Szektorszámok', 'Sector numbers'], ['Mutasd csak', 'Show only'], ['Kép a szintről', 'Photo of the level'],
+  ['Alapnézet', 'Default view'], ['Felülnézet', 'Top view'], ['Nagyítás', 'Zoom in'], ['Távolítás', 'Zoom out'], ['Bezárás', 'Close'], ['Bővebben', 'More'],
+  ['Környékrajz', 'Surroundings'], ['közreműködők', 'contributors'], ['mintaadat', 'sample data'],
+  // szintek, lelátók, oldalak
+  ['Lobby – Bejárati szint', 'Lobby – Entrance level'], ['Felső körüljáró szint', 'Upper concourse level'], ['Alsó körüljáró szint', 'Lower concourse level'],
+  ['Páholy szint (VIP)', 'Box level (VIP)'], ['VIP páholy szint', 'VIP box level'], ['Lobby és küzdőtér', 'Lobby and arena floor'], ['Teljes épület', 'Whole building'],
+  ['Felső körüljáró', 'Upper concourse'], ['Alsó körüljáró', 'Lower concourse'], ['Páholy (VIP)', 'Boxes (VIP)'], ['Épület', 'Building'],
+  ['Küzdőtéri lelátó', 'Floor-level stands'], ['Alsó lelátó', 'Lower tier'], ['Felső lelátó', 'Upper tier'], ['Lelátó', 'Stand'],
+  ['Északi oldal', 'North side'], ['Nyugati oldal', 'West side'], ['Déli oldal', 'South side'], ['Keleti oldal', 'East side'], ['Oldal', 'Side'],
+  ['Állapot', 'Status'], ['Szélesség', 'Width'], ['Szabad', 'Available'], ['szabad', 'available'], ['Elkelt', 'Sold'],
+  // helyek
+  ['Visa Platinum Lounge bár', 'Visa Platinum Lounge bar'], ['Akadálymentes mosdó', 'Accessible toilet'], ['Baba-mama szoba', 'Baby care room'],
+  ['Férfi mosdó', 'Men’s toilet'], ['Női mosdó', 'Women’s toilet'], ['Büfé, bár', 'Food & drinks'], ['VIP páholyok', 'VIP boxes'], ['VIP páholy', 'VIP box'],
+  ['VIP bejárat', 'VIP entrance'], ['Elsősegély', 'First aid'], ['Információ', 'Information'], ['Ruhatár', 'Cloakroom'], ['Mosdó', 'Toilet'],
+  ['Büfé', 'Bar'], ['Szektorok', 'Sectors'], ['Szektor', 'Sector'], ['Páholy', 'Box'], [' – kelet', ' – east'], [' – nyugat', ' – west'],
+].sort((a, b) => b[0].length - a[0].length);
+function tr(s) {
+  if (!s || !/[A-Za-zÁÉÍÓÖŐÚÜŰáéíóöőúüű]/.test(s)) return s;
+  let t = s.replace(/^(.+) betöltése$/, 'Loading $1');
+  for (const [hu, en] of EN) if (t.includes(hu)) t = t.split(hu).join(en);
+  return t;
+}
+let NYELV = 'hu';
+try { NYELV = QS.get('lang') === 'en' ? 'en' : QS.get('lang') === 'hu' ? 'hu' : (localStorage.getItem('mvm_nyelv') || 'hu'); } catch (e) {}
+const nyelvEredeti = new WeakMap();   // szövegcsomópont → { hu, en }
+const NYELV_ATTR = ['placeholder', 'title', 'aria-label'];
+function forditCsomopont(n) {
+  let r = nyelvEredeti.get(n);
+  if (!r || (n.data !== r.en && n.data !== r.hu)) { r = { hu: n.data, en: tr(n.data) }; nyelvEredeti.set(n, r); }   // új vagy az app által átírt szöveg
+  const cel = NYELV === 'en' ? r.en : r.hu;
+  if (n.data !== cel) n.data = cel;
+}
+function forditElem(el) {
+  if (!el.hasAttribute) return;
+  for (const a of NYELV_ATTR) {
+    if (!el.hasAttribute(a)) continue;
+    const k = 'hu' + a.replace('-', '');
+    const most = el.getAttribute(a);
+    if (el.dataset[k] === undefined || (most !== el.dataset[k] && most !== tr(el.dataset[k]))) el.dataset[k] = most;
+    const cel = NYELV === 'en' ? tr(el.dataset[k]) : el.dataset[k];
+    if (most !== cel) el.setAttribute(a, cel);
+  }
+}
+function forditFa(gyoker) {
+  if (gyoker.nodeType === 3) return forditCsomopont(gyoker);
+  if (gyoker.nodeType !== 1 || /^(SCRIPT|STYLE|CANVAS)$/i.test(gyoker.tagName)) return;
+  forditElem(gyoker);
+  const w = document.createTreeWalker(gyoker, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+  for (let n = w.nextNode(); n; n = w.nextNode()) { if (n.nodeType === 3) forditCsomopont(n); else forditElem(n); }
+}
+const nyelvFigyelo = new MutationObserver((lista) => {
+  for (const m of lista) {
+    if (m.type === 'characterData') forditCsomopont(m.target);
+    else if (m.type === 'attributes') forditElem(m.target);
+    else m.addedNodes.forEach(forditFa);
+  }
+});
+function nyelvBeallit(ny) {
+  NYELV = ny; try { localStorage.setItem('mvm_nyelv', ny); } catch (e) {}
+  document.documentElement.lang = ny;
+  nyelvFigyelo.disconnect();
+  $('#langMost').textContent = ny.toUpperCase(); $('#langMas').textContent = ny === 'en' ? 'HU' : 'EN';
+  forditFa(document.body);
+  nyelvFigyelo.observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: NYELV_ATTR });
+}
+$('#langBtn').addEventListener('click', (e) => { e.stopPropagation(); $('#lang').classList.toggle('nyitva'); });
+$('#langMas').addEventListener('click', (e) => { e.stopPropagation(); $('#lang').classList.remove('nyitva'); nyelvBeallit(NYELV === 'en' ? 'hu' : 'en'); });
+addEventListener('pointerdown', (e) => { if (!e.target.closest('#lang')) $('#lang').classList.remove('nyitva'); });
+nyelvBeallit(NYELV);

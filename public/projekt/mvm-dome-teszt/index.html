@@ -34,25 +34,37 @@
   input{-webkit-user-select:text;user-select:text}
 
   /* --- brand bar --- */
-  /* fejléc a mvm-dome.hu szerint (2026-11-22): 1056 px széles, középre igazított sáv, logó 149×26 a bal szélén, menü középen, Nunito 400 16 px */
-  .brand{position:fixed;top:0;left:0;right:0;height:80px;padding:0 max(24px,calc((100vw - 1056px)/2));display:flex;align-items:center;gap:40px;z-index:9;pointer-events:none;background:linear-gradient(180deg,rgba(16,24,40,.92) 0%,rgba(16,24,40,.55) 60%,rgba(16,24,40,0) 100%)}
-  .brand img{height:26px;width:auto;display:block}
-  .brand .sep,.brand>div{display:none}
+  /* fejléc a mvm-dome.hu szerint (mérve 2026-11-22, 1440 px): 160 px magas; 1056 px széles, középre igazított sáv; logó 149×26, mellette 40 px-re a HU/EN gomb;
+     a menü a sáv jobb szélén, 16 px közzel, Nunito 400 16 px, rámutatáskor sárga */
+  .brand{position:fixed;top:0;left:0;right:0;height:160px;padding:0 max(24px,calc((100vw - 1056px)/2));display:flex;align-items:center;gap:40px;z-index:9;pointer-events:none;background:linear-gradient(180deg,rgba(29,41,57,.94) 0%,rgba(29,41,57,.88) 62%,rgba(29,41,57,0) 100%);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);-webkit-mask-image:linear-gradient(180deg,#000 75%,transparent);mask-image:linear-gradient(180deg,#000 75%,transparent)}
+  .brand img{width:149px;height:26px;display:block;object-fit:contain}
+  .brand .sep,.brand .cim{display:none}
+  /* nyelvválasztó: sárga keretes gomb (8 px sarok, 8/24 px belső margó, Nunito 900 14 px), rámutatáskor kék #3BC3EE; lenyíló: #344054 háttér, 8 px-re alatta */
+  .lang{position:relative;pointer-events:auto}
+  .langBtn{display:inline-flex;align-items:center;gap:8px;padding:8px 24px;border:1px solid var(--yellow);border-radius:8px;background:transparent;color:var(--text);font:900 14px/20px Nunito,sans-serif;cursor:pointer;transition:color .3s linear,border-color .3s linear}
+  .langBtn:hover,.langMenu button:hover{color:#3BC3EE;border-color:#3BC3EE}
+  .langBtn svg{width:14px;height:14px;transition:transform .3s linear}
+  .lang.nyitva .langBtn svg{transform:scaleY(-1)}
+  .langMenu{position:absolute;left:0;right:0;top:calc(100% + 8px);display:none}
+  .lang.nyitva .langMenu{display:block}
+  .langMenu button{width:100%;padding:8px 24px;border:0;border-radius:8px;background:#344054;color:var(--text);font:900 14px/20px Nunito,sans-serif;cursor:pointer;transition:color .3s linear}
   .brand h1{margin:0;font-size:16px;font-weight:900;letter-spacing:0;color:var(--text)}
   .brand small{display:block;color:var(--muted);font-size:13px;font-weight:400;margin-top:1px}
 
   /* --- Újratervezés (2026-11-22, jegyoldal-stílus, csak a tesztoldalon): szintváltó fent, teljes nevekkel; bal oldali panel szektorlistával,
      szolgáltatásokkal és keresővel; kis vezérlőgombok jobb alul; a szektor rámutatásra kiemelődik --- */
-  .levels{pointer-events:auto;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;gap:28px;transition:opacity .2s}
-  .levels button{position:relative;height:40px;padding:0;border:0;background:transparent;color:var(--text);font:400 16px/24px Nunito,sans-serif;cursor:pointer;white-space:nowrap;transition:color .2s}
-  .levels button:hover{color:var(--yellow)}
-  .levels button.active{color:var(--yellow)}
-  .levels button.active::after{content:"";position:absolute;left:0;right:0;bottom:4px;height:2px;border-radius:2px;background:var(--yellow)}
-  @media (min-width:641px) and (max-width:1000px){.levels{position:static;transform:none;gap:20px}.levels button{font-size:15px}}
-  @media (min-width:641px) and (max-width:1420px){body.panel-open .levels{opacity:0;pointer-events:none}}
+  /* a menü első gombja ott kezdődik, ahol az igazi oldalon az „Események”: a sáv bal szélétől 383,5 px-re (mérve 1440 px-en) */
+  .levels{pointer-events:auto;position:absolute;top:68px;left:calc(max(24px,(100vw - 1056px)/2) + 383.5px);display:flex;gap:16px;transition:opacity .2s}
+  .levels button{height:24px;padding:0;border:0;background:transparent;color:var(--text);font:400 16px/24px Nunito,sans-serif;cursor:pointer;white-space:nowrap;transition:color .3s linear}
+  .levels button:hover,.levels button.active{color:var(--yellow)}
+  /* keskenyebb képernyőn (az igazi oldalon is 90 px a fejléc): logó és nyelvgomb fent, a szintmenü alattuk, oldalra görgethető */
+  @media (max-width:1000px){.brand{height:136px;padding:26px 16px 0;align-items:flex-start;background:linear-gradient(180deg,rgba(29,41,57,.95) 0%,rgba(29,41,57,.88) 70%,rgba(29,41,57,0) 100%)}.brand img{margin-top:6px}.lang{margin-left:auto}
+    .levels{position:fixed;top:84px;left:16px;right:16px;margin:0;gap:22px;overflow-x:auto;scrollbar-width:none}.levels::-webkit-scrollbar{display:none}.levels button{height:36px;flex:none}}
+  @media (min-width:641px) and (max-width:1000px){.side,.sideOpen{top:136px}}
+  @media (min-width:641px) and (max-width:1860px){body.panel-open .levels{opacity:0;pointer-events:none}}
 
   /* --- bal oldali panel: kereső + Szektorok / Szolgáltatások fül --- */
-  .side{position:fixed;left:16px;top:88px;bottom:16px;width:300px;z-index:11;display:flex;flex-direction:column;gap:10px;padding:14px;border-radius:18px;background:var(--panel);border:1px solid var(--panel-border);backdrop-filter:blur(14px);transition:transform .35s cubic-bezier(.2,.8,.2,1),opacity .25s}
+  .side{position:fixed;left:16px;top:128px;bottom:16px;width:300px;z-index:11;display:flex;flex-direction:column;gap:10px;padding:14px;border-radius:18px;background:var(--panel);border:1px solid var(--panel-border);backdrop-filter:blur(14px);transition:transform .35s cubic-bezier(.2,.8,.2,1),opacity .25s}
   body.side-closed .side{transform:translateX(calc(-100% - 24px));opacity:0;pointer-events:none}
   body.no-side .side,body.no-side .sideOpen{display:none!important}
   .sideHead{display:flex;gap:8px;align-items:center}
@@ -88,7 +100,7 @@
   .srow .t{display:flex;flex-direction:column;line-height:1.2;min-width:0}
   .srow .t small{color:var(--muted);font-weight:600;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .ures{color:var(--muted);font-size:13px;padding:12px 6px}
-  .sideOpen{position:fixed;left:16px;top:88px;z-index:11;display:none;align-items:center;gap:8px;height:42px;padding:0 16px;border-radius:12px;background:var(--panel);border:1px solid var(--panel-border);color:var(--text);font:800 13.5px Nunito,sans-serif;cursor:pointer;backdrop-filter:blur(14px)}
+  .sideOpen{position:fixed;left:16px;top:128px;z-index:11;display:none;align-items:center;gap:8px;height:42px;padding:0 16px;border-radius:12px;background:var(--panel);border:1px solid var(--panel-border);color:var(--text);font:800 13.5px Nunito,sans-serif;cursor:pointer;backdrop-filter:blur(14px)}
   .sideOpen:hover{border-color:var(--yellow)}
   body.side-closed .sideOpen{display:inline-flex}
   .hovtip{position:fixed;left:0;top:0;z-index:20;pointer-events:none;background:#fff;color:var(--navy);border-radius:10px;padding:8px 12px;font:800 14px Nunito,sans-serif;box-shadow:0 10px 28px rgba(0,0,0,.45);white-space:nowrap;opacity:0;transition:opacity .12s}
@@ -207,7 +219,7 @@
   .panel .plist .cim{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);padding:6px 8px 4px}
 
   /* --- vissza az áttekintéshez (részletnézetben) --- */
-  .overview{position:fixed;left:50%;top:84px;transform:translateX(-50%);z-index:10;display:none;align-items:center;gap:8px;padding:9px 16px;border-radius:999px;background:var(--panel);border:1px solid var(--panel-border);color:var(--text);font:700 13px Nunito,sans-serif;cursor:pointer;backdrop-filter:blur(14px)}
+  .overview{position:fixed;left:50%;top:128px;transform:translateX(-50%);z-index:10;display:none;align-items:center;gap:8px;padding:9px 16px;border-radius:999px;background:var(--panel);border:1px solid var(--panel-border);color:var(--text);font:700 13px Nunito,sans-serif;cursor:pointer;backdrop-filter:blur(14px)}
   .overview.show{display:inline-flex}
   body.panel-open .overview{display:none}
   .overview:hover{border-color:var(--yellow)}
@@ -224,16 +236,13 @@
 
   .forras{position:fixed;left:50%;bottom:6px;transform:translateX(-50%);z-index:8;font-size:10.5px;color:var(--muted);opacity:.8;white-space:nowrap}
   .forras a{color:inherit}
-  .toast{position:fixed;top:80px;left:50%;transform:translateX(-50%);z-index:60;background:var(--navy);border:1px solid var(--panel-border);padding:10px 16px;border-radius:10px;font-size:13px;opacity:0;transition:.25s;pointer-events:none}
+  .toast{position:fixed;top:128px;left:50%;transform:translateX(-50%);z-index:60;background:var(--navy);border:1px solid var(--panel-border);padding:10px 16px;border-radius:10px;font-size:13px;opacity:0;transition:.25s;pointer-events:none}
   .toast.show{opacity:1}
-  .hint{position:fixed;left:50%;top:80px;transform:translateX(-50%);color:var(--muted);font-size:12px;z-index:9;pointer-events:none;transition:.4s}
+  .hint{position:fixed;left:50%;top:128px;transform:translateX(-50%);color:var(--muted);font-size:12px;z-index:9;pointer-events:none;transition:.4s}
   .hint.hide{opacity:0}
 
   @media (max-width:640px){
     /* telefon: szintváltó a logó alatt (vízszintesen görgethető), a lista és a szolgáltatások alulról felhúzható lapon */
-    .levels{position:fixed;top:54px;left:12px;right:12px;transform:none;gap:22px;padding:0 4px;margin:0;overflow-x:auto;scrollbar-width:none}
-    .levels::-webkit-scrollbar{display:none}
-    .levels button{height:36px;font-size:15px;flex:none}
     .side{left:0;right:0;top:auto;bottom:0;width:100%;height:62vh;border-radius:18px 18px 0 0;border-bottom:0;z-index:13}
     body.side-closed .side{transform:translateY(100%)}
     .sideOpen{top:auto;bottom:16px;left:12px;height:44px}
@@ -243,7 +252,6 @@
     .panel h2{font-size:22px}
     body.panel-open .sideOpen{display:none}
     .overview{top:auto;bottom:140px}
-    .brand{height:56px;padding:0 12px;gap:10px}.brand img{height:22px}.brand h1{font-size:13.5px}.brand small{font-size:11.5px}.brand .sep{height:22px}
     .hint{display:none}
     .hovtip{display:none}
     .tools{right:12px;bottom:16px}
@@ -261,7 +269,9 @@
 <div class="brand">
   <img src="/projekt/mvm-dome-teszt/logo.svg" alt="MVM Dome">
   <div class="sep"></div>
-  <div><h1>Interaktív térkép</h1><small id="lvlSub">Lobby – Bejárati szint</small></div>
+  <div class="cim"><h1>Interaktív térkép</h1><small id="lvlSub">Lobby – Bejárati szint</small></div>
+  <div class="lang" id="lang"><button class="langBtn" id="langBtn" aria-haspopup="true"><span id="langMost">HU</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>
+    <div class="langMenu"><button id="langMas">EN</button></div></div>
   <nav class="levels" id="levels" aria-label="Szint">
     <button data-level="epulet" title="A teljes épület kívülről">Épület</button>
     <button data-level="lobby" class="active" title="Lobby – Bejárati szint">Lobby</button>
