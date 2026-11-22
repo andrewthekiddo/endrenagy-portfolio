@@ -299,7 +299,7 @@ function lepcsoFade(root, v) {
             // a teteje fölött eltűnik – nincs rácsos pontkihagyás (dither). ?regifade: a régi, pöttyös út
             (QS.has('regifade')
               ? ` float fk = smoothstep(${v.y0.toFixed(1)}, ${v.y1.toFixed(1)}, vFadeP.y); if (fk > 0.0 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) < fk) discard; }`
-              : ` lepcsoFk = smoothstep(${v.y0.toFixed(1)}, ${v.y1.toFixed(1)}, vFadeP.y); if (lepcsoFk > 0.985) discard; }`))
+              : ` lepcsoFk = smoothstep(${v.y0.toFixed(1)}, ${v.y1.toFixed(1)}, vFadeP.y); if (lepcsoFk > 0.985${QS.has('hatlap') ? '' : ' || (lepcsoFk > 0.0 && !gl_FrontFacing)'}) discard; }`))   // a halványuló sávban csak a kamera felé néző lapok: a zárt lépcsőfal belső lapjai nem villognak át (felhasználó, 2026-11-22)
           // az élsimítás (MSAA) mintáin át halványul (alpha-to-coverage): képpontnál finomabb lépések, nincs látható pöttyrács
           .replace('#include <dithering_fragment>', `#include <dithering_fragment>
             gl_FragColor.a = min(gl_FragColor.a, 1.0 - lepcsoFk);`);
