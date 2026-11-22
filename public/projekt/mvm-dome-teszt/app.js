@@ -2444,7 +2444,7 @@ const EN = [
   ['A Visa Platinum Lounge központi bárpultja: italok és snackek a lounge vendégeinek. A lounge a páholy szint északi oldalán található.', 'The central bar of the Visa Platinum Lounge: drinks and snacks for lounge guests. The lounge is on the north side of the box level.'],
   ['Ajándék- és rajongói termékek (merch) árusítása. A helyét a mennyezet lila kiemelése mutatja.', 'Merchandise and fan products. Its location is shown by the purple ceiling highlight.'],
   ['A kép a kapuról kívülről készült.', 'Photo of the gate from outside.'], ['Erről a kapuról még nincs közeli fotó.', 'No close-up photo of this gate yet.'], ['Erről a kapuról még nincs fotó', 'No photo of this gate yet'],
-  ['Bejárat a csarnokba.', 'Entrance to the arena.'], ['Főbejárat.', 'Main entrance.'], ['VIP-bejárat.', 'VIP entrance.'], ['Rakodókapu.', 'Loading gate.'], [' · fotó', ' · photo'], ['Bejárat', 'Entrance'], ['. kapu', ' gate'],
+  ['Bejárat a csarnokba.', 'Entrance to the arena.'], [' február', ' February'], ['Főbejárat.', 'Main entrance.'], ['VIP-bejárat.', 'VIP entrance.'], ['Rakodókapu.', 'Loading gate.'], [' · fotó', ' · photo'], ['Bejárat', 'Entrance'], ['. kapu', ' gate'],
   ['Ezen a szinten nincs lelátószektor.', 'There are no stand sectors on this level.'],
   ['Nincs találat ezen a szinten.', 'No results on this level.'],
   [': a modell pár percen belül érkezik.', ': the model will arrive in a few minutes.'],
@@ -2524,6 +2524,17 @@ $('#langBtn').addEventListener('click', (e) => { e.stopPropagation(); $('#lang')
 $('#langMas').addEventListener('click', (e) => { e.stopPropagation(); $('#lang').classList.remove('nyitva'); nyelvBeallit(NYELV === 'en' ? 'hu' : 'en'); });
 addEventListener('pointerdown', (e) => { if (!e.target.closest('#lang')) $('#lang').classList.remove('nyitva'); });
 nyelvBeallit(NYELV);
+
+// Koncertkártya a fejlécben (felhasználó ötlete, 2026-11-22): előadó, dátum, időpont, kis kép – minden a data/koncert.json-ban, egy helyen
+fetch(asset('data/koncert.json')).then((r) => r.json()).then((k) => {
+  const el = $('#koncert'); if (!el || !k?.eloado) return;
+  el.querySelector('b').textContent = k.eloado;
+  el.querySelector('small').textContent = [k.datum, k.ido].filter(Boolean).join(' · ');
+  if (k.kep) el.querySelector('img').src = kepUrl(k.kep); else el.querySelector('img').remove();
+  if (k.link) { el.href = k.link; el.target = '_blank'; el.rel = 'noopener'; }
+  el.title = `${k.eloado} – ${[k.datum, k.ido].filter(Boolean).join(', ')}`;
+  el.hidden = false;
+}).catch(() => {});
 
 // Nyitott adatlapnál a szintmenü nem tűnik el (felhasználó, 2026-11-22): ha a jobb oldali adatlap alá érne, balra csúszik
 // (legfeljebb a nyelvgomb mellé). Asztali szélességen fut; 1024 px alatt a CSS rövidíti le a görgethető sort.

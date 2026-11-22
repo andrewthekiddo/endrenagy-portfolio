@@ -71,6 +71,16 @@
   @media (max-width:1023px){.brand{height:140px;padding:26px 16px 0;align-items:flex-start}.brand::before{background:linear-gradient(180deg,rgba(29,41,57,.95) 0%,rgba(29,41,57,.9) 64%,rgba(29,41,57,0) 100%)}.brand img{margin-top:6px}
     .levels{position:fixed;top:92px;left:16px;right:16px;margin:0;gap:22px;overflow-x:auto;scrollbar-width:none}.levels::-webkit-scrollbar{display:none}.levels button{height:36px;flex:none}}
   @media (min-width:641px) and (max-width:1023px){.side,.sideOpen{top:140px}}
+  /* koncertkártya a fejléc jobb szélén (ahol az igazi oldalon a sárga Jegyek gomb van) – adat: data/koncert.json (felhasználó ötlete, 2026-11-22) */
+  .koncert{pointer-events:auto;margin-left:auto;display:flex;align-items:center;gap:10px;height:44px;max-width:190px;padding:4px 14px 4px 4px;border-radius:8px;background:rgba(252,252,253,.06);border:1px solid rgba(252,191,32,.55);color:var(--text);text-decoration:none;transition:border-color .3s,background .3s,opacity .2s}
+  .koncert[hidden]{display:none}
+  .koncert img{width:36px;height:36px;border-radius:6px;object-fit:cover;flex:none;background:#344054}
+  .koncert span{display:flex;flex-direction:column;min-width:0}
+  .koncert b{font:900 14px/18px Nunito,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .koncert small{font:500 12px/16px Nunito,sans-serif;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  a.koncert[href]:hover{border-color:var(--yellow);background:rgba(252,191,32,.1)}
+  @media (max-width:1179px){.koncert{display:none!important}}
+  @media (min-width:641px){body.panel-open .koncert{opacity:0;pointer-events:none}}
   /* nyitott adatlapnál a szintmenü látható marad (felhasználó, 2026-11-22): ha ütközne az adatlappal, a JS balra tolja (navIgazit);
      a fejléc háttere az adatlap széléig tart, az adatlap a fejléc alatt van */
   @media (min-width:641px){body.panel-open .brand::before{right:min(400px,100vw)}}
@@ -301,6 +311,7 @@
     <button data-level="paholy" title="Páholy szint (VIP)">Páholy (VIP)</button>
     <button data-level="felso" title="Felső körüljáró szint">Felső körüljáró</button>
   </nav>
+  <a class="koncert" id="koncert" hidden><img alt=""><span><b></b><small></small></span></a>
 </div>
 
 <div class="hint" id="hint" hidden></div>
