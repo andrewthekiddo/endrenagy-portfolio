@@ -2307,6 +2307,7 @@ async function loadLevel(level) {
     document.querySelectorAll('#levels button').forEach(b => b.classList.toggle('active', b.dataset.level === level));
     renderer.compile(scene, camera);
     await Promise.race([Promise.all(IKON_ELO.map((k) => k.decode?.().catch(() => {}))), new Promise((r) => setTimeout(r, 1500))]);   // a betöltő csak akkor tűnik el, ha az ikonok is megvannak
+    if (!performance.getEntriesByName('mvm-kesz').length) performance.mark('mvm-kesz');   // a push rutin mérése ehhez igazodik
     setTimeout(() => { loaderEl.classList.add('hide'); if (SHOT) loaderEl.style.display = 'none'; }, SHOT ? 250 : 450);   // a számláló még kifut 100-ig
     tour.zoom = alapZoom(); tour.dir = 1;
     tour.u = c.path.closed ? 0 : 0.5;
