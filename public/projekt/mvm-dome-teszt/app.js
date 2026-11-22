@@ -1835,7 +1835,11 @@ async function paholyBlokkok(root) {
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
     const h = Math.min(3.2, b.szelesseg * 0.62), lap = new THREE.Mesh(new THREE.PlaneGeometry(h * 2, h), new THREE.MeshBasicMaterial({ name: 'WEB_paholyszam', map: t, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6 }));
     lap.position.set(cx, y + 0.12, -cy);   // a blokk polygonOffsetje ferde nézetben „feljebb húzza” a blokkot → a szám ennél is feljebb
-    lap.rotation.order = 'YXZ'; lap.rotation.set(-Math.PI / 2, Math.atan2(cx, -cy), 0); lap.renderOrder = 7; csop.add(lap);
+    // a szám a saját páholya elejéhez igazodik (felhasználó, 2026-11-22: az egyenes oldalakon és a kanyarban ferde volt): a két, az aréna
+    // közepéhez közelebbi sarok a belső (erkély felőli) él – v = belső közép − külső közép, a betű teteje erre néz. ?regiszam: a régi út
+    const sk = [...b.sarkok].sort((p1, p2) => Math.hypot(p1[0], p1[1]) - Math.hypot(p2[0], p2[1]));
+    const vx = (sk[0][0] + sk[1][0] - sk[2][0] - sk[3][0]) / 2, vy = (sk[0][1] + sk[1][1] - sk[2][1] - sk[3][1]) / 2;
+    lap.rotation.order = 'YXZ'; lap.rotation.set(-Math.PI / 2, QS.has('regiszam') ? Math.atan2(cx, -cy) : Math.atan2(-vx, vy), 0); lap.renderOrder = 7; csop.add(lap);
     return p;
   });
   root.add(csop);
