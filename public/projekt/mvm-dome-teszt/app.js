@@ -17,12 +17,12 @@ if (SHOT) { addEventListener('error', (e) => { document.title = 'JSERR ' + e.mes
 // 4 szint + a teljes épület, mindegyik a saját padlóján (y = 0), az aréna középpontja az origó. A modellek a Blender showreel-fájlból
 // (00_Teljes_epulet/…_showreel_v01.blend) jönnek: _Blender_Projects/00_Web_export/scripts/export_web.py + web_adat.py
 const LEVELS = {
-  felso:  { key: 'S3', name: 'Felső körüljáró szint', model: 'models/S3.glb', meret: 6971096, data: 'data/S3.json', tier: 'Felső lelátó (3xx)' },
-  paholy: { key: 'S2', name: 'Páholy szint (VIP)', model: 'models/S2.glb', meret: 7254760, data: 'data/S2.json', tier: 'Alsó lelátó (2xx)' },
-  also:   { key: 'S1', name: 'Alsó körüljáró szint', model: 'models/S1.glb', meret: 5196616, data: 'data/S1.json', tier: 'Alsó lelátó (2xx)' },
-  lobby:  { key: 'S0', name: 'Lobby – Bejárati szint', model: 'models/S0.glb', meret: 2488572, data: 'data/S0.json', tier: 'Küzdőtéri lelátó (1xx)' },
+  felso:  { key: 'S3', name: 'Felső körüljáró szint', model: 'models/S3.glb', meret: 5641624, data: 'data/S3.json', tier: 'Felső lelátó (3xx)' },
+  paholy: { key: 'S2', name: 'Páholy szint (VIP)', model: 'models/S2.glb', meret: 6096468, data: 'data/S2.json', tier: 'Alsó lelátó (2xx)' },
+  also:   { key: 'S1', name: 'Alsó körüljáró szint', model: 'models/S1.glb', meret: 4095444, data: 'data/S1.json', tier: 'Alsó lelátó (2xx)' },
+  lobby:  { key: 'S0', name: 'Lobby – Bejárati szint', model: 'models/S0.glb', meret: 1732584, data: 'data/S0.json', tier: 'Küzdőtéri lelátó (1xx)' },
   // a teljes, megépített épület kívülről (homlokzat bekapcsolva, nyitott tető): a kezdőnézet, ha a fájljai megvannak (lásd VAN_EPULET)
-  epulet: { key: 'S4', name: 'MVM Dome', model: 'models/S4.glb', meret: 7342956, data: 'data/S4.json', tier: 'Lelátó' },
+  epulet: { key: 'S4', name: 'MVM Dome', model: 'models/S4.glb', meret: 6375816, data: 'data/S4.json', tier: 'Lelátó' },
 };
 
 // Pinek: funkciónként színes (a térkép-stílus palettája), az ikon fehér vagy sötét a jobb olvashatóságért
@@ -180,10 +180,20 @@ const FACADE_CUT = { S3: 5.1 };
 // anyagot kapnak: szín × lightmap × (π / skála) × erősítés. Sütetlen marad: üveg, világító felületek, a számok / feliratok rétege
 // ('W_nb_' anyagok) és az animált lift – ezeket a jelenet fényei világítják.
 const texLoader = new THREE.TextureLoader();
-async function loadLightmap(info) {
+// a teljes fénytérkép a háttérben: amint letöltődött, az összes anyagpéldány képe kicserélődik (ugyanaz a UV, csak élesebb)
+function lmCsere(klonok, info) {
+  setTimeout(() => loadLightmap(info).then((uj) => {
+    for (const t of klonok) { t.image = uj.image; t.needsUpdate = true; }
+    uj.dispose();
+  }).catch((e) => console.warn('teljes lightmap', e)), 300);
+}
+// Gyors első megjelenés (felhasználó, 2026-11-22): előbb a kicsi, 1024 px-es előnézeti fénytérkép (S*_lm_kicsi.webp, ~100–200 KB) kerül fel,
+// a teljes (4096 px) a háttérben töltődik, és megérkezésekor észrevétlenül kicserélődik (lmCsere). ?nokicsi: a régi út.
+const kicsiLm = (f) => f.replace(/_lm\.webp$/, '_lm_kicsi.webp');
+async function loadLightmap(info, kicsi = false) {
   // V2 (gyors betöltés): mindenhol a 4096 px-es lightmap az alap (64 MB videómemória); a 8192 px-es (256 MB) csak külön kérésre: ?lm8k
   const nagy = info.nagy && QS.has('lm8k') && renderer.capabilities.maxTextureSize >= 8192;
-  const tex = await texLoader.loadAsync(await forras(nagy ? info.nagy : info.file));
+  const tex = await texLoader.loadAsync(await forras(kicsi ? kicsiLm(info.file) : nagy ? info.nagy : info.file));
   tex.flipY = false; tex.colorSpace = THREE.SRGBColorSpace; tex.channel = 1;
   tex.generateMipmaps = false; tex.minFilter = THREE.LinearFilter; tex.magFilter = THREE.LinearFilter;
   return tex;
@@ -2228,13 +2238,14 @@ async function loadLevel(level) {
       if (KAMERAK[L.key] && !QS.has('regikamera')) data.camera = KAMERAK[L.key];   // V2: tág áttekintő kamera (data/kamerak.json)
       let c_baked = false, c_lm = null;
       // a modell és a lightmap egyszerre töltődik (V2: gyorsabb betöltés), nem egymás után
-      const lmP = data.lightmap && !QS.has('nolm') ? loadLightmap(data.lightmap).catch((e) => { console.warn('lightmap', e); return null; }) : null;
+      const lmKicsi = !!data.lightmap && !QS.has('nokicsi') && !QS.has('lm8k') && /_lm\.webp$/.test(data.lightmap.file);
+      const lmP = data.lightmap && !QS.has('nolm') ? loadLightmap(data.lightmap, lmKicsi).catch(() => lmKicsi ? loadLightmap(data.lightmap) : null).catch((e) => { console.warn('lightmap', e); return null; }) : null;
       const gltf = await loadGltf(L.model, (xhr) => { const ossz = xhr.total || L.meret; if (ossz) setProgress(Math.min(0.95, 0.95 * xhr.loaded / ossz)); });   // a tömörítve küldött fájlnál a böngésző nem tudja a teljes méretet → a szint ismert mérete (LEVELS.meret)
       tuneMaterials(gltf.scene, L.key);
       if (AJTO_IGAZIT.has(L.key) && !QS.has('noajto')) { try { mosdoAjtokhoz(gltf.scene, data.pois); } catch (e) { console.warn('mosdó-ajtók', e); } }
       const lmTex = lmP && await lmP;
       if (lmTex) {
-        try { c_lm = applyLightmap(gltf.scene, lmTex, Math.PI / data.lightmap.k); c_baked = true; }
+        try { c_lm = applyLightmap(gltf.scene, lmTex, Math.PI / data.lightmap.k); c_baked = true; if (lmKicsi && lmTex.image?.width <= 2048) lmCsere(c_lm, data.lightmap); }
         catch (e) { console.warn('lightmap', e); }
       }
       let animObj = null;

@@ -15,7 +15,7 @@
   // az oldal címe lehet /projekt/mvm-dome (perjel nélkül, a portfólióban) → a fájlok mappáját a címből számoljuk, nem relatívan
   var p = location.pathname, B = /\/$/.test(p) ? p : /\.html?$/.test(p) ? p.replace(/[^/]*$/, '') : p + '/';
   function elo(href, as) { var l = document.createElement('link'); l.rel = 'preload'; l.as = as; l.href = B + href; if (as === 'fetch') l.crossOrigin = 'anonymous'; document.head.appendChild(l); }
-  elo('models/' + k + '.glb', 'fetch'); if (!q.has('nolm')) elo('models/' + k + (q.has('lm8k') ? '_lm8k' : '_lm') + '.webp', 'image'); elo('data/' + k + '.json', 'fetch');
+  elo('models/' + k + '.glb', 'fetch'); if (!q.has('nolm')) elo('models/' + k + (q.has('lm8k') ? '_lm8k' : q.has('nokicsi') ? '_lm' : '_lm_kicsi') + '.webp', 'image'); elo('data/' + k + '.json', 'fetch');
 })();
 </script>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
