@@ -45,6 +45,8 @@ const IKON_ADAT = {"akadalymentes":"data:image/svg+xml;charset=utf-8,%3Csvg xmln
 // IKON_ADAT_VEG
 const ikonUrl = (nev) => IKON_ADAT[nev] || asset(`img/ikonok/ikon_${nev}.${nev === 'info' ? 'png' : 'svg'}`);
 // fotók: a push rutin minden .jpg mellé kis .webp-t készít (640 px, ~30–60 KB) – a néző azt tölti be
+// a 3D-s (mennyezeti) ikon-textúrák fájlból töltődnek: a Safari a kódba ágyazott SVG-t nem rajzolja WebGL-felületre (felhasználó, 2026-11-22: eltűntek a lobbin)
+const ikonFajl = (nev) => asset(`img/ikonok/ikon_${nev}.${nev === 'info' ? 'png' : 'svg'}`);
 const kepUrl = (rel) => asset(rel.replace(/\.(jpe?g|png)$/i, '.webp'));
 // Az ikonok már induláskor letöltődnek és dekódolódnak (a modell letöltése alatt), hogy a pinek ne üres körként jelenjenek meg, amibe később ugrik be a rajz (felhasználó, 2026-11-19)
 const IKON_ELO = ['wc', 'wc_ferfi', 'wc_noi', 'akadalymentes', 'baba', 'bufe', 'ruhatar', 'merch', 'lift', 'vip', 'elsosegely', 'info', 'wc_s', 'merch_s', 'wc_ferfi_s', 'wc_noi_s', 'akadalymentes_s', 'baba_s', 'bufe_s', 'ruhatar_s', 'vip_s', 'elsosegely_s'].map((n) => { const k = new Image(); k.src = ikonUrl(n); k.decode?.().catch(() => {}); return k; });
@@ -528,7 +530,7 @@ function zonaFeliratPontokra(pontok, y, szoveg, szin = 0x0b1220, haromszogek = n
     { const r = Math.hypot(kx, kz) || 1, tx = -kz / r, tz = kx / r; let bx = dx, bz = dz, bd = -2;
       for (const [cx, cz] of [[dx, dz], [-dz, dx], [-dx, -dz], [dz, -dx]]) { const s = cx * tx + cz * tz; if (s > bd) { bd = s; bx = cx; bz = cz; } }
       dx = bx; dz = bz; if (dz * -kx + -dx * -kz < 0) { dx = -dx; dz = -dz; } }
-    const t = texLoader.load(ikonUrl(ZONA_IKON[szoveg])); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+    const t = texLoader.load(ikonFajl(ZONA_IKON[szoveg])); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
     const m = new THREE.Mesh(new THREE.PlaneGeometry(d, d), new THREE.MeshBasicMaterial({ name: 'WEB_zona_ikon', map: t, transparent: true, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));   // toneMapped:false – a mennyezeti ikon ugyanolyan színű legyen, mint a menüben (az AgX színkezelés kifakította – felhasználó, 2026-11-22)
     m.renderOrder = 8; m.frustumCulled = false; m.rotation.order = 'YXZ'; m.rotation.set(-Math.PI / 2, Math.atan2(-dz, dx), 0);
     m.position.set(kx, y + 0.06, kz);
@@ -940,7 +942,7 @@ function homlokzatLapok(root, key) {
         const f = new THREE.Mesh(new THREE.PlaneGeometry(h * tw / 260, h), new THREE.MeshBasicMaterial({ name: 'WEB_zona_felirat', map: tex, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
         f.renderOrder = 8; f.frustumCulled = false; f.position.set(ux * (rk + 0.06) + tx * (t0 + t1) / 2, (ya + yb) / 2, uz * (rk + 0.06) + tz * (t0 + t1) / 2); f.lookAt(f.position.x + ux, f.position.y, f.position.z + uz); csop.add(f);
       } else if (ZONA_IKON[ZONA_SZOVEG[tipus]]) {
-        const d = Math.min(1.4 * FELIRAT_M, (yb - ya) * 0.8, (t1 - t0) * 0.8), tex = texLoader.load(ikonUrl(ZONA_IKON[ZONA_SZOVEG[tipus]])); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+        const d = Math.min(1.4 * FELIRAT_M, (yb - ya) * 0.8, (t1 - t0) * 0.8), tex = texLoader.load(ikonFajl(ZONA_IKON[ZONA_SZOVEG[tipus]])); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
         const ik = new THREE.Mesh(new THREE.PlaneGeometry(d, d), new THREE.MeshBasicMaterial({ name: 'WEB_zona_ikon', map: tex, transparent: true, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));   // toneMapped:false – a mennyezeti ikon ugyanolyan színű legyen, mint a menüben (az AgX színkezelés kifakította – felhasználó, 2026-11-22)
         ik.renderOrder = 8; ik.frustumCulled = false; ik.position.set(ux * (rk + 0.06) + tx * (t0 + t1) / 2, (ya + yb) / 2, uz * (rk + 0.06) + tz * (t0 + t1) / 2); ik.lookAt(ik.position.x + ux, ik.position.y, ik.position.z + uz); csop.add(ik);
       }
