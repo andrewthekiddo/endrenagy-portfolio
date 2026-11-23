@@ -163,7 +163,7 @@ const hatBias = (m) => !QS.has('nohb') && m.side === THREE.DoubleSide && !(m.pol
 // Állandó (kijelölés nélkül is) tónus az új kinézetben (felhasználó, 2026-11-23): a homlokzat BELSŐ oldala sötét (?facein=0.35), a lelátó-tál
 // és a küzdőtér enyhén visszahúzva (?bowl=0.78); kijelöléskor a homlokzat KÜLSŐ oldala nem halványul. ?dimregi vagy ?bowl=1&facein=1: a régi
 const KAT_HOM = /^W_(EF_|KA_)?(Kulso|Kulter)(?!.*(uveg|szalag|bejaratszam))/, KAT_TAL = /^W_(TS_|UJ_)?(lelato|szek|VIP_szek|kuzdoter)/i;
-const BOWL = QS.has('dimregi') ? 1 : Math.min(1, Math.max(0.1, Number(QS.get('bowl')) || 0.78));
+const BOWL = QS.has('dimregi') ? 1 : Math.min(1, Math.max(0.1, Number(QS.get('bowl')) || 0.62));   // a tál külső (sétány felőli) peremén; befelé, a küzdőtér közepe felé lágyan tovább sötétül (BOWL × 0,7)
 const FACEIN = QS.has('dimregi') ? 1 : Math.min(1, Math.max(0.05, Number(QS.get('facein')) || 0.35));
 function addSectorShader(m) {
   const kat = KAT_HOM.test(alapNev(m.name)) ? 1 : KAT_TAL.test(alapNev(m.name)) ? 2 : 0;
@@ -181,7 +181,10 @@ function addSectorShader(m) {
           float gL = dot(gl_FragColor.rgb, vec3(0.2126, 0.7152, 0.0722));
           gl_FragColor.rgb *= mix(vec3(0.84, 0.93, 1.14), vec3(1.08, 1.0, 0.88), smoothstep(0.06, 0.5, gL)); }
         ${kat === 1 && FACEIN < 1 ? `if (!gl_FrontFacing) gl_FragColor.rgb *= ${FACEIN.toFixed(3)};   // homlokzat belső oldala` : ''}
-        ${kat === 2 && BOWL < 1 ? `{ float bL = dot(gl_FragColor.rgb, vec3(0.2126, 0.7152, 0.0722)); gl_FragColor.rgb = mix(vec3(bL), gl_FragColor.rgb, 0.85) * ${BOWL.toFixed(3)}; }   // lelátó-tál, küzdőtér` : ''}   // prémium: hideg kék árnyék / meleg fény (referencia: Halden Arena)
+        ${kat === 2 && BOWL < 1 ? `{ float bL = dot(gl_FragColor.rgb, vec3(0.2126, 0.7152, 0.0722)); float bR = length(vWPos.xz);   // lelátó-tál, küzdőtér: lágy, sugárirányú elsötétülés a közép felé (nincs éles határ)
+          float bF = ${BOWL.toFixed(3)} * mix(0.7, 1.0, smoothstep(12.0, 58.0, bR));
+          bF = mix(bF, 1.0, smoothstep(0.32, 0.85, bL) * 0.55);   // a meleg lépcsőfény-csíkok olvashatók maradnak
+          gl_FragColor.rgb = mix(vec3(bL), gl_FragColor.rgb, 0.8) * bF; }` : ''}   // prémium: hideg kék árnyék / meleg fény (referencia: Halden Arena)
         if (uHlOn > 0.5) {
           vec2 hp = vec2(vWPos.x, -vWPos.z);
           float hr = -1e9, ht = 0.0; int hf = 0;
