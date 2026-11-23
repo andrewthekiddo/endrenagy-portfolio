@@ -2696,12 +2696,23 @@ fetch(asset('data/koncert.json')).then((r) => r.json()).then((k) => {
 
 // Nyitott adatlapnál a szintmenü nem tűnik el (felhasználó, 2026-11-22): ha a jobb oldali adatlap alá érne, balra csúszik
 // (legfeljebb a nyelvgomb mellé). Asztali szélességen fut; 1024 px alatt a CSS rövidíti le a görgethető sort.
+// A koncert-badge (felhasználó, 2026-11-23: „a jobb felső Artist Badge mögé megy a leírás és a kép … ne érjenek össze, legyen kényelmes hely
+// közöttük”): nyitott adatlapnál a badge a panellel együtt, lágyan a panel bal széle elé csúszik (24 px hellyel); ha a szintmenü miatt
+// nem férne el, kompakt lesz (csak a kép), és csak ha úgy sem fér, halványul el. A szintmenü a badge (vagy a panel) elé igazodik.
 function navIgazit() {
-  const L = $('#levels'); if (!L) return;
-  L.style.transform = '';
+  const L = $('#levels'), K = $('#koncert'); if (!L) return;
+  L.style.transform = ''; if (K) { K.style.transform = ''; K.classList.remove('kompakt', 'rejt'); }
   if (VW() < 1024 || !document.body.classList.contains('panel-open')) return;
-  const r = L.getBoundingClientRect(), hatar = VW() - Math.min(400, VW()) - 24, bal = $('#lang').getBoundingClientRect().right + 32;
-  let dx = Math.min(0, hatar - r.right); if (r.left + dx < bal) dx = bal - r.left;
+  const hatar = VW() - Math.min(400, VW()) - 24, bal = $('#lang').getBoundingClientRect().right + 32, navW = L.getBoundingClientRect().width;
+  let jobb = hatar;
+  if (K && !K.hidden && getComputedStyle(K).display !== 'none') {
+    let kr = K.getBoundingClientRect();
+    if (hatar - kr.width - 24 - navW < bal) { K.classList.add('kompakt'); kr = K.getBoundingClientRect(); }
+    if (hatar - kr.width - 24 - navW < bal) K.classList.add('rejt');
+    else { const dxk = Math.min(0, hatar - kr.right); if (dxk) K.style.transform = `translateX(${dxk}px)`; jobb = kr.left + dxk - 24; }
+  }
+  const r = L.getBoundingClientRect();
+  let dx = Math.min(0, jobb - r.right); if (r.left + dx < bal) dx = bal - r.left;
   if (dx) L.style.transform = `translateX(${dx}px)`;
 }
 new MutationObserver(navIgazit).observe(document.body, { attributes: true, attributeFilter: ['class'] });

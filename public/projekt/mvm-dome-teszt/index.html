@@ -10,7 +10,7 @@
 <script>
 // Gyors indulás (V2): a kezdőszint modellje és fénytérképe már a HTML beolvasásakor elkezd letöltődni, nem csak a kód elindulása után
 // MVM_VER: a modellek/adatok verziója – minden modellcserénél EMELNI kell, így a böngésző (iPad Safari is) biztosan az újat tölti
-window.MVM_VER = '2026-11-23m';
+window.MVM_VER = '2026-11-23n';
 (function () {
   var V = window.MVM_VER;
   var S = { lobby: 'S0', also: 'S1', paholy: 'S2', felso: 'S3', epulet: 'S4' }, q = new URLSearchParams(location.search), k = S[q.get('szint')] || 'S4';
@@ -83,7 +83,11 @@ window.MVM_VER = '2026-11-23m';
   .koncert small{font:500 12px/16px Nunito,sans-serif;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   a.koncert[href]:hover{border-color:var(--yellow);background:rgba(252,191,32,.1)}
   @media (max-width:1179px){.koncert{display:none!important}}
-  @media (min-width:641px){body.panel-open .koncert{opacity:0;pointer-events:none}}
+  /* nyitott adatlap: a badge a panel elé csúszik (app.js navIgazit), szűk helyen kompakt, végső esetben elhalványul */
+  .koncert{transition:border-color .3s,background .3s,opacity .2s,transform .35s cubic-bezier(.2,.8,.2,1)}
+  .koncert.kompakt{padding:4px;gap:0}
+  .koncert.kompakt span{display:none}
+  .koncert.rejt{opacity:0;pointer-events:none}
   /* nyitott adatlapnál a szintmenü látható marad (felhasználó, 2026-11-22): ha ütközne az adatlappal, a JS balra tolja (navIgazit);
      a fejléc háttere az adatlap széléig tart, az adatlap a fejléc alatt van */
   @media (min-width:641px){body.panel-open .brand::before{right:min(400px,100vw)}}
