@@ -10,7 +10,7 @@
 <script>
 // Gyors indulás (V2): a kezdőszint modellje és fénytérképe már a HTML beolvasásakor elkezd letöltődni, nem csak a kód elindulása után
 // MVM_VER: a modellek/adatok verziója – minden modellcserénél EMELNI kell, így a böngésző (iPad Safari is) biztosan az újat tölti
-window.MVM_VER = '2026-11-23zp';
+window.MVM_VER = '2026-11-23zr';
 // Mindig a legfrissebb kiadás (felhasználó, 2026-11-23: „egy link legyen, ne ezer verzió”): betöltés után és amikor a lap újra előtérbe kerül
 // (iPad Safari a nyitva hagyott lapot a memóriából mutatja), a néző gyorsítótár nélkül lekéri a saját HTML-jét; ha abban újabb MVM_VER áll,
 // egyszer újratölt (munkamenetenként egy kiadásra legfeljebb egyszer – nincs töltési hurok). ?nofrissit: kikapcsolva
@@ -165,8 +165,11 @@ window.MVM_VER = '2026-11-23zp';
   @media (min-width:1024px){
   body:not(.navregi) .brand::before{bottom:auto;height:calc(100% + 70px);-webkit-mask-image:none;mask-image:none;
     background:linear-gradient(180deg,rgba(var(--fejlec),.97) 0,rgba(var(--fejlec),.97) 104px,rgba(var(--fejlec),.9) 116px,rgba(var(--fejlec),.74) 128px,rgba(var(--fejlec),.52) 139px,rgba(var(--fejlec),.3) 149px,rgba(var(--fejlec),.13) 158px,rgba(var(--fejlec),.03) 164px,rgba(var(--fejlec),0) 100%)}
-  body:not(.navregi) .side,body:not(.navregi) .sideOpen{z-index:13}   /* a bal panel a hosszabb átmenet FÖLÖTT (a kereső ne kerüljön alá) */
+  body:not(.navregi) .side,body:not(.navregi) .sideOpen{z-index:13}
+  body .overview{top:118px}
   }
+  body .overview{z-index:14}   /* a vissza-gomb mindig a fejléc és az átmenete FÖLÖTT (2026-11-23) */
+  @media (min-width:641px) and (max-width:1023px){body .overview{top:150px}}
   body{--fejlec:10,16,25}
   body.ujlook{--fejlec:6,13,23}
   /* ---- epikus betöltő (v3, 2026-11-23): a látható szalag a logó VALÓDI kitöltött alakja (sima sávval vágva); csak egy egyenes élű ablak

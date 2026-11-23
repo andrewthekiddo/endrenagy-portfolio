@@ -395,14 +395,16 @@ function zonaVag(m, v) {
 // A lobby lépcsői és mozgólépcsői a szint tetejénél élesen el voltak vágva; a felhasználó kérésére (V2) fölfelé fokozatosan „elporladnak”:
 // a megadott alaprajzi sávban (a két lépcsőcsoport) az y0 fölötti képpontokat magassággal növekvő arányban eldobjuk (szitaminta), y1-nél teljesen.
 // Nem átlátszóság, ezért a sütött fény és a rajzolási sorrend érintetlen. A homlokzat anyagai kimaradnak (a lobby kivágott homlokzat-alakja marad).
-const LEPCSO_FADE = { S0: { xMin: 17, xMax: 38, zMin: -77, zMax: -57, y0: 3.0, y1: 6.2 } };
+const LEPCSO_FADE = { S0: { xMin: 17, xMax: 38, zMin: -77, zMax: -57, y0: 3.0, y1: 6.2 },
+  // alsó körüljáró (2026-11-23): a két, a páholyszintre felvezető lépcső + mozgólépcső (|x| 31–56 m, z −59…−43, 0 → 5 m); ?lepcsoregi=1: ki
+  ...(QS.get('lepcsoregi') === '1' ? {} : { S1: { xMin: 28, xMax: 58, zMin: -61, zMax: -41, y0: 1.2, y1: 5.2 } }) };
 function lepcsoFade(root, v) {
   const kesz = new Set();
   root.traverse((o) => {
     if (!o.isMesh || !o.material) return;
     for (const m of (Array.isArray(o.material) ? o.material : [o.material])) {
       // a külső homlokzat (f36 osztály: EF_/KA_Kulso, Kulter, homlokzati üveg/fém, záróoszlop) NEM halványul (felhasználó, 2026-11-22: a II. kapunál átlátszott)
-      if (kesz.has(m) || FACADE.test(alapNev(m.name)) || /^W_f36_|_(Kulso|Kulter)_/.test(m.name || '') || /UJ_/.test(m.name)) continue; kesz.add(m);
+      if (kesz.has(m) || FACADE.test(alapNev(m.name)) || /^W_(f36|hm)_|_(Kulso|Kulter)_|kapuszam|szalag/.test(m.name || '') || /UJ_(?!lelato_lepcso)/.test(m.name) || /lelato|szek|Kuzdoter/i.test(m.name || '')) continue; kesz.add(m);   // homlokzat, kapuszám, fénycsík, lelátó, küzdőtér: nem halványul
       const elozo = m.onBeforeCompile, kulcs = m.customProgramCacheKey?.bind(m);
       m.onBeforeCompile = (sh, r) => {
         elozo?.call(m, sh, r);
@@ -1651,6 +1653,27 @@ function updateMarkers() {
   const f = (q) => `${q[0].toFixed(1)} ${q[1].toFixed(1)}`;
   const szar = (q) => (q.length === 2 ? `M${f(q[0])}L${f(q[1])}` : `M${f(q[0])}L${f(q[1])}L${f(q[2])}L${f(q[3])}M${f(q[4])}L${f(q[5])}`);
   for (const a of pinSor) if (a.rejt) { a.m.ag.style.display = 'none'; a.m.csopN = 0; a.m.elozoFo = null; }
+  // Egymást fedő, KÜLÖNBÖZŐ típusú pinek egymás mellé (felhasználó, 2026-11-23: a baba-mama szoba és az akadálymentes mosdó pinje mindig egymásra csúszott):
+  // a fedő pinek csoportja egy vízszintes sorba rendeződik a közös középpontjuk körül, pin-szélesség + 4 px távolsággal; a sorrend az azonosító
+  // szerint állandó, a csoport tagsága kis hiszterézissel marad (nem villog). ?pinhely=0: a régi (egymásra csúszó) elhelyezés
+  const eltol = new Map();
+  if (QS.get('pinhely') !== '0') {
+    const L = csoportok.map((g) => { const t = g.fo.q[g.fo.q.length - 1]; return { m: g.fo.m, x: t[0], y: t[1] - 18 * g.fo.s, r: 18 * g.fo.s + 2 }; });
+    const szulo = L.map((_, i) => i), gy = (i) => (szulo[i] === i ? i : (szulo[i] = gy(szulo[i])));
+    for (let i = 0; i < L.length; i++) for (let j = i + 1; j < L.length; j++) {
+      const A = L[i], B = L[j], volt = A.m.pinSzomszed === B.m.pinSzomszedKulcs || B.m.pinSzomszed === A.m.pinSzomszedKulcs;
+      const hatar = (A.r + B.r) * (volt ? 0.95 : 0.75);   // csak a ténylegesen egymást fedő pinek (a közeli, de külön álló pinek a helyükön maradnak)
+      if (Math.hypot(A.x - B.x, A.y - B.y) < hatar) szulo[gy(i)] = gy(j);
+    }
+    const kl = new Map(); L.forEach((A, i) => { const k = gy(i); if (!kl.has(k)) kl.set(k, []); kl.get(k).push(A); });
+    for (const tagok of kl.values()) {
+      for (const A of tagok) { A.m.pinSzomszedKulcs = A.m.p.id; A.m.pinSzomszed = tagok.length > 1 ? tagok.find((B) => B !== A)?.m.p.id : null; }
+      if (tagok.length < 2) continue;
+      tagok.sort((A, B) => (A.m.p.id < B.m.p.id ? -1 : 1));
+      const kx = tagok.reduce((s, A) => s + A.x, 0) / tagok.length, sz = tagok.reduce((s, A) => s + 2 * A.r + 4, 0);
+      let x = kx - sz / 2; for (const A of tagok) { eltol.set(A.m, x + A.r + 2 - A.x); x += 2 * A.r + 4; }
+    }
+  }
   for (const g of csoportok) {
     const a = g.fo, m = a.m, n = g.tagok.length;
     const t = a.q[a.q.length - 1];
@@ -1658,7 +1681,7 @@ function updateMarkers() {
     m.ag.setAttribute('d', szar(a.q)); m.ag.style.display = tk || !(SZAR_MINDIG || m.el === selectedEl || m.el === hovPinEl) ? 'none' : '';   // szár csak a kiválasztott (és a rámutatott) pinnél
     m.ag.style.opacity = a.halv ? 0.3 : (m.el === hovPinEl && m.el !== selectedEl ? 0.45 : 0.9); m.ag.style.strokeWidth = a.focus ? 2.6 : 2;
     m.ag.style.stroke = a.focus || m.el === selectedEl || MINDIG_SZINES.has(m.p.cat) ? CATS[m.p.cat].color : 'rgba(252,191,32,.5)';   // semleges állapotban halvány sárga szár
-    m.el.style.transform = `translate(${t[0]}px,${t[1]}px) translate(-50%,-100%) scale(${a.s})`;
+    m.el.style.transform = `translate(${t[0] + (eltol.get(m) || 0)}px,${t[1]}px) translate(-50%,-100%) scale(${a.s})`;
     // rétegezés (felhasználó, 2026-11-20): a szolgáltatás-pin mindig a szektorszámok fölött van, egymás között a közelebbi felül
     _v.copy(m.vaz[m.vaz.length - 1]).project(camera); m.el.style.zIndex = String((a.focus || m.el === selectedEl ? 4000 : 3000) - Math.round(_v.z * 900));
     m.el.classList.remove('osszevont');
@@ -2491,7 +2514,7 @@ function sugarLampak(root) {
     while (r > 35 && Math.abs(h(dx * r, dz * r)) >= 0.3) r -= 0.25;
     while (r > 35 && Math.abs(h(dx * r, dz * r)) < 0.3) { if (e < 0) e = r; s = r; r -= 0.25; }
     const rk = e > 0 && e - s >= 3 ? (s + e) / 2 : 0;
-    if (rk) pont.push([dx * rk, dz * rk]);
+    if (rk) pont.push([dx * rk, dz * rk, e - s, szog]);
     szog += 7 / Math.max(rk || 65, 30);   // ~7 m ív
   }
   if (!pont.length) return null;
@@ -2502,7 +2525,10 @@ function sugarLampak(root) {
   g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
   const im = new THREE.InstancedMesh(new THREE.PlaneGeometry(QS.has('eleslampa') ? 5 : 12, QS.has('eleslampa') ? 5 : 12).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ name: 'WEB_lampafolt', map: t, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, opacity: 0.9 }), pont.length);
-  const M = new THREE.Matrix4(); pont.forEach(([x, z], i) => { M.makeTranslation(x, 0.03, z); im.setMatrixAt(i, M); });
+  // a folt a sétány mentén széles, keresztben legfeljebb a sétány szélessége (felhasználó képe, 2026-11-23: a 12 m-es folt a lelátó fölé lógott,
+  // és ott a „levegőben” lebegő ködnek látszott). ?lampaszel: a régi kör alakú folt
+  const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), S = new THREE.Vector3(), P = new THREE.Vector3(), meret = QS.has('eleslampa') ? 5 : 12;
+  pont.forEach(([x, z, w, szog], i) => { Q.setFromAxisAngle(Y, szog); S.set(QS.has('lampaszel') ? 1 : Math.min(1, Math.max(0.2, (w - 0.6) / meret)), 1, 1); M.compose(P.set(x, 0.03, z), Q, S); im.setMatrixAt(i, M); });
   im.renderOrder = 4; im.frustumCulled = false; im.raycast = () => {}; im.name = 'WEB_lampak'; im.material.userData.alapSzin = im.material.color.clone(); DIM_ANYAG.push(im.material);
   return im;
 }
