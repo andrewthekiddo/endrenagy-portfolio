@@ -8,6 +8,11 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 // önállóan (web/) és beágyazva (/projekt/mvm-dome) is működik.
 const VER = window.MVM_VER || '';   // index.html állítja; a models/ és data/ fájlok ?v= jelet kapnak → modellcserénél nincs régi, gyorsítótárazott példány
 const asset = (rel) => { const u = new URL(rel, import.meta.url); if (VER && /^(models|data)\//.test(rel)) u.searchParams.set('v', VER); return u.href; };
+// ZOOM-BUG (2026-11-23): a Safari csípős nagyításkor az innerWidth/innerHeight a KINAGYÍTOTT (látható) terület mérete, a vászon viszont marad →
+// a pinek és a kattintás a vászon valódi CSS-méretéből számol (a #c fix, teljes képernyős). Régi viselkedés: ?regizoom
+const _VC = () => document.getElementById('c');
+const VW = () => (new URLSearchParams(location.search).has('regizoom') ? window.innerWidth : (_VC() && _VC().clientWidth) || document.documentElement.clientWidth || window.innerWidth);
+const VH = () => (new URLSearchParams(location.search).has('regizoom') ? window.innerHeight : (_VC() && _VC().clientHeight) || document.documentElement.clientHeight || window.innerHeight);
 const QS = new URLSearchParams(location.search);
 const SHOT = QS.has('shot');
 // Gyors indulás (V2): a kis adatfájlok kérése azonnal, egyszerre elindul – a kód lejjebb csak megvárja őket
@@ -780,6 +785,83 @@ function zonaMind(root, key) {
     if (/UJ_zona_(?!wc)[a-z]+_(teto|szegely|betu|felirathatter)/.test(m.name || '') && !String(m.customProgramCacheKey?.() || '').includes('|zonarejt')) zonaRejt(m, rejt.concat(ZONA_REJT[key] || [])); });
   return csop.children.length ? csop : null;
 }
+// ---------- Kiemelések a kézi tetőkre igazítva (felhasználó, 2026-11-23: „az összes színes kijelölés átlóg a tetőfalon”) ----------
+// Az alsó szint új, kézzel rajzolt tetői (W_f90_UJ_eresz 5,75 m, W_f12_L1_fal_teto 4,21 m) mások, mint a régi 4,31 m-es zóna-lapok alaprajza:
+// a lapok kilógtak a tetőfalon, vagy az eresz alól csíkként látszottak. Itt a néző a lapok helyén a TETŐ felső háromszögeit színezi ki
+// (a saját színükkel, 3 cm-rel fölöttük) → a kiemelés pontosan a tető formáját követi. A modell kék mosdó-lapja (kilógott) láthatatlan lesz;
+// a büfé/ruhatár/merch régi lapja marad (a fal belső síkjáig ér; a visszavágott eresz alatt ez zárja le a pultdobozt).
+// Kikapcsolás: ?regikiem
+const TETO_IGAZIT = new Set(['S1']);
+const TETO_FELULET = /(L1_fal_teto|UJ_eresz)(\.\d+)?$/;
+function tetoraIgazit(root) {
+  root.updateMatrixWorld(true);
+  const V = new THREE.Vector3(), haromszogek = (o, mi) => {
+    const g = o.geometry, p = g.attributes.position, ix = g.index, n = ix ? ix.count : p.count, out = [];
+    const rng = mi >= 0 && g.groups.length ? g.groups.filter((gr) => gr.materialIndex === mi) : [{ start: 0, count: n }];
+    for (const r of rng) for (let t = r.start; t < r.start + r.count; t += 3) out.push([0, 1, 2].map((j) => V.fromBufferAttribute(p, ix ? ix.getX(t + j) : t + j).applyMatrix4(o.matrixWorld).toArray()));
+    return out; };
+  // 1. a kiemelés-egységek alaprajza: a néző 12 lapja (WEB_zona_teto) egyenként + a modell kék mosdó-lapja (W_UJ_zona_wc_teto) tömbönként
+  const egys = [], regiAnyag = new Set();
+  root.traverse((o) => { if (!o.isMesh || o.userData.zonaKiem) return; (Array.isArray(o.material) ? o.material : [o.material]).forEach((m, i) => {
+    const nev = m?.name || '', mi = Array.isArray(o.material) ? i : -1;
+    if (nev === 'WEB_zona_teto') egys.push({ szin: m.color.getHex(), tris: haromszogek(o, mi) });   // a régi lap MARAD: a visszavágott eresz alatt a pultdoboz teteje nyitott, ott ez a „tető” (a fal belső síkjáig ér, nem lóg ki)
+    else if (/UJ_zona_wc_teto/.test(nev)) {
+      const tr = haromszogek(o, mi), sz = tr.map((_, k) => k), gy = (k) => { while (sz[k] !== k) { sz[k] = sz[sz[k]]; k = sz[k]; } return k; };
+      for (let a = 0; a < tr.length; a++) for (let b = a + 1; b < tr.length; b++) if (tr[a].some((p) => tr[b].some((q) => Math.hypot(p[0] - q[0], p[2] - q[2]) < 1.0))) { const x = gy(a), y = gy(b); if (x !== y) sz[x] = y; }
+      const cs = new Map(); tr.forEach((t, k) => { const g0 = gy(k); if (!cs.has(g0)) cs.set(g0, []); cs.get(g0).push(t); });
+      for (const t of cs.values()) egys.push({ szin: ZONA_PALETTA.wc, tris: t, wc: true });
+      regiAnyag.add(m);
+    } }); });
+  if (!egys.length) return null;
+  // pont–háromszög (felülnézet) távolság; 0 = belül
+  const tavTri = (x, z, t) => {
+    const [a, b, c] = t, s = (p, q) => (x - q[0]) * (p[2] - q[2]) - (p[0] - q[0]) * (z - q[2]);
+    const d1 = s(a, b), d2 = s(b, c), d3 = s(c, a); if (!((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0))) return 0;
+    const sz = (p, q) => { const dx = q[0] - p[0], dz = q[2] - p[2], L = dx * dx + dz * dz || 1, u = Math.max(0, Math.min(1, ((x - p[0]) * dx + (z - p[2]) * dz) / L)); return Math.hypot(x - p[0] - u * dx, z - p[2] - u * dz); };
+    return Math.min(sz(a, b), sz(b, c), sz(c, a)); };
+  for (const u of egys) { u.b = [1e9, -1e9, 1e9, -1e9]; for (const t of u.tris) for (const p of t) { u.b[0] = Math.min(u.b[0], p[0]); u.b[1] = Math.max(u.b[1], p[0]); u.b[2] = Math.min(u.b[2], p[2]); u.b[3] = Math.max(u.b[3], p[2]); } u.teto = []; }
+  const tav = (u, x, z) => { if (x < u.b[0] - 3 || x > u.b[1] + 3 || z < u.b[2] - 3 || z > u.b[3] + 3) return 1e9; let d = 1e9; for (const t of u.tris) { d = Math.min(d, tavTri(x, z, t)); if (!d) break; } return d; };
+  // 2. a tető felfelé néző háromszögei (3,5–7 m): amelyik súlypontja az egység alaprajzán (+0,6 m) van, és egyik csúcsa sem lóg 2 m-nél messzebb
+  const A = new THREE.Vector3(), B = new THREE.Vector3(), C = new THREE.Vector3(), E1 = new THREE.Vector3(), E2 = new THREE.Vector3(), Nn = new THREE.Vector3();
+  root.traverse((o) => { if (!o.isMesh || !o.visible) return; const g = o.geometry, p = g.attributes.position, ix = g.index, mats = Array.isArray(o.material) ? o.material : [o.material], n = ix ? ix.count : p.count;
+    if (!mats.some((m) => TETO_FELULET.test(m?.name || ''))) return;
+    for (let t = 0; t < n; t += 3) {
+      let mn = mats[0]?.name || ''; if (g.groups.length) for (const gr of g.groups) if (t >= gr.start && t < gr.start + gr.count) { mn = mats[gr.materialIndex]?.name || ''; break; }
+      if (!TETO_FELULET.test(mn)) continue;
+      A.fromBufferAttribute(p, ix ? ix.getX(t) : t).applyMatrix4(o.matrixWorld); B.fromBufferAttribute(p, ix ? ix.getX(t + 1) : t + 1).applyMatrix4(o.matrixWorld); C.fromBufferAttribute(p, ix ? ix.getX(t + 2) : t + 2).applyMatrix4(o.matrixWorld);
+      const cy = (A.y + B.y + C.y) / 3; if (cy < 3.5 || cy > 7) continue;
+      E1.subVectors(B, A); E2.subVectors(C, A); Nn.crossVectors(E1, E2); const L = Nn.length(); if (L < 1e-6 || Math.abs(Nn.y / L) < 0.9) continue;
+      const cx = (A.x + B.x + C.x) / 3, cz = (A.z + B.z + C.z) / 3;
+      let leg = null, ld = 0.6; for (const u of egys) { const d = tav(u, cx, cz); if (d <= ld) { ld = d; leg = u; } }
+      if (!leg || [A, B, C].some((q) => tav(leg, q.x, q.z) > 2.0)) continue;
+      leg.teto.push([A.toArray(), B.toArray(), C.toArray()]); } });
+  // 3. új lapok (egy egység = egy háló, hogy a rámutatás az egészet emelje ki) + szegély a szabad éleken
+  const csop = new THREE.Group(); csop.name = 'WEB_zona_tetore'; let db = 0;
+  for (const u of egys) { if (!u.teto.length) continue; db++;
+    const pos = u.teto.flatMap((t) => t.flatMap((q) => [q[0], q[1] + 0.03, q[2]])), g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    const lap = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ name: 'WEB_zona_teto', color: u.szin, transparent: true, opacity: ZONA_FEDES, depthWrite: false, side: THREE.DoubleSide }));
+    lap.renderOrder = 5; lap.frustumCulled = false; lap.userData.egyDarab = true; csop.add(lap);
+    const k = (q) => `${Math.round(q[0] * 50)},${Math.round(q[1] * 50)},${Math.round(q[2] * 50)}`, el = new Map();
+    for (const t of u.teto) for (let j = 0; j < 3; j++) { const a = t[j], b = t[(j + 1) % 3], kk = [k(a), k(b)].sort().join('|'); const e = el.get(kk); if (e) e.n++; else el.set(kk, { a, b, n: 1 }); }
+    const sz = []; for (const e of el.values()) if (e.n === 1) sz.push(e.a[0], e.a[1] + 0.05, e.a[2], e.b[0], e.b[1] + 0.05, e.b[2]);
+    const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(sz, 3));
+    const v = new THREE.LineSegments(sg, new THREE.LineBasicMaterial({ name: 'WEB_zona_szegely', color: u.szin })); v.renderOrder = 6; v.frustumCulled = false; csop.add(v);
+    u.ymax = Math.max(...u.teto.flatMap((t) => t.map((q) => q[1]))); }
+  if (!db) return null;
+  // 4. a régi lapok és szegélyük láthatatlan (a kattintás-keresés átlép rajtuk); a feliratok / ikonok a tető tetejére
+  root.traverse((o) => { if (!(o.isMesh || o.isLine) || csop.children.includes(o)) return; for (const m of (Array.isArray(o.material) ? o.material : [o.material])) {
+    if (regiAnyag.has(m) || /UJ_zona_wc_szegely/.test(m?.name || '')) m.visible = false; } });   // csak a modell kék mosdó-lapja (az lógott ki a tetőfalon)
+  root.traverse((o) => { if (!o.isMesh || !/^WEB_zona_(felirat|ikon)$/.test(o.material?.name || '')) return;
+    o.updateWorldMatrix(true, false); const w = new THREE.Vector3().setFromMatrixPosition(o.matrixWorld);
+    let leg = null, ld = 3; for (const u of egys) { if (!u.teto.length) continue; const d = tav(u, w.x, w.z); if (d < ld) { ld = d; leg = u; } }
+    if (!leg) return; let y = -1e9; for (const t of leg.teto) if (tavTri(w.x, w.z, t) === 0) y = Math.max(y, (t[0][1] + t[1][1] + t[2][1]) / 3);
+    if (y < leg.ymax - 0.1) {   // nem a legfelső tetőrészen ülne (pl. a mosdó-ikon a magasabb eresz mögött, félig takarva) → a felső rész közepére
+      let sx = 0, sz = 0, sa = 0; for (const t of leg.teto) { if (Math.min(t[0][1], t[1][1], t[2][1]) < leg.ymax - 0.1) continue;
+        const ter = Math.abs((t[1][0] - t[0][0]) * (t[2][2] - t[0][2]) - (t[2][0] - t[0][0]) * (t[1][2] - t[0][2])) / 2; sa += ter; sx += ter * (t[0][0] + t[1][0] + t[2][0]) / 3; sz += ter * (t[0][2] + t[1][2] + t[2][2]) / 3; }
+      if (sa > 0) { o.position.x += sx / sa - w.x; o.position.z += sz / sa - w.z; } y = leg.ymax; }
+    o.position.y += y + 0.07 - w.y; });
+  return csop;
+}
 // A modell egységenként egy (vagy több) keskeny lapot ad; a néző a lap mögötti tömör tetőtömböt keresi meg a magasságtérképen
 // (2,5–6 m magas, azonos magasságú összefüggő felület, a lap oldalirányú kiterjedése ± 3,5 m-en belül), és azt színezi ki egészben.
 const TETOBLOKK = { S3: ['bar', 'merch'] };
@@ -1342,10 +1424,10 @@ const _feher = new THREE.Color(0xffffff);
 function takarasFrissit() {
   if (!TAKAR.be || !current) return;
   // csak akkor rajzoljuk újra, ha a kamera elmozdult (álló képnél elég egyszer), és akkor is csak minden 3. képkockán
-  const kulcs = current.level + camera.matrixWorld.elements.map((x) => x.toFixed(2)).join(',') + camera.fov.toFixed(1) + innerWidth + 'x' + innerHeight;
+  const kulcs = current.level + camera.matrixWorld.elements.map((x) => x.toFixed(2)).join(',') + camera.fov.toFixed(1) + VW() + 'x' + VH();
   if (kulcs === TAKAR.elozo || (++TAKAR.kocka % 3 && TAKAR.kesz)) return;
   TAKAR.elozo = kulcs;
-  const w = TAKAR.sz, h = Math.max(32, Math.round(TAKAR.sz * innerHeight / innerWidth));
+  const w = TAKAR.sz, h = Math.max(32, Math.round(TAKAR.sz * VH() / VW()));
   if (!TAKAR.rt || TAKAR.m !== h) { TAKAR.rt?.dispose(); TAKAR.rt = new THREE.WebGLRenderTarget(w, h, { depthBuffer: true }); TAKAR.puf = new Uint8Array(w * h * 4); TAKAR.m = h; }
   // ami nem takar: áttetsző anyagok, a levágott homlokzat (FACADE_CUT) – ezeket a mélységrajz idejére elrejtjük
   current.nemTakar ??= (() => { const l = []; const vag = !!FACADE_CUT[LEVELS[current.level].key];
@@ -1385,7 +1467,7 @@ function takarJel(m, pont) {
 const _v = new THREE.Vector3();
 function updateMarkers() {
   if (!current) return;
-  const w = innerWidth, h = innerHeight;
+  const w = VW(), h = VH();
   const camDist = camera.position.distanceTo(controls.target);
   const kep = THREE.MathUtils.clamp(Math.min(w, h) / 720, 0.62, 1);   // kis képernyőn (telefon) arányosan kisebb pinek és szektorszámok (felhasználó, 2026-11-19)
   const pinSor = [];
@@ -1525,7 +1607,7 @@ function enterDetail(anchor, distance = 34, height = 24, irany = null) {
 }
 // Alapnézet: vissza a szint kezdőkamerájához (a körút eleje, eredeti távolság)
 // Álló telefonon a tág áttekintő kamera közelebbről indul (felhasználó, V2) – az aréna így kitölti a kép szélességét
-const alapZoom = () => (current && innerWidth / innerHeight < 0.8 && KAMERAK[LEVELS[current.level].key] && !QS.has('regikamera') ? 0.86 : 1);
+const alapZoom = () => (current && VW() / VH() < 0.8 && KAMERAK[LEVELS[current.level].key] && !QS.has('regikamera') ? 0.86 : 1);
 function alapNezet() {
   if (!current) return;
   closePanel(false);
@@ -1686,9 +1768,11 @@ function sectorAt(point, pontos = false) {
   }
   return best;
 }
+// a kattintás helye a vászon saját téglalapjához mérve (nagyításkor is ugyanabban a koordináta-rendszerben, mint az esemény)
+function ndcBe(x, y) { const r = canvas.getBoundingClientRect(); ndc.set(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1); }
 function dblAt(clientX, clientY) {
   if (!current) return;
-  ndc.set((clientX / innerWidth) * 2 - 1, -(clientY / innerHeight) * 2 + 1);
+  ndcBe(clientX, clientY);
   raycaster.setFromCamera(ndc, camera);
   const hit = raycaster.intersectObject(current.root, true).find((h) => !(h.object.material?.transparent));
   if (!hit) return;
@@ -1782,7 +1866,7 @@ function selectPoi(p, anchor) {
   }
   $('#panelMore').style.display = szek || p.cat === 'kapu' ? 'none' : '';   // szektorhoz nincs külső oldal (jegylink később, ha lesz)
   selSec = szek ? p : null; syncSorok();
-  if (innerWidth <= 640) document.body.classList.add('side-closed');   // telefonon egyszerre egy lap
+  if (VW() <= 640) document.body.classList.add('side-closed');   // telefonon egyszerre egy lap
   panel.classList.add('show'); document.body.classList.add('panel-open');
   const at = anchor ? anchor.clone() : poiWorld(p);
   if (p.cat === 'kapu') enterDetail(at, 42, 22, new THREE.Vector3(at.x, 0, at.z).normalize());
@@ -1873,7 +1957,7 @@ function setHover(s, pont) {
 let sugarMemo = null;
 function sugarTalalatok(x, y) {
   if (sugarMemo && sugarMemo.x === x && sugarMemo.y === y && sugarMemo.root === current.root && sugarMemo.cam === camera.matrixWorld.elements.join()) return sugarMemo.hits;
-  ndc.set((x / innerWidth) * 2 - 1, -(y / innerHeight) * 2 + 1);
+  ndcBe(x, y);
   raycaster.setFromCamera(ndc, camera);
   const hits = raycaster.intersectObject(current.root, true);
   sugarMemo = { x, y, root: current.root, cam: camera.matrixWorld.elements.join(), hits };
@@ -1882,7 +1966,7 @@ function sugarTalalatok(x, y) {
 let PAHOLY_HALOK = [];
 function paholyGyors(x, y) {
   if (!current || !pahLista().length || !PAHOLY_HALOK.length) return null;
-  ndc.set((x / innerWidth) * 2 - 1, -(y / innerHeight) * 2 + 1);
+  ndcBe(x, y);
   raycaster.setFromCamera(ndc, camera);
   const h = raycaster.intersectObjects(PAHOLY_HALOK, false)[0];
   return h ? { s: h.object.userData.paholy, pont: h.point } : null;
@@ -2004,6 +2088,7 @@ const zonaKomp = new Map();   // (háló, anyag) → háromszögenként az össz
 function zonaKomponensek(o, mi) {
   const k = `${o.uuid}|${mi}`; if (zonaKomp.has(k)) return zonaKomp.get(k);
   const g = o.geometry, pos = g.attributes.position, idx = g.index, n = (idx ? idx.count : pos.count) / 3;
+  if (o.userData.egyDarab) { const komp = new Map(); for (let t = 0; t < n; t++) komp.set(t, 0); zonaKomp.set(k, komp); return komp; }   // tetőre igazított lap: az egész egység egy darab
   const ranges = mi >= 0 ? g.groups.filter((gr) => gr.materialIndex === mi) : [{ start: 0, count: n * 3 }];
   const kulcs = (v) => `${Math.round(pos.getX(v) * 50)},${Math.round(pos.getY(v) * 50)},${Math.round(pos.getZ(v) * 50)}`;
   const tris = [], csucs = new Map();
@@ -2125,15 +2210,15 @@ $('#kereso').addEventListener('input', keres);
 $('#kereso').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#paneTalalat .srow')?.click(); if (e.key === 'Escape') { e.target.value = ''; keres(); } });
 document.querySelectorAll('#tabs button').forEach((b) => b.addEventListener('click', () => fulValt(b.dataset.tab)));
 $('#sideX').addEventListener('click', () => document.body.classList.add('side-closed'));
-$('#sideOpen').addEventListener('click', () => { document.body.classList.remove('side-closed'); if (innerWidth <= 640 && panel.classList.contains('show')) closePanel(false); });
-if (innerWidth <= 640) document.body.classList.add('side-closed');
+$('#sideOpen').addEventListener('click', () => { document.body.classList.remove('side-closed'); if (VW() <= 640 && panel.classList.contains('show')) closePanel(false); });
+if (VW() <= 640) document.body.classList.add('side-closed');
 // a bal oldali panel (és a jobb oldali adatlap) mellett a 3D kép a szabad terület közepére kerül: vízszintes képeltolás (px)
 let uiEltol = 0, uiEltolY = 0;
 const B = document.body.classList;
-const uiCel = () => innerWidth <= 640 ? 0 : (!B.contains('no-side') && !B.contains('side-closed') ? 158 : 0) - (B.contains('panel-open') ? Math.min(400, innerWidth) / 2 : 0);
+const uiCel = () => VW() <= 640 ? 0 : (!B.contains('no-side') && !B.contains('side-closed') ? 158 : 0) - (B.contains('panel-open') ? Math.min(400, VW()) / 2 : 0);
 // telefonon az alsó lap (62 vh) fölötti szabad sávba kerül a kép: függőleges eltolás felfelé
-const uiCelY = () => innerWidth > 640 ? 0 : ((!B.contains('no-side') && !B.contains('side-closed')) || B.contains('panel-open') ? innerHeight * 0.3 : 0);
-if (innerWidth <= 640) $('#sideX').textContent = '×';
+const uiCelY = () => VW() > 640 ? 0 : ((!B.contains('no-side') && !B.contains('side-closed')) || B.contains('panel-open') ? VH() * 0.3 : 0);
+if (VW() <= 640) $('#sideX').textContent = '×';
 
 // ---------- Szűrőpanel: egy kategória kiválasztása = csak az látszik; újra kattintva vissza az összes ----------
 const FILTER_COLUMNS = [
@@ -2330,6 +2415,7 @@ async function loadLevel(level) {
         let vanModellben = false; gltf.scene.traverse((o) => { if (o.isMesh) for (const m of (Array.isArray(o.material) ? o.material : [o.material])) if (/UJ_zona_wc/.test(m.name || '')) vanModellben = true; });
         const t = !vanModellben && wcTetok(gltf.scene, data.pois); if (t) gltf.scene.add(t);
       } catch (e) { console.warn('wc-tető', e); } }
+      if (TETO_IGAZIT.has(L.key) && !QS.has('regikiem')) { try { const u = tetoraIgazit(gltf.scene); if (u) gltf.scene.add(u); } catch (e) { console.warn('tetőre igazítás', e); } }
       // a sütött-fény átalakítás új anyagpéldányt adhat, a szektor-kiemelő shader pedig felülírja az onBeforeCompile-t → a zóna-elrejtést a végleges anyagokra újra rátesszük
       if (ZONA_REJT[L.key] && !QS.has('norejt')) gltf.scene.traverse((o) => { if (!o.isMesh) return; for (const m of (Array.isArray(o.material) ? o.material : [o.material])) { const d = ZONA_REJT[L.key].filter((d) => d.minta.test(m.name || '')); if (d.length && !String(m.customProgramCacheKey?.() || '').includes('|zonarejt')) zonaRejt(m, d); } });
       c = cache[level] = { level, baked: c_baked, lm: c_lm, root: gltf.scene, anim: animObj, data, path: buildPath(data.camera) };
@@ -2377,13 +2463,13 @@ function showToast(msg) { toast.textContent = msg; toast.classList.add('show'); 
 // A lencse-eltolás csak körút-módban él (ott a Blender-kamera kivágását adja); részletnézetben 0-ra fut, hogy a forgáspont középen legyen
 let shiftK = 1; let DBGFOV = 0;
 function applyShift() {
-  const w = innerWidth, h = innerHeight, M = Math.max(w, h);
+  const w = VW(), h = VH(), M = Math.max(w, h);
   const ox = camShift[0] * M * shiftK - uiEltol, oy = -camShift[1] * M * shiftK + uiEltolY;
   if (Math.abs(ox) > 0.01 || Math.abs(oy) > 0.01) camera.setViewOffset(w, h, ox, oy, w, h);
   else if (camera.view) camera.clearViewOffset();
 }
 function resize() {
-  const w = innerWidth, h = innerHeight;
+  const w = VW(), h = VH();
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   // a Blender-kamera vízszintes látószöge; álló képernyőn a függőleges látószög felső korláttal
@@ -2588,8 +2674,8 @@ fetch(asset('data/koncert.json')).then((r) => r.json()).then((k) => {
 function navIgazit() {
   const L = $('#levels'); if (!L) return;
   L.style.transform = '';
-  if (innerWidth < 1024 || !document.body.classList.contains('panel-open')) return;
-  const r = L.getBoundingClientRect(), hatar = innerWidth - Math.min(400, innerWidth) - 24, bal = $('#lang').getBoundingClientRect().right + 32;
+  if (VW() < 1024 || !document.body.classList.contains('panel-open')) return;
+  const r = L.getBoundingClientRect(), hatar = VW() - Math.min(400, VW()) - 24, bal = $('#lang').getBoundingClientRect().right + 32;
   let dx = Math.min(0, hatar - r.right); if (r.left + dx < bal) dx = bal - r.left;
   if (dx) L.style.transform = `translateX(${dx}px)`;
 }
