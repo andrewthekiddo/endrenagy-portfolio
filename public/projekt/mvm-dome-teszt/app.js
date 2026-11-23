@@ -25,7 +25,7 @@ if (SHOT) { addEventListener('error', (e) => { document.title = 'JSERR ' + e.mes
 const LEVELS = {
   felso:  { key: 'S3', name: 'Felső körüljáró szint', model: 'models/S3.glb', meret: 5628720, data: 'data/S3.json', tier: 'Felső lelátó (3xx)' },
   paholy: { key: 'S2', name: 'Páholy szint (VIP)', model: 'models/S2.glb', meret: 6082436, data: 'data/S2.json', tier: 'Alsó lelátó (2xx)' },
-  also:   { key: 'S1', name: 'Alsó körüljáró szint', model: 'models/S1.glb', meret: 4086824, data: 'data/S1.json', tier: 'Alsó lelátó (2xx)' },
+  also:   { key: 'S1', name: 'Alsó körüljáró szint', model: 'models/S1.glb', meret: 4085680, data: 'data/S1.json', tier: 'Alsó lelátó (2xx)' },
   lobby:  { key: 'S0', name: 'Lobby – Bejárati szint', model: 'models/S0.glb', meret: 1660196, data: 'data/S0.json', tier: 'Küzdőtéri lelátó (1xx)' },
   // a teljes, megépített épület kívülről (homlokzat bekapcsolva, nyitott tető): a kezdőnézet, ha a fájljai megvannak (lásd VAN_EPULET)
   epulet: { key: 'S4', name: 'MVM Dome', model: 'models/S4.glb', meret: 6375816, data: 'data/S4.json', tier: 'Lelátó' },
@@ -581,6 +581,27 @@ function zonaFeliratPontokra(pontok, y, szoveg, szin = 0x0b1220, haromszogek = n
   return m;
 }
 // a modell egy anyagú lapjaiból (pl. UJ_zona_wc_teto, UJ_zona_ruhatar_teto) tömbönként felirat – ahol a néző nem rajzolja újra az egységet
+// Az alsó szint kézi ereszei (UJ_eresz) 5,75 m-en a 4,31 m-es zóna-lapok FÖLÉ nyúlnak; a magasságtérkép ezeket kihagyja (UJ_ anyag),
+// ezért a lapra tett ikon / felirat az eresz alá kerülhetett (felhasználó, 2026-11-23: a jobb oldali mosdónál nem látszott a TOILET).
+// Itt az eresz felülnézeti lefedettsége 0,25 m-es rácson (a legmagasabb pontja) → az ikon csak a lap fedetlen részére kerül.
+function ereszFedes(root) {
+  if (root.userData.ereszFedes) return root.userData.ereszFedes;
+  root.updateMatrixWorld(true); const L = 0.25, cel = new Map(), V = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+  root.traverse((o) => { if (!o.isMesh) return; const ms = Array.isArray(o.material) ? o.material : [o.material]; if (!ms.some((m) => /UJ_eresz/.test(m?.name || ''))) return;
+    const g = o.geometry, p = g.attributes.position, ix = g.index, n = ix ? ix.count : p.count;
+    for (let t = 0; t < n; t += 3) {
+      let mn = ms[0]?.name || ''; if (g.groups.length) for (const gr of g.groups) if (t >= gr.start && t < gr.start + gr.count) { mn = ms[gr.materialIndex]?.name || ''; break; }
+      if (!/UJ_eresz/.test(mn)) continue;
+      for (let j = 0; j < 3; j++) V[j].fromBufferAttribute(p, ix ? ix.getX(t + j) : t + j).applyMatrix4(o.matrixWorld);
+      const [A, B, C] = V, ter = (B.x - A.x) * (C.z - A.z) - (C.x - A.x) * (B.z - A.z); if (Math.abs(ter) < 1e-4) continue;   // függőleges lap: nem fed
+      const y = Math.max(A.y, B.y, C.y), s = (px, pz, P, Q) => (px - Q.x) * (P.z - Q.z) - (P.x - Q.x) * (pz - Q.z);
+      for (let i = Math.floor(Math.min(A.x, B.x, C.x) / L); i <= Math.ceil(Math.max(A.x, B.x, C.x) / L); i++) for (let k = Math.floor(Math.min(A.z, B.z, C.z) / L); k <= Math.ceil(Math.max(A.z, B.z, C.z) / L); k++) {
+        const x = i * L, z = k * L, d1 = s(x, z, A, B), d2 = s(x, z, B, C), d3 = s(x, z, C, A);
+        if ((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0)) continue;
+        const kk = i + ',' + k; if (!(cel.get(kk) >= y)) cel.set(kk, y); } } });
+  const f = (x, z) => cel.get(Math.round(x / L) + ',' + Math.round(z / L)) ?? -1e9;
+  root.userData.ereszFedes = f; return f;
+}
 function modellLapFeliratok(root, minta, szoveg, kihagy = () => false) {
   // a lap háromszögei összetartoznak (egy tömb), és a 2,5 m-nél közelebbi csúcsok is (a blokkok közti rések átívelése)
   root.updateMatrixWorld(true); const pts = [], szulo = [], tri = [];
@@ -598,7 +619,7 @@ function modellLapFeliratok(root, minta, szoveg, kihagy = () => false) {
     if (kihagy(pp)) continue;
     const g0 = gy(cs[0]), hsz = ZONA_IKON[szoveg] ? tri.filter((q) => gy(q[0]) === g0).map((q) => q.flatMap((j) => [pts[j][0], pts[j][2]])) : null;
     // csak a felülről LÁTHATÓ rész számít (a lobby mosdó-lapjának belső fele a lelátó alatt van – oda tett ikon a kék sáv szélén ült)
-    if (hsz) { const mag = wcMagassagTerkep(root); hsz.lathato = (x, z) => mag[wcCy(z) * WC_N + wcCx(x)] < y + 0.6; }
+    if (hsz) { const mag = wcMagassagTerkep(root), ef = ereszFedes(root); hsz.lathato = (x, z) => mag[wcCy(z) * WC_N + wcCx(x)] < y + 0.6 && ef(x, z) < y + 0.3; }
     const f = zonaFeliratPontokra(pp, y, szoveg, undefined, hsz); if (f) out.push(f);
   }
   return out;
@@ -776,7 +797,7 @@ function zonaMind(root, key) {
     const doboz = { x0: x0 - 2.5, x1: x1 + 2.5, z0: z0 - 2.5, z1: z1 + 2.5 }; rejt.push(doboz);   // 2,5 m ráhagyás: a modell lapjának a homlokzatra kilógó csíkja is tűnjön el (felhasználó, 2026-11-21)
     // felirat minden egységre, a helyiség hossztengelyével párhuzamosan
     { // a sima lap háromszögei → az ikon a lap közepén, a leghosszabb élével párhuzamosan (egyenesen), mint a lobbyban
-      let hsz = null; if (poli) { const tr = THREE.ShapeUtils.triangulateShape(poli.map(([x, z]) => new THREE.Vector2(x, z)), []); hsz = tr.map((q) => q.flatMap((k) => poli[k])); hsz.lathato = (x, z) => mag[wcCy(z) * N + wcCx(x)] < y + 0.6; }
+      let hsz = null; if (poli) { const tr = THREE.ShapeUtils.triangulateShape(poli.map(([x, z]) => new THREE.Vector2(x, z)), []); hsz = tr.map((q) => q.flatMap((k) => poli[k])); const ef = ereszFedes(root); hsz.lathato = (x, z) => mag[wcCy(z) * N + wcCx(x)] < y + 0.6 && ef(x, z) < y + 0.3; }
       const f = zonaFeliratPontokra([...lat].map((i) => [wcX(i % N), wcZ((i - i % N) / N)]), y, ZONA_SZOVEG[u.tipus] || u.tipus.toUpperCase(), undefined, hsz); if (f) csop.add(f); }
   }
   for (const f of modellLapFeliratok(root, /UJ_zona_wc_teto/, 'TOILET_IKON')) csop.add(f);   // alsó szint: felirat helyett kék mosdó-ikon, mint a lobbyban (felhasználó, 2026-11-21)
