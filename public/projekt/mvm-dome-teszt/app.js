@@ -2455,6 +2455,64 @@ function sugarLampak(root) {
   im.renderOrder = 4; im.frustumCulled = false; im.raycast = () => {}; im.name = 'WEB_lampak';
   return im;
 }
+// S1 „V3 kinézet” (felhasználó a board chaten, 2026-11-23 este: az élő S1 legyen olyan, mint a jóváhagyott Blender V3 render).
+// A jóváhagyott V3 renderen és az élő nézőn mért területátlagok (lineáris fényerő V3/élő): sétány padló 0,34, küzdőtér 0,44 (kevésbé kék),
+// homlokzat 0,39 (a V3 mintában a LED-csíkok is benne → valódi ≈ 0,3), lelátó 1,7. Ezekkel szorozzuk az anyagszínt (a fénytérkép marad).
+// + vékony, világító neon-keret a bódék tetőlapjai körül a saját színükben, a tetőlapok telítettebbek és „izzanak” (tónusleképezés nélkül).
+// ?s1look=regi: a régi (eddigi) S1 kinézet; próbához ?s1x=padlo:0.4,kuzd:0.5,homl:0.3,lelato:1.5,neon:0
+const S1LOOK = QS.get('s1look') !== 'regi';
+const S1X = Object.fromEntries((QS.get('s1x') || '').split(',').filter(Boolean).map((s) => s.split(':')).map(([k, v]) => [k, Number(v)]));
+const s1x = (k, d) => (Number.isFinite(S1X[k]) ? S1X[k] : d);
+const S1_NEON = { bar: 0xff2f78, wc: 0x2b8cff, ruhatar: 0xffb21e, merch: 0xa66bff };
+const S1_LAP = { bar: 0xd62a5e, wc: 0x184a8a, ruhatar: 0xd8961a, merch: 0x7c45d6 };
+function s1LookV3(root) {
+  const f = s1x('padlo', 0.33), fk = s1x('kuzd', 1.2), fh = s1x('homl', 0.3), fl = s1x('lelato', 1.85);
+  const SZ = [[/Kuzdoter/i, [0.55 * fk, 0.45 * fk, 0.33 * fk]], [/padlo|terrazzo/i, [f * 1.05, f * 0.97, f * 0.94]],
+    [/^W_(tb|f\d+)_.*(Kulso|Kulter|Homlokzat|Bejarat)(?!.*(szalag|bejaratszam|uveg))/, [fh, fh, fh]],
+    [/^W_(f\d+_)?L1_(fal|bufe_krem)/, [s1x('fal', 0.45), s1x('fal', 0.45), s1x('fal', 0.45) * 0.95]], [/lelato(?!.*uveg)/i, [fl, fl * 0.97, fl * 0.84]]];
+  const kesz = new Set(), lapok = [];
+  root.updateMatrixWorld(true);
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    for (const m of (Array.isArray(o.material) ? o.material : [o.material])) {
+      if (!m || kesz.has(m)) continue; kesz.add(m); const n = m.name || '';
+      const z = /^WEB_zona_teto|UJ_zona_(bar|wc|ruhatar|merch)_teto/.exec(n);
+      if (z) {   // tetőlap: telítettebb, „izzó” szín (a tónusleképezés nem fakítja), és neon-keret köré
+        const tip = z[1] || ZONA_SZIN_TIPUS[m.color?.getHex()] || null;
+        if (tip && S1_LAP[tip]) { m.color.setHex(S1_LAP[tip]); m.toneMapped = false; m.opacity = 0.9; m.needsUpdate = true; }
+        lapok.push([o, tip]); continue;
+      }
+      if (m.transparent && /Kulso_uvegfal|Kulter_ajto_uveg|Kulso_ajto_uveg|Lobby_uveg/.test(n)) {   // a külső üvegfal a V3-on sötét: kevesebb tükröződés
+        m.color.multiplyScalar(s1x('uveg', 0.35)); if (m.envMapIntensity !== undefined) m.envMapIntensity *= 0.4; if (m.emissive) m.emissive.multiplyScalar(0.4); continue; }
+      if (/^WEB_/.test(n) || m.transparent || (m.emissive && m.emissive.getHex() !== 0 && m.emissiveIntensity > 0)) continue;
+      for (const [re, k] of SZ) if (re.test(n)) { m.color.setRGB(m.color.r * k[0], m.color.g * k[1], m.color.b * k[2]); break; }
+    }
+  });
+  if (!(s1x('neon', 1) > 0)) return null;
+  // neon-keret: a tetőlap háló szabad élei (csak egy háromszöghöz tartozó élek) mentén 0,32 m széles, világító szalag
+  const csop = new THREE.Group(); csop.name = 'WEB_s1_neon'; const mats = {};
+  const v = new THREE.Vector3();
+  for (const [o, tip] of lapok) {
+    const szin = S1_NEON[tip]; if (!szin) continue;
+    const g = o.geometry, p = g.attributes.position, idx = g.index ? g.index.array : [...Array(p.count).keys()];
+    const kulcs = [], pts = [];
+    for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i).applyMatrix4(o.matrixWorld); pts.push(v.clone()); kulcs.push(`${Math.round(v.x * 50)},${Math.round(v.z * 50)}`); }
+    const egy = new Map(), uniq = new Map();   // azonos helyű csúcsok összevonva (nem indexelt háló is)
+    kulcs.forEach((k, i) => { if (!uniq.has(k)) uniq.set(k, i); });
+    const id = (i) => uniq.get(kulcs[i]);
+    for (let t = 0; t < idx.length; t += 3) for (const [a, b] of [[idx[t], idx[t + 1]], [idx[t + 1], idx[t + 2]], [idx[t + 2], idx[t]]]) {
+      const A = id(a), B = id(b); if (A === B) continue; const k = A < B ? A + '_' + B : B + '_' + A; egy.set(k, (egy.get(k) || 0) + 1); }
+    const cs = [], W = 0.16;
+    for (const [k, db] of egy) { if (db !== 1) continue; const [A, B] = k.split('_').map(Number), P = pts[A], Q = pts[B];
+      const dx = Q.x - P.x, dz = Q.z - P.z, L = Math.hypot(dx, dz); if (L < 0.05) continue; const nx = -dz / L * W, nz = dx / L * W, y = Math.max(P.y, Q.y) + 0.05;
+      cs.push(P.x - nx, y, P.z - nz, Q.x - nx, y, Q.z - nz, Q.x + nx, y, Q.z + nz, P.x - nx, y, P.z - nz, Q.x + nx, y, Q.z + nz, P.x + nx, y, P.z + nz); }
+    if (!cs.length) continue;
+    const gg = new THREE.BufferGeometry(); gg.setAttribute('position', new THREE.Float32BufferAttribute(cs, 3));
+    mats[tip] ||= new THREE.MeshBasicMaterial({ name: 'WEB_s1_neon_' + tip, color: szin, toneMapped: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    const me = new THREE.Mesh(gg, mats[tip]); me.renderOrder = 7; me.frustumCulled = false; me.raycast = () => {}; csop.add(me);
+  }
+  return csop.children.length ? csop : null;
+}
 function homlokzatFeny(root) {   // a homlokzat fehér csíkjai meleg, „világító” színnel (az AgX nem fakítja ki)
   root.traverse((o) => { if (!o.isMesh) return; for (const m of (Array.isArray(o.material) ? o.material : [o.material])) if (m && /Kulso_szalag_feher/.test(m.name || '') && !m.userData.feny) { m.userData.feny = true; m.color.setHex(0xffd9a8); m.toneMapped = false; m.needsUpdate = true; } });
 }
@@ -2550,6 +2608,7 @@ async function loadLevel(level) {
       zonaEro(gltf.scene);
       // a lámpafoltok + homlokzati fénycsík az S1 V3 sütéssel együtt élesednek; addig csak próbára: ?lampa (LAMPA_BE = true kapcsolja be véglegesen)
       if (UJLOOK && UJLOOK_SZINTEK.has(L.key) && (LAMPA_BE || QS.has('lampa')) && !QS.has('nolampa')) { try { const l = sugarLampak(gltf.scene); if (l) gltf.scene.add(l); homlokzatFeny(gltf.scene); } catch (e) { console.warn('lámpák', e); } }
+      if (L.key === 'S1' && S1LOOK && UJLOOK) { try { const n = s1LookV3(gltf.scene); if (n) gltf.scene.add(n); } catch (e) { console.warn('s1 V3 kinézet', e); } }
       // a sütött-fény átalakítás új anyagpéldányt adhat, a szektor-kiemelő shader pedig felülírja az onBeforeCompile-t → a zóna-elrejtést a végleges anyagokra újra rátesszük
       if (ZONA_REJT[L.key] && !QS.has('norejt')) gltf.scene.traverse((o) => { if (!o.isMesh) return; for (const m of (Array.isArray(o.material) ? o.material : [o.material])) { const d = ZONA_REJT[L.key].filter((d) => d.minta.test(m.name || '')); if (d.length && !String(m.customProgramCacheKey?.() || '').includes('|zonarejt')) zonaRejt(m, d); } });
       c = cache[level] = { level, baked: c_baked, lm: c_lm, root: gltf.scene, anim: animObj, data, path: buildPath(data.camera) };
