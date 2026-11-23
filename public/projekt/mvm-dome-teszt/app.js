@@ -2447,10 +2447,12 @@ function sugarLampak(root) {
   }
   if (!pont.length) return null;
   const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'), gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
-  gr.addColorStop(0, 'rgba(255,236,205,1)'); gr.addColorStop(0.07, 'rgba(255,226,180,.95)'); gr.addColorStop(0.16, 'rgba(255,190,120,.42)'); gr.addColorStop(0.5, 'rgba(255,170,95,.12)'); gr.addColorStop(1, 'rgba(255,160,90,0)');
+  if (QS.has('eleslampa')) { gr.addColorStop(0, 'rgba(255,236,205,1)'); gr.addColorStop(0.07, 'rgba(255,226,180,.95)'); gr.addColorStop(0.16, 'rgba(255,190,120,.42)'); gr.addColorStop(0.5, 'rgba(255,170,95,.12)'); gr.addColorStop(1, 'rgba(255,160,90,0)'); }
+  else { // lágy, széles, mag nélküli fényfolt (felhasználó, 2026-11-23: „nagyon éles, spotlámpa-szerű” → mint a referencián: puha meleg tócsa)
+    [[0, .34], [0.15, .3], [0.3, .22], [0.45, .13], [0.6, .065], [0.75, .025], [0.9, .006], [1, 0]].forEach(([s, a]) => gr.addColorStop(s, `rgba(255,${Math.round(196 - 30 * s)},${Math.round(128 - 40 * s)},${a})`)); }
   g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
-  const im = new THREE.InstancedMesh(new THREE.PlaneGeometry(5, 5).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ name: 'WEB_lampafolt', map: t, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, opacity: 0.9 }), pont.length);
+  const im = new THREE.InstancedMesh(new THREE.PlaneGeometry(QS.has('eleslampa') ? 5 : 9, QS.has('eleslampa') ? 5 : 9).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ name: 'WEB_lampafolt', map: t, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, opacity: 0.9 }), pont.length);
   const M = new THREE.Matrix4(); pont.forEach(([x, z], i) => { M.makeTranslation(x, 0.03, z); im.setMatrixAt(i, M); });
   im.renderOrder = 4; im.frustumCulled = false; im.raycast = () => {}; im.name = 'WEB_lampak';
   return im;
@@ -2472,6 +2474,8 @@ function homlokzatRegi(root) {
 const S1LOOK = QS.get('s1look') !== 'regi';
 const S1X = Object.fromEntries((QS.get('s1x') || '').split(',').filter(Boolean).map((s) => s.split(':')).map(([k, v]) => [k, Number(v)]));
 const s1x = (k, d) => (Number.isFinite(S1X[k]) ? S1X[k] : d);
+const srgbLin = (r, g, b) => new THREE.Color().setRGB(r / 255, g / 255, b / 255, THREE.SRGBColorSpace).toArray();
+const S1_TETO = srgbLin(14, 23, 38), S1_KUZD = srgbLin(18, 25, 36);
 const S1_NEON = { bar: 0xff2f78, wc: 0x2b8cff, ruhatar: 0xffb21e, merch: 0xa66bff };
 const S1_LAP = { bar: 0xd62a5e, wc: 0x184a8a, ruhatar: 0xd8961a, merch: 0x7c45d6 };
 function s1LookV3(root) {
@@ -2491,6 +2495,10 @@ function s1LookV3(root) {
         if (tip && S1_LAP[tip]) { m.color.setHex(S1_LAP[tip]); m.toneMapped = false; m.opacity = 0.9; m.needsUpdate = true; }
         lapok.push([o, tip]); continue;
       }
+      if (/L1_fal_teto/.test(n) && !QS.has('feketeteto')) {   // a sétány fekete tetejű tömbjei: sötét navy (a referencián (6,15,24) – egy árnyalattal világosabb, hogy felület legyen, ne lyuk)
+        m.color.setRGB(...S1_TETO); m.map = null; m.lightMap = null; m.toneMapped = false; m.needsUpdate = true; continue; }
+      if (/Kuzdoter_padlo/.test(n) && !QS.has('kuzdlm')) {   // küzdőtér: minta és sütött fény nélkül (a fénytérkép UV-je középre futó csillagot rajzolt), egyetlen sötét navy szín (referencia (18,25,36))
+        m.color.setRGB(...S1_KUZD); m.map = null; m.lightMap = null; m.toneMapped = false; m.needsUpdate = true; continue; }
       if (HOM_UJ && m.transparent && /Kulso_uvegfal|Kulter_ajto_uveg|Kulso_ajto_uveg|Lobby_uveg/.test(n)) {   // a külső üvegfal a V3-on sötét: kevesebb tükröződés
         m.color.multiplyScalar(s1x('uveg', 0.35)); if (m.envMapIntensity !== undefined) m.envMapIntensity *= 0.4; if (m.emissive) m.emissive.multiplyScalar(0.4); continue; }
       if (/^WEB_/.test(n) || m.transparent || (m.emissive && m.emissive.getHex() !== 0 && m.emissiveIntensity > 0)) continue;
