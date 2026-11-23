@@ -10,7 +10,7 @@
 <script>
 // Gyors indulás (V2): a kezdőszint modellje és fénytérképe már a HTML beolvasásakor elkezd letöltődni, nem csak a kód elindulása után
 // MVM_VER: a modellek/adatok verziója – minden modellcserénél EMELNI kell, így a böngésző (iPad Safari is) biztosan az újat tölti
-window.MVM_VER = '2026-11-23t';
+window.MVM_VER = '2026-11-23u';
 (function () {
   var V = window.MVM_VER;
   var S = { lobby: 'S0', also: 'S1', paholy: 'S2', felso: 'S3', epulet: 'S4' }, q = new URLSearchParams(location.search), k = S[q.get('szint')] || 'S4';
@@ -419,12 +419,13 @@ window.MVM_VER = '2026-11-23t';
     var SAV=[[18,10],[13.6,4.8],[9.4,4.6],[5,4.8],[-2,7.4]],sv=SAV.map(function(s){
       var f=document.createElementNS(NS,'rect'),c=document.createElementNS(NS,'rect');f.setAttribute('y',s[0]);f.setAttribute('height',s[1]);f.setAttribute('x',-2);f.setAttribute('width',0);f.setAttribute('fill','#FCBF20');
       c.setAttribute('y',s[0]);c.setAttribute('height',s[1]);c.setAttribute('width',14);c.setAttribute('fill','url(#lCsik)');c.setAttribute('opacity',0);G.appendChild(f);G.appendChild(c);return [f,c];});
-    var EMB=0.86,most=0,t0=performance.now(),demo=q.has('loader');if(demo)L.classList.add('demo');
+    var EMB=0.86,most=0,t0=performance.now(),demo=q.has('loader'),rajzolt=false,sarga=null,BP=[].slice.call(B.querySelectorAll('path'));if(demo)L.classList.add('demo');
     (function rajz(t){if(!demo&&L.classList.contains('hide')&&most>=0.999&&(parseFloat(L.style.getPropertyValue('--p'))||0)>=99){requestAnimationFrame(rajz);return;}var cel;if(demo){var ido=((t-t0)%7500)/6000;cel=Math.min(1,ido);}else{cel=(parseFloat(L.style.getPropertyValue('--p'))||0)/100;}
-      most=demo?cel:Math.min(cel,most+0.02+(cel-most)*0.12);   // sosem előzi meg a valódi haladást; lemaradásból lágyan utoléri
+      var elozo=most; most=demo?cel:Math.min(cel,most+0.02+(cel-most)*0.12);   // sosem előzi meg a valódi haladást; lemaradásból lágyan utoléri
+      if(Math.abs(most-elozo)<0.0015&&rajzolt){requestAnimationFrame(rajz);return;} rajzolt=true;   // csak változáskor ír a DOM-ba (a betöltés alatt a fő szál kíméléséért)
       var e=Math.min(1,most/EMB),n=sv.length;
       for(var i=0;i<n;i++){var k=Math.max(0,Math.min(1,e*n-i)),x=-2+88*k;sv[i][0].setAttribute('width',88*k);sv[i][1].setAttribute('x',x-14);sv[i][1].setAttribute('opacity',k>0&&k<1?1:0);}
-      var b=Math.max(0,(most-EMB)/(1-EMB));B.style.opacity=.13+.87*b;B.querySelectorAll('path').forEach(function(p){p.style.fill=b>0.02?'#FCBF20':'#fff';});
+      var b=Math.max(0,(most-EMB)/(1-EMB));B.style.opacity=.13+.87*b;var bs=b>0.02;if(bs!==sarga){sarga=bs;BP.forEach(function(p){p.style.fill=bs?'#FCBF20':'#fff';});}
       requestAnimationFrame(rajz);})(performance.now());})();   // szintváltáskor a betöltő újra megjelenik → a ciklus fut tovább (rejtve alig dolgozik)
   </script>
   <div class="bar" hidden><i id="barfill"></i></div>
