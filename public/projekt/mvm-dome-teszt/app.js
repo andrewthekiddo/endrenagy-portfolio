@@ -2455,6 +2455,15 @@ function sugarLampak(root) {
   im.renderOrder = 4; im.frustumCulled = false; im.raycast = () => {}; im.name = 'WEB_lampak';
   return im;
 }
+// A V3 sütés (2026-11-23 este) a homlokzatot is a tribün-atlaszba (W_tb_*) tette, ~8 px/m felbontással – a felhasználónak ez elfogadhatatlan
+// („tegyük vissza a régit a homlokzatra”): a régi S1-ben ezek W_f36_* anyagok voltak (a jelenet fényeivel árnyalva, fénytérkép nélkül).
+// A régi nevet visszaadva a néző ugyanúgy jeleníti meg őket, mint a V3 előtt. A lelátó (W_tb_Lelato…, TS_lelato…) marad a 2. atlaszon.
+// ?hom=uj: a V3 sütött homlokzat
+const HOM_UJ = QS.get('hom') === 'uj';
+function homlokzatRegi(root) {
+  const re = /^W_tb_((EF_|KA_)?Kul(so|ter)_.*|Lobby_(fem|mullion|uveg)(\.\d+)?)$/;
+  root.traverse((o) => { if (!o.isMesh) return; for (const m of (Array.isArray(o.material) ? o.material : [o.material])) if (m && re.test(m.name || '')) m.name = 'W_f36_' + m.name.slice(5); });
+}
 // S1 „V3 kinézet” (felhasználó a board chaten, 2026-11-23 este: az élő S1 legyen olyan, mint a jóváhagyott Blender V3 render).
 // A jóváhagyott V3 renderen és az élő nézőn mért területátlagok (lineáris fényerő V3/élő): sétány padló 0,34, küzdőtér 0,44 (kevésbé kék),
 // homlokzat 0,39 (a V3 mintában a LED-csíkok is benne → valódi ≈ 0,3), lelátó 1,7. Ezekkel szorozzuk az anyagszínt (a fénytérkép marad).
@@ -2468,7 +2477,7 @@ const S1_LAP = { bar: 0xd62a5e, wc: 0x184a8a, ruhatar: 0xd8961a, merch: 0x7c45d6
 function s1LookV3(root) {
   const f = s1x('padlo', 0.33), fk = s1x('kuzd', 1.2), fh = s1x('homl', 0.3), fl = s1x('lelato', 1.85);
   const SZ = [[/Kuzdoter/i, [0.55 * fk, 0.45 * fk, 0.33 * fk]], [/padlo|terrazzo/i, [f * 1.05, f * 0.97, f * 0.94]],
-    [/^W_(tb|f\d+)_.*(Kulso|Kulter|Homlokzat|Bejarat)(?!.*(szalag|bejaratszam|uveg))/, [fh, fh, fh]],
+    ...(HOM_UJ ? [[/^W_(tb|f\d+)_.*(Kulso|Kulter|Homlokzat|Bejarat)(?!.*(szalag|bejaratszam|uveg))/, [fh, fh, fh]]] : []),
     [/^W_(f\d+_)?L1_(fal|bufe_krem)/, [s1x('fal', 0.45), s1x('fal', 0.45), s1x('fal', 0.45) * 0.95]], [/lelato(?!.*uveg)/i, [fl, fl * 0.97, fl * 0.84]]];
   const kesz = new Set(), lapok = [];
   root.updateMatrixWorld(true);
@@ -2482,7 +2491,7 @@ function s1LookV3(root) {
         if (tip && S1_LAP[tip]) { m.color.setHex(S1_LAP[tip]); m.toneMapped = false; m.opacity = 0.9; m.needsUpdate = true; }
         lapok.push([o, tip]); continue;
       }
-      if (m.transparent && /Kulso_uvegfal|Kulter_ajto_uveg|Kulso_ajto_uveg|Lobby_uveg/.test(n)) {   // a külső üvegfal a V3-on sötét: kevesebb tükröződés
+      if (HOM_UJ && m.transparent && /Kulso_uvegfal|Kulter_ajto_uveg|Kulso_ajto_uveg|Lobby_uveg/.test(n)) {   // a külső üvegfal a V3-on sötét: kevesebb tükröződés
         m.color.multiplyScalar(s1x('uveg', 0.35)); if (m.envMapIntensity !== undefined) m.envMapIntensity *= 0.4; if (m.emissive) m.emissive.multiplyScalar(0.4); continue; }
       if (/^WEB_/.test(n) || m.transparent || (m.emissive && m.emissive.getHex() !== 0 && m.emissiveIntensity > 0)) continue;
       for (const [re, k] of SZ) if (re.test(n)) { m.color.setRGB(m.color.r * k[0], m.color.g * k[1], m.color.b * k[2]); break; }
@@ -2545,6 +2554,7 @@ async function loadLevel(level) {
       const lm2P = lm2 ? loadLightmap({ file: lm2.kicsi || lm2.file }).catch((e) => { console.warn('lightmap2', e); return null; }) : null;
       const lmP = data.lightmap && !QS.has('nolm') ? loadLightmap(data.lightmap, lmKicsi).catch(() => lmKicsi ? loadLightmap(data.lightmap) : null).catch((e) => { console.warn('lightmap', e); return null; }) : null;
       const gltf = await loadGltf(L.model, (xhr) => { const ossz = xhr.total || L.meret; if (ossz) setProgress(Math.min(0.95, 0.95 * xhr.loaded / ossz)); });   // a tömörítve küldött fájlnál a böngésző nem tudja a teljes méretet → a szint ismert mérete (LEVELS.meret)
+      if (L.key === 'S1' && !HOM_UJ) homlokzatRegi(gltf.scene);   // a régi (V3 előtti) homlokzat
       tuneMaterials(gltf.scene, L.key);
       if (AJTO_IGAZIT.has(L.key) && !QS.has('noajto')) { try { mosdoAjtokhoz(gltf.scene, data.pois); } catch (e) { console.warn('mosdó-ajtók', e); } }
       const lmTex = lmP && await lmP;
