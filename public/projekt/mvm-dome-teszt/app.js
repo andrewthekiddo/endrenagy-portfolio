@@ -807,6 +807,11 @@ function burokPoligon(cellak) {
 // Kiemelő lapok pontosabb alakja (felhasználó, 2026-11-23: Merch 203 jobb felső és ruhatár 210 bal felső sarka hiányzott, a 206-os bár lapja
 // átnyúlt a hátfalon): ruhatár / Merch → a burok legkisebb területű, elforgatott befoglaló téglalapja (a sarkok kitöltve); bár → a vékony
 // (falpárkány-) nyúlványok levágása két cella eróziójával, a burok után ugyanennyivel visszanövesztve. ?lapregi: a régi burok
+function lapMagSzur(cellak, mag) {   // csak a tető magasságában lévő cellák (a hátfal / párkány / eresz más magasságú cellái kimaradnak)
+  const h = [...cellak].map((i) => mag[i]).filter((v) => v > -50).sort((x, y) => x - y); if (h.length < 20) return cellak;
+  const tH = h[Math.floor(h.length / 2)], u = new Set(); for (const i of cellak) if (Math.abs(mag[i] - tH) < 0.2) u.add(i);
+  return u.size > 20 ? u : cellak;
+}
 function lapErozio(cellak, k) {
   let s = cellak; const N = WC_N;
   for (let t = 0; t < k; t++) { const u = new Set(); for (const i of s) if (s.has(i - 1) && s.has(i + 1) && s.has(i - N) && s.has(i + N)) u.add(i); s = u; }
@@ -961,7 +966,7 @@ function zonaMind(root, key, pois = []) {
   // közös helyiség (ruhatár + bár): EGY körvonal az egész helyiségre, egyetlen egyenes vágással kettéosztva → a két lap pontosan
   // összeér, se rés, se átfedés (felhasználó, 2026-11-21). A vágás iránya a helyiség fő tengelyére merőleges, ha ±25°-on belül van.
   const kozosPoli = (u) => {
-    const p = u.par, osszes = new Set([...u.lat, ...p.lat]), szoba = QS.has('regisarok') ? racsPoligon(osszes) : burokPoligon(osszes); if (!szoba) return null;
+    const p = u.par, osszes = new Set([...u.lat, ...p.lat]), szoba = QS.has('regisarok') ? racsPoligon(osszes) : burokPoligon(QS.has('lapregi') ? osszes : lapMagSzur(osszes, mag)); if (!szoba) return null;   // csak a tető magasságú cellák (a hátfal ne nyúljon bele)
     const kp = (s) => { let x = 0, z = 0; for (const c of s) { x += wcX(c % N); z += wcZ((c - c % N) / N); } return [x / s.size, z / s.size]; };
     const [ax, az] = kp(u.lat), [bx, bz] = kp(p.lat); let nx = bx - ax, nz = bz - az; const L = Math.hypot(nx, nz) || 1; nx /= L; nz /= L;
     { let lh = 0, fx = 1, fz = 0; for (let i = 0; i < szoba.length; i++) { const q = szoba[i], r = szoba[(i + 1) % szoba.length], h = Math.hypot(r[0] - q[0], r[1] - q[1]); if (h > lh) { lh = h; fx = (r[0] - q[0]) / h; fz = (r[1] - q[1]) / h; } }
@@ -987,10 +992,9 @@ function zonaMind(root, key, pois = []) {
     for (const i of bov) { const x = i % N, yy = (i - x) / N, xa = wcX(x) - cm / 2, xb = wcX(x) + cm / 2, za = wcZ(yy) + cm / 2, zb = wcZ(yy) - cm / 2, yv = y + 0.02;
       if (!bov.has(i - 1)) sz.push(xa, yv, za, xa, yv, zb); if (!bov.has(i + 1)) sz.push(xb, yv, za, xb, yv, zb);
       if (!bov.has(i - N)) sz.push(xa, yv, za, xb, yv, za); if (!bov.has(i + N)) sz.push(xa, yv, zb, xb, yv, zb); }
-    let poli = QS.has('pixeles') ? null : ((u.par && u.par.lat && !QS.has('nokozos') && kozosPoli(u)) || (QS.has('regisarok') ? racsPoligon(QS.has('bov') ? bov : lat, 0.3, u.tipus === 'ruhatar' && !u.par) : burokPoligon(u.tipus === 'bar' && !QS.has('lapregi') ? lapErozio(lat, 2) : lat)));
+    let poli = QS.has('pixeles') ? null : ((u.par && u.par.lat && !QS.has('nokozos') && kozosPoli(u)) || (QS.has('regisarok') ? racsPoligon(QS.has('bov') ? bov : lat, 0.3, u.tipus === 'ruhatar' && !u.par) : burokPoligon(QS.has('lapregi') ? lat : lapMagSzur(lat, mag))));
     if (poli && !QS.has('lapregi') && !QS.has('regisarok')) {
-      if ((u.tipus === 'ruhatar' || u.tipus === 'merch') && !(u.par && u.par.lat)) poli = minTeglalap(poli);
-      else if (u.tipus === 'bar' && !(u.par && u.par.lat)) poli = poliNovel(poli, 2 * cm * 0.9);
+      // (a téglalap / erózió próbája mérve rosszabb volt – 2026-11-24: kivéve)
     }   // a különálló ruhatár téglalap: a ferde sarok-levágás is elhagyható   // a fal BELSŐ oldaláig (a kihízlalt „bov” a falon túl lógott – felhasználó, 2026-11-21)
     if (poli) { for (const o of poligonLap(poli, y, ZONA_PALETTA[u.tipus] ?? u.szin, 'WEB_zona')) csop.add(o); }
     else {
