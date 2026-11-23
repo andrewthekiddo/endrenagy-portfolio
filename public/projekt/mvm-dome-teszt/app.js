@@ -804,6 +804,31 @@ function burokPoligon(cellak) {
   const hull = lo.slice(0, -1).concat(up.slice(0, -1));
   return hull.length >= 3 ? hull : null;
 }
+// Kiemelő lapok pontosabb alakja (felhasználó, 2026-11-23: Merch 203 jobb felső és ruhatár 210 bal felső sarka hiányzott, a 206-os bár lapja
+// átnyúlt a hátfalon): ruhatár / Merch → a burok legkisebb területű, elforgatott befoglaló téglalapja (a sarkok kitöltve); bár → a vékony
+// (falpárkány-) nyúlványok levágása két cella eróziójával, a burok után ugyanennyivel visszanövesztve. ?lapregi: a régi burok
+function lapErozio(cellak, k) {
+  let s = cellak; const N = WC_N;
+  for (let t = 0; t < k; t++) { const u = new Set(); for (const i of s) if (s.has(i - 1) && s.has(i + 1) && s.has(i - N) && s.has(i + N)) u.add(i); s = u; }
+  return s.size > 20 ? s : cellak;
+}
+function minTeglalap(poli) {
+  let best = null;
+  for (let i = 0; i < poli.length; i++) {
+    const [ax, az] = poli[i], [bx, bz] = poli[(i + 1) % poli.length], L = Math.hypot(bx - ax, bz - az); if (L < 1e-6) continue;
+    const ux = (bx - ax) / L, uz = (bz - az) / L; let u0 = 1e9, u1 = -1e9, v0 = 1e9, v1 = -1e9;
+    for (const [x, z] of poli) { const u = x * ux + z * uz, v = -x * uz + z * ux; u0 = Math.min(u0, u); u1 = Math.max(u1, u); v0 = Math.min(v0, v); v1 = Math.max(v1, v); }
+    const T = (u1 - u0) * (v1 - v0); if (!best || T < best.T) best = { T, ux, uz, u0, u1, v0, v1 };
+  }
+  if (!best) return poli; const { ux, uz, u0, u1, v0, v1 } = best, P = (u, v) => [u * ux - v * uz, u * uz + v * ux];
+  return [P(u0, v0), P(u1, v0), P(u1, v1), P(u0, v1)];
+}
+function poliNovel(poli, d) {   // konvex sokszög kifelé tolása d-vel (a csúcsok a két szomszédos él normálisának összegével)
+  const n = poli.length, ki = [], kr = poli.reduce((s, [x, z], i) => { const [x2, z2] = poli[(i + 1) % n]; return s + x * z2 - x2 * z; }, 0) > 0 ? 1 : -1;
+  const nor = (i) => { const [ax, az] = poli[i], [bx, bz] = poli[(i + 1) % n], L = Math.hypot(bx - ax, bz - az) || 1; return [kr * (bz - az) / L, -kr * (bx - ax) / L]; };
+  for (let i = 0; i < n; i++) { const a = nor((i - 1 + n) % n), b = nor(i), sx = a[0] + b[0], sz = a[1] + b[1], c = 1 + a[0] * b[0] + a[1] * b[1]; ki.push([poli[i][0] + d * sx / Math.max(c, 0.3), poli[i][1] + d * sz / Math.max(c, 0.3)]); }
+  return ki;
+}
 function racsPoligon(cellak, tures = 0.3, sarokTag = false) {
   const N = WC_N, cm = 2 * WC_R / (N - 1), ki = new Map();
   const el = (ax, ay, bx, by) => { const k = ax + ',' + ay; if (!ki.has(k)) ki.set(k, []); ki.get(k).push([bx, by]); };
@@ -962,7 +987,11 @@ function zonaMind(root, key, pois = []) {
     for (const i of bov) { const x = i % N, yy = (i - x) / N, xa = wcX(x) - cm / 2, xb = wcX(x) + cm / 2, za = wcZ(yy) + cm / 2, zb = wcZ(yy) - cm / 2, yv = y + 0.02;
       if (!bov.has(i - 1)) sz.push(xa, yv, za, xa, yv, zb); if (!bov.has(i + 1)) sz.push(xb, yv, za, xb, yv, zb);
       if (!bov.has(i - N)) sz.push(xa, yv, za, xb, yv, za); if (!bov.has(i + N)) sz.push(xa, yv, zb, xb, yv, zb); }
-    const poli = QS.has('pixeles') ? null : ((u.par && u.par.lat && !QS.has('nokozos') && kozosPoli(u)) || (QS.has('regisarok') ? racsPoligon(QS.has('bov') ? bov : lat, 0.3, u.tipus === 'ruhatar' && !u.par) : burokPoligon(lat)));   // a különálló ruhatár téglalap: a ferde sarok-levágás is elhagyható   // a fal BELSŐ oldaláig (a kihízlalt „bov” a falon túl lógott – felhasználó, 2026-11-21)
+    let poli = QS.has('pixeles') ? null : ((u.par && u.par.lat && !QS.has('nokozos') && kozosPoli(u)) || (QS.has('regisarok') ? racsPoligon(QS.has('bov') ? bov : lat, 0.3, u.tipus === 'ruhatar' && !u.par) : burokPoligon(u.tipus === 'bar' && !QS.has('lapregi') ? lapErozio(lat, 2) : lat)));
+    if (poli && !QS.has('lapregi') && !QS.has('regisarok')) {
+      if ((u.tipus === 'ruhatar' || u.tipus === 'merch') && !(u.par && u.par.lat)) poli = minTeglalap(poli);
+      else if (u.tipus === 'bar' && !(u.par && u.par.lat)) poli = poliNovel(poli, 2 * cm * 0.9);
+    }   // a különálló ruhatár téglalap: a ferde sarok-levágás is elhagyható   // a fal BELSŐ oldaláig (a kihízlalt „bov” a falon túl lógott – felhasználó, 2026-11-21)
     if (poli) { for (const o of poligonLap(poli, y, ZONA_PALETTA[u.tipus] ?? u.szin, 'WEB_zona')) csop.add(o); }
     else {
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(cs, 3)); g.setIndex(ix);
