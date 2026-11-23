@@ -287,6 +287,24 @@ const SIK_SZOVET = QS.has('szovet') ? Number(QS.get('szovet')) || 0 : 0.12;   //
 // A sütött fény görbéje: fény' = erősítés × fény^gamma (a fényesség szerint, a színarány megtartásával). A Cycles-sütés árnyékai
 // mélyebbek, mint a Blender (EEVEE, árnyék nélküli lámpák) képe; a gamma < 1 megemeli az árnyékokat. Szintenként a data/<S>.json adja.
 const LM = { gamma: { value: 1.0 }, gain: { value: 1.0 }, amb: { value: new THREE.Vector3(0.02, 0.024, 0.033).multiplyScalar(QS.has('amb') ? Number(QS.get('amb')) : 1) } };   // amb: kis alapfény, hogy az árnyék se legyen csupa fekete
+// Második atlasz (sütő chat, 2026-11-23): a "lightmap2.csomopont" nevű csomópont (W_S1_tribun_sutott, W_tb_* anyagok) saját fénytérképet kap.
+// Az első lightmap után fut: a csomópont alatti anyagok lightMap-képét cseréli (a gltfpack UV-transzformációja megmarad); előbb a kicsi,
+// a teljes a háttérben. A gain / gamma közös a szinttel, a k külön (lightmap2.k). ?nolm2: kikapcsolva (marad az első atlasz)
+function applyLightmap2(root, info, tex) {
+  const node = root.getObjectByName(info.csomopont); if (!node) { console.warn('lightmap2: nincs csomópont', info.csomopont); tex.dispose(); return []; }
+  const klonok = [tex], kesz = new Set();
+  node.traverse((o) => {
+    if (!o.isMesh) return;
+    for (const m of (Array.isArray(o.material) ? o.material : [o.material])) {
+      if (!m || !m.lightMap || kesz.has(m)) continue;
+      const t = tex.clone(), r = m.lightMap;
+      t.offset.copy(r.offset); t.repeat.copy(r.repeat); t.center.copy(r.center); t.rotation = r.rotation; t.matrixAutoUpdate = r.matrixAutoUpdate; t.matrix.copy(r.matrix);
+      t.channel = 1; t.needsUpdate = true; klonok.push(t);
+      m.lightMap = t; m.lightMapIntensity = Math.PI / info.k; m.needsUpdate = true; kesz.add(m);
+    }
+  });
+  return klonok;
+}
 function applyLightmap(root, tex, intensity) {
   const conv = new Map(), klonok = [tex];              // a lightmap példányai (anyagonként egy) – szintváltáskor a videómemóriából kiürítve
   root.traverse((o) => {
@@ -2400,7 +2418,7 @@ async function elotoltTobbi() {
     try {
       const d = await fetch(asset(L.data)).then((r) => r.json());
       if (cache[k]) continue;
-      await elotolt(L.model); if (d.lightmap) await elotolt(d.lightmap.file); if (d.anim) await elotolt(d.anim.model);
+      await elotolt(L.model); if (d.lightmap) await elotolt(d.lightmap.file); if (d.lightmap2?.kicsi) await elotolt(d.lightmap2.kicsi); if (d.anim) await elotolt(d.anim.model);
     } catch (e) { /* nem baj: szintváltáskor rendesen letölti */ }
   }
 }
@@ -2465,6 +2483,8 @@ async function loadLevel(level) {
       let c_baked = false, c_lm = null;
       // a modell és a lightmap egyszerre töltődik (V2: gyorsabb betöltés), nem egymás után
       const lmKicsi = !!data.lightmap && !QS.has('nokicsi') && !QS.has('lm8k') && /_lm\.webp$/.test(data.lightmap.file);
+      const lm2 = data.lightmap && data.lightmap2 && !QS.has('nolm') && !QS.has('nolm2') ? data.lightmap2 : null;
+      const lm2P = lm2 ? loadLightmap({ file: lm2.kicsi || lm2.file }).catch((e) => { console.warn('lightmap2', e); return null; }) : null;
       const lmP = data.lightmap && !QS.has('nolm') ? loadLightmap(data.lightmap, lmKicsi).catch(() => lmKicsi ? loadLightmap(data.lightmap) : null).catch((e) => { console.warn('lightmap', e); return null; }) : null;
       const gltf = await loadGltf(L.model, (xhr) => { const ossz = xhr.total || L.meret; if (ossz) setProgress(Math.min(0.95, 0.95 * xhr.loaded / ossz)); });   // a tömörítve küldött fájlnál a böngésző nem tudja a teljes méretet → a szint ismert mérete (LEVELS.meret)
       tuneMaterials(gltf.scene, L.key);
@@ -2473,6 +2493,11 @@ async function loadLevel(level) {
       if (lmTex) {
         try { c_lm = applyLightmap(gltf.scene, lmTex, Math.PI / data.lightmap.k); c_baked = true; if (lmKicsi && lmTex.image?.width <= 2048) lmCsere(c_lm, data.lightmap); }
         catch (e) { console.warn('lightmap', e); }
+        const lm2Tex = lm2P && await lm2P;
+        if (lm2Tex && c_lm) {
+          try { const k2 = applyLightmap2(gltf.scene, lm2, lm2Tex); c_lm.push(...k2); if (lm2.kicsi && lm2.kicsi !== lm2.file && k2.length > 1) lmCsere(k2, { file: lm2.file }); }
+          catch (e) { console.warn('lightmap2', e); }
+        }
       }
       let animObj = null;
       if (data.anim) {

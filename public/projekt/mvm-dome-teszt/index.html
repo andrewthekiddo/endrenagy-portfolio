@@ -10,7 +10,7 @@
 <script>
 // Gyors indulás (V2): a kezdőszint modellje és fénytérképe már a HTML beolvasásakor elkezd letöltődni, nem csak a kód elindulása után
 // MVM_VER: a modellek/adatok verziója – minden modellcserénél EMELNI kell, így a böngésző (iPad Safari is) biztosan az újat tölti
-window.MVM_VER = '2026-11-23za';
+window.MVM_VER = '2026-11-23zb';
 (function () {
   var V = window.MVM_VER;
   var S = { lobby: 'S0', also: 'S1', paholy: 'S2', felso: 'S3', epulet: 'S4' }, q = new URLSearchParams(location.search), k = S[q.get('szint')] || 'S4';
@@ -146,10 +146,10 @@ window.MVM_VER = '2026-11-23za';
   .lepik .lesvg{display:block;width:100%;height:auto;overflow:visible}
   .lepik .le-alap{fill:#fff;opacity:.08}
   .lepik .le-teli{fill:#FCBF20;opacity:0;transition:opacity .7s ease-out}
-  .lepik .le-sz{fill:none;stroke:#FCBF20;stroke-linecap:butt;stroke-linejoin:round;stroke-dasharray:1 1;stroke-dashoffset:1;transition:stroke-dashoffset 1.05s cubic-bezier(.65,0,.3,1)}
-  .lepik .le-fej{fill:none;stroke:#fff;stroke-linecap:butt;stroke-linejoin:round;stroke-dasharray:var(--f) 2;stroke-dashoffset:var(--f);opacity:0;transition:stroke-dashoffset 1.05s cubic-bezier(.65,0,.3,1)}
+  .lepik .le-sz{fill:none;stroke:#FCBF20;stroke-linecap:butt;stroke-linejoin:round;stroke-dasharray:1 1;stroke-dashoffset:1;transition:stroke-dashoffset .85s cubic-bezier(.4,0,.2,1)}
+  .lepik .le-fej{fill:none;stroke:#fff;stroke-linecap:butt;stroke-linejoin:round;stroke-dasharray:var(--f) 2;stroke-dashoffset:var(--f);opacity:0;transition:stroke-dashoffset .85s cubic-bezier(.4,0,.2,1)}
   .lepik .be.le-sz{stroke-dashoffset:0}
-  .lepik .be.le-fej{stroke-dashoffset:var(--e);animation:lefej 1.05s linear forwards}
+  .lepik .be.le-fej{stroke-dashoffset:var(--e);animation:lefej .85s linear forwards}
   @keyframes lefej{0%{opacity:0}12%{opacity:1}78%{opacity:1}100%{opacity:0}}
   .lepik .le-villan{fill:#fff;opacity:0}
   .lepik .le-betu{opacity:.12;transition:opacity .8s ease-out .15s}
@@ -470,7 +470,7 @@ window.MVM_VER = '2026-11-23za';
     var sz=[].slice.call(E.querySelectorAll('.le-sz')),fj=[].slice.call(E.querySelectorAll('.le-fej')),n=sz.length;
     var demo=q.has('loader'),dGyors=q.get('loader')==='gyors',t0=null,allas=-1,utolso=0,keszT=0,gyors=false,start=performance.now(),vegCb=null,vegT=0;
     // a szalagok legalább ennyi időközzel követik egymást (gyorsítótárból töltött szintnél is látszik a sor), a lezárás az utolsó szalag ~70 %-ánál
-    function par(){return gyors?{koz:85,dur:500,tart:650,max:2600}:{koz:170,dur:1050,tart:1300,max:5000};}
+    function par(){return gyors?{koz:80,dur:500,tart:600,max:2600}:{koz:150,dur:850,tart:1100,max:5000};}
     function alap(){E.classList.add('ujra');for(var j=0;j<n;j++){sz[j].classList.remove('be');fj[j].classList.remove('be');sz[j].style.transitionDelay=fj[j].style.transitionDelay=fj[j].style.animationDelay='';}E.classList.remove('kesz');void E.offsetWidth;E.classList.remove('ujra');allas=-1;keszT=0;utolso=0;start=performance.now();}
     // app.js: szintváltáskor indit(true) (rövid változat); a betöltés végén vege(cb): a betöltő a lezárás + rövid kitartás után tűnik el
     window.__lepik={indit:function(g){gyors=!!g;E.classList.toggle('gyors',gyors);alap();vegCb=null;},
@@ -478,7 +478,7 @@ window.MVM_VER = '2026-11-23za';
     if(demo){gyors=dGyors;E.classList.toggle('gyors',gyors);L.classList.add('demo');addEventListener('load',function(){setTimeout(function(){t0=performance.now();alap();},400);});}
     setInterval(function(){
       var most=performance.now(),P=par(),p;
-      if(demo){if(t0===null)return;var per=gyors?2600:8200,t=(most-t0)%per;if(t<130&&keszT){alap();}p=Math.min(1,t/(gyors?600:5600));}
+      if(demo){if(t0===null)return;var per=gyors?2600:5600,t=(most-t0)%per;if(t<130&&keszT){alap();}p=Math.min(1,t/(gyors?600:2600));}
       else p=(parseFloat(L.style.getPropertyValue('--p'))||0)/100;
       for(var i=allas+1;i<n;i++){if(p<0.02+0.84*i/(n-1))break;var s=Math.max(most,utolso+P.koz),dl=Math.round(s-most)+'ms';sz[i].style.transitionDelay=fj[i].style.transitionDelay=fj[i].style.animationDelay=dl;sz[i].classList.add('be');fj[i].classList.add('be');allas=i;utolso=s;}   // ha a valódi haladás egyszerre több küszöböt lép át, a lépcsőzést a CSS-késleltetés adja (a fő szál akadása nem bontja meg)
       if(!keszT&&p>=0.97&&allas>=n-1&&most-utolso>=P.dur*0.7){E.classList.add('kesz');keszT=most;}
