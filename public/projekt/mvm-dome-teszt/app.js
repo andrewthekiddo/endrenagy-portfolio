@@ -25,7 +25,7 @@ if (SHOT) { addEventListener('error', (e) => { document.title = 'JSERR ' + e.mes
 const LEVELS = {
   felso:  { key: 'S3', name: 'Felső körüljáró szint', model: 'models/S3.glb', meret: 5736704, data: 'data/S3.json', tier: 'Felső lelátó (3xx)' },
   paholy: { key: 'S2', name: 'Páholy szint (VIP)', model: 'models/S2.glb', meret: 6178796, data: 'data/S2.json', tier: 'Alsó lelátó (2xx)' },
-  also:   { key: 'S1', name: 'Alsó körüljáró szint', model: 'models/S1.glb', meret: 4356200, data: 'data/S1.json', tier: 'Alsó lelátó (2xx)' },
+  also:   { key: 'S1', name: 'Alsó körüljáró szint', model: 'models/S1.glb', meret: 4356992, data: 'data/S1.json', tier: 'Alsó lelátó (2xx)' },
   lobby:  { key: 'S0', name: 'Lobby – Bejárati szint', model: 'models/S0.glb', meret: 1733080, data: 'data/S0.json', tier: 'Küzdőtéri lelátó (1xx)' },
   // a teljes, megépített épület kívülről (homlokzat bekapcsolva, nyitott tető): a kezdőnézet, ha a fájljai megvannak (lásd VAN_EPULET)
   epulet: { key: 'S4', name: 'MVM Dome', model: 'models/S4.glb', meret: 6375816, data: 'data/S4.json', tier: 'Lelátó' },
@@ -273,7 +273,9 @@ const SIK_GAIN = Number(QS.get('sikg')) || 1.0;
 const SIK_LELATO = Number(QS.get('lelato')) || 0.4;
 // a lelátó szövetmintája (W_f100_TS_lelato_szovet, 2026-11-23) visszafogottan: sötétebb, hogy a minta finom maradjon, ne szemcsés-szürke
 // (felhasználó: „letisztult … az információ könnyen átjöjjön”); próbához: ?szovet=0.3
-const SIK_SZOVET = Number(QS.get('szovet')) || 0.14;   // a sötét lelátó / küzdőtér (f100 osztály) fényessége – a Blender-képen szinte fekete
+// 2026-11-23 este: a felhasználónak a minta „nagyon blokki … katonai szerű” → ALAPBÓL KI (sima sötét lelátó, mint korábban), amíg nyugodtabb
+// minta nem jön; bekapcsolás próbára: ?szovet=0.1 (az érték a minta fényessége). A lejárók padlója is ezt az anyagot kapta → ott is sima lesz.
+const SIK_SZOVET = QS.has('szovet') ? Number(QS.get('szovet')) || 0 : 0;   // a sötét lelátó / küzdőtér (f100 osztály) fényessége – a Blender-képen szinte fekete
 // A sütött fény görbéje: fény' = erősítés × fény^gamma (a fényesség szerint, a színarány megtartásával). A Cycles-sütés árnyékai
 // mélyebbek, mint a Blender (EEVEE, árnyék nélküli lámpák) képe; a gamma < 1 megemeli az árnyékokat. Szintenként a data/<S>.json adja.
 const LM = { gamma: { value: 1.0 }, gain: { value: 1.0 }, amb: { value: new THREE.Vector3(0.02, 0.024, 0.033).multiplyScalar(QS.has('amb') ? Number(QS.get('amb')) : 1) } };   // amb: kis alapfény, hogy az árnyék se legyen csupa fekete
@@ -298,7 +300,7 @@ function applyLightmap(root, tex, intensity) {
       let b = conv.get(m);
       const sik = /^W_f(\d+)_/.exec(m.name || '');      // az atlaszból kimaradó felület: szín × állandó tényező, lightmap nélkül
       if (!b && sik) {
-        b = new THREE.MeshBasicMaterial({ name: m.name, color: m.color.clone().multiplyScalar((sik[1] === '100' ? (/szovet/.test(m.name) ? SIK_SZOVET : SIK_LELATO) : Number(sik[1]) / 100) * SIK_GAIN), map: m.map, side: m.side, visible: m.visible });
+        b = new THREE.MeshBasicMaterial({ name: m.name, color: (/szovet/.test(m.name) && !(SIK_SZOVET > 0) ? new THREE.Color(0.03, 0.032, 0.036) : m.color.clone()).multiplyScalar((sik[1] === '100' ? (/szovet/.test(m.name) && SIK_SZOVET > 0 ? SIK_SZOVET : SIK_LELATO) : Number(sik[1]) / 100) * SIK_GAIN), map: /szovet/.test(m.name) && !(SIK_SZOVET > 0) ? null : m.map, side: m.side, visible: m.visible });   // szövet minta nélkül: a régi sötét lelátó-beton színe (W_TS_lelato_beton_sotet)
         b.clippingPlanes = m.clippingPlanes; b.polygonOffset = m.polygonOffset; b.polygonOffsetFactor = m.polygonOffsetFactor; b.polygonOffsetUnits = m.polygonOffsetUnits;
         addSectorShader(b); conv.set(m, b);
       }
