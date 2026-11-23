@@ -1734,7 +1734,9 @@ canvas.addEventListener('pointercancel', endDrag);
 // egérgörgővel, két ujjas csípéssel és a + / − gombbal. A pálya (a körbeforgás) közben megmarad.
 const ZOOM_MIN = 0.2;
 // az MVM Dome (S4) kezdőnézetéből kifelé is lehet távolítani, 2,8-szorosig (felhasználó, 2026-11-21: 1,8 → „még nagyobb is”); a többi szinten a kezdőnézet a legtágabb
-const zoomMax = () => (current && LEVELS[current.level].key === 'S4' ? 2.8 : alapZoom());
+// a lobbyn az áttekintés legtágabb zoomja kicsit tágabb (felhasználó, 2026-11-23: „hogy még lássam a 114-es és 115-ös szektor tetejét”): 1,0 → 1,25
+const ZOOM_MAX_SZINT = { S4: 2.8, S0: 1.25 };
+const zoomMax = () => (current && ZOOM_MAX_SZINT[LEVELS[current.level].key]) || alapZoom();
 if (SHOT && QS.has('zoom')) setTimeout(function zv() { if (!current) return setTimeout(zv, 300); zoomAllit(parseFloat(QS.get('zoom'))); }, 0);   // képernyőkép: kezdő nagyítás (pl. zoom=2.8)
 const zoomAllit = (z) => { tour.zoom = THREE.MathUtils.clamp(z, ZOOM_MIN, zoomMax()); };
 let zoomCel = null;   // a + / − gomb puha átmenete
