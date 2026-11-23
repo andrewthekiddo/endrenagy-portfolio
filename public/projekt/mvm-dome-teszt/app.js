@@ -86,8 +86,10 @@ function lookAlkalmaz(key) {
   const uj = UJLOOK && UJLOOK_SZINTEK.has(key); LOOK.uj.value = uj ? 1 : 0;
   const v3 = uj && (LAMPA_BE || QS.has('lampa'));   // az S1 V3 utóeffektjei (sötétkék háttér, −0,25 EV) a V3 sütéssel együtt élesednek
   renderer.toneMappingExposure = uj ? (v3 ? 0.84 : 0.86) : 1.0;   // v3: ≈ −0,25 EV, mint a jóváhagyott S1 V3 előkép (AgX alap)
-  const hatter = uj ? (v3 ? 0x060d17 : 0x0a1019) : 0x1d2939; scene.background.setHex(hatter); scene.fog.color.setHex(hatter);   // új kinézet: sötétkék (6, 13, 23) a fekete helyett
-  document.body.classList.toggle('ujlook', uj);
+  // a sötétebb háttér + vignetta MINDEN szinten (felhasználó, 2026-11-23: „az alsó körüljáróba csináltál sötétebb hátteret, azt az összes többibe”); ?regihatter: a régi
+  const sotet = !QS.has('regihatter');
+  const hatter = uj ? (v3 ? 0x060d17 : 0x0a1019) : sotet ? 0x0a1019 : 0x1d2939; scene.background.setHex(hatter); scene.fog.color.setHex(hatter);   // új kinézet: sötétkék (6, 13, 23) a fekete helyett
+  document.body.classList.toggle('ujlook', uj); document.body.classList.toggle('sotethatter', uj || sotet);
 }
 renderer.localClippingEnabled = true;
 renderer.debug.onShaderError = (gl, prog, vs, fs) => { document.title = 'SHADERERR ' + (gl.getShaderInfoLog(fs) || '') + ' || ' + (gl.getShaderInfoLog(vs) || ''); };
