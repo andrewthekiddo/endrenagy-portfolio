@@ -171,17 +171,21 @@ function addSectorShader(m) {
           vec2 hp = vec2(vWPos.x, -vWPos.z);
           float hr = -1e9, ht = 0.0; int hf = 0;
           for (int i = 0; i < 16; i++) { vec3 f = uSzF[i]; float r = dot(f.xy, hp) - f.z; if (r > hr) { hr = r; hf = i; ht = dot(vec2(-f.y, f.x), hp); } }
-          float hz = vWPos.y + uSzPadlo; bool bent = false;
+          float hz = vWPos.y + uSzPadlo; bool bent = false; float sorPoz = 0.0;
           for (int i = 0; i < ${SZ_MAX}; i++) {
             if (float(i) >= uSzN) break;
             vec4 q = uSzR[i]; vec3 e = uSzQ[i];
             float dz = hz - mix(e.y, e.z, clamp((hr - q.z) / (q.w - q.z), 0.0, 1.0));
-            if (int(e.x + 0.5) == hf && ht > q.x && ht < q.y && hr > q.z && hr < q.w && dz > -0.5 && dz < 1.2) { bent = true; break; }
+            if (int(e.x + 0.5) == hf && ht > q.x && ht < q.y && hr > q.z && hr < q.w && dz > -0.5 && dz < 1.2) { bent = true; sorPoz = (hr - q.z) / max(q.w - q.z, 0.01); break; }
           }
           vec3 c = gl_FragColor.rgb; float L = dot(c, vec3(0.2126, 0.7152, 0.0722));
           if (bent) {
+            // Célkép (felhasználó, 2026-11-23, „202 karikázva”): a szektor sorai meleg-fehéren KIVILÁGÍTVA, a sorok és a lépcsőélek
+            // olvashatók (a felfelé néző lépcsőfok világos, a homlokfal sötétebb → csíkos sorrend), elöl (a pálya felé) kicsit fényesebb,
+            // az eredeti textúra / fénytérkép finom változása megmarad
             bool fel = normalize(cross(dFdx(vWPos), dFdy(vWPos))).y > 0.6;
-            vec3 lit = mix(c * 1.6 + 0.08, vec3(0.95, 0.94, 0.90), fel ? 0.74 : 0.34);   // szinte fehérre kivilágított sorok   // „kivilágított” szektor: meleg fehér fény a sorokon
+            vec3 meleg = vec3(0.97, 0.93, 0.85) * (1.08 - 0.22 * sorPoz) * (0.86 + 0.28 * smoothstep(0.0, 0.12, L));
+            vec3 lit = fel ? meleg : meleg * 0.38;
             c = mix(c, lit, uHlK);
             // vékony fénykörvonal: a szektor szélén (a belső téglalap-határokon nem – ott a szomszéd pont is a szektorban van)
             float d = 0.28; bool szel = false;
@@ -191,8 +195,8 @@ function addSectorShader(m) {
                 if (int(e.x + 0.5) == hf && pt > q.x && pt < q.y && pr > q.z && pr < q.w) { b2 = true; break; } }
               if (!b2) { szel = true; break; }
             }
-            if (fel && szel) c = mix(c, vec3(1.0, 0.94, 0.76), uHlK);
-          } else c = mix(c, vec3(L) * 0.5, 0.62 * uHlK);   // minden más: ~35 %-kal sötétebb és fakóbb (de olvasható; a pinek, számok, feliratok nem halványulnak)
+            if (szel) c = mix(c, vec3(1.0, 0.97, 0.9), uHlK);   // éles, vékony világos körvonal
+          } else c = mix(c, c * 0.8, uHlK);   // a többi szektor megtartja a nyugodt sötét kinézetét a sorokkal – csak finoman csendesebb
           gl_FragColor.rgb = c;
         }
         } else {
@@ -1909,7 +1913,8 @@ $('#panelX').addEventListener('click', () => closePanel(true));
 // Szektor-kiemelés: a kiválasztott szektor téglalapjai a shader uniformjaiba (alak: data/szektorok.json)
 function highlightSector(s) {
   const rects = s && current && SZEKTOR ? SZEKTOR.szektorok[s.id.slice(8)] : null;
-  if (!rects) { HL.on.value = 0; HL.k.value = 0; HL.szek = null; return; }
+  if (!rects) { HL.szek = null; if (LOOK.uj.value && HL.on.value) { HL.cel = 0; return; } HL.on.value = 0; HL.k.value = 0; return; }   // új kinézet: lágy kifakulás (a ciklus kapcsolja ki)
+  HL.cel = 1;
   if (HL.szek !== s.id) { HL.szek = s.id; if (LOOK.uj.value) HL.k.value = 0; }
   rects.slice(0, SZ_MAX).forEach((q, i) => { HL.R.value[i].set(q[1], q[2], q[3], q[4]); HL.Q.value[i].set(q[0], q[5], q[6]); });
   HL.n.value = Math.min(rects.length, SZ_MAX); HL.padlo.value = current.data.padlo || 0;
@@ -1965,7 +1970,7 @@ const szamSor = (p) => p.name.replace('Szektor ', '');
 const normal = (s) => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 function syncSorok() {
   document.querySelectorAll('.srow[data-id]').forEach((r) => { r.classList.toggle('hov', r.dataset.id === hovSec?.id); r.classList.toggle('on', r.dataset.id === selSec?.id); });
-  current?.markers.forEach((m) => m.p.cat === 'szektor' && m.el.classList.toggle('hov', m.p === hovSec));
+  current?.markers.forEach((m) => { if (m.p.cat !== 'szektor') return; m.el.classList.toggle('hov', m.p === hovSec); m.el.classList.toggle('sel', m.p === selSec); });
 }
 function setHover(s, pont) {
   if (s !== hovSec) { hovSec = s; hlFrissit(); syncSorok(); }
@@ -2510,7 +2515,8 @@ renderer.setAnimationLoop((now) => {
   if (current?.anim) current.anim.mixer.update(dt);
   stepAnim(now);
   stepTour(now);
-  if (HL.on.value) HL.k.value = QS.has('hlk') ? Number(QS.get('hlk')) : LOOK.uj.value ? Math.min(1, HL.k.value + dt * 6) : 0.5 + 0.32 * Math.sin(now / 320);   // új kinézet: villogás helyett lágy, ~0,17 s-os felúszás
+  if (HL.on.value) HL.k.value = QS.has('hlk') ? Number(QS.get('hlk')) : LOOK.uj.value ? (HL.cel === 0 ? Math.max(0, HL.k.value - dt * 7) : Math.min(1, HL.k.value + dt * 7)) : 0.5 + 0.32 * Math.sin(now / 320);   // új kinézet: villogás helyett lágy, ~0,17 s-os felúszás
+  if (HL.on.value && HL.cel === 0 && HL.k.value <= 0) HL.on.value = 0;
   const cel = mode === 'tour' ? 1 : 0;
   if (Math.abs(cel - shiftK) > 0.001) { shiftK += (cel - shiftK) * (SHOT ? 1 : 0.08); applyShift(); camera.updateProjectionMatrix(); }
   { const u = uiCel(), v = uiCelY(); if (Math.abs(u - uiEltol) > 0.5 || Math.abs(v - uiEltolY) > 0.5) { uiEltol += (u - uiEltol) * (SHOT ? 1 : 0.1); uiEltolY += (v - uiEltolY) * (SHOT ? 1 : 0.1); applyShift(); camera.updateProjectionMatrix(); } }
