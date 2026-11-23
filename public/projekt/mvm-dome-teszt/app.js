@@ -1588,9 +1588,9 @@ function buildMarkers(pois, padlo = 0, mag = null) {
       // 3D-s váz (világkoordináta): ajtó alja → ajtó fölött (gerinc vége) … gerinc a fal vonalában … → másik ajtó alja; a gerinc közepéről föl a pinhez
       const G = 3.3, P = 2.4;
       // az információs pult pinje alacsonyabban áll (felhasználó, 2026-11-19): a lobbyban a mögötte lévő ruhatár-pinnel egybelógott
-      if (!p.ajtok) { const al = poiWorld(p); return { p, el, world, ag, vaz: [al.clone().setY(al.y + 0.15), al.clone().setY(p.cat === 'info' ? al.y + 1.9 : pinTeto(mag, al, al.y + G + P))] }; }
+      if (!p.ajtok) { const al = poiWorld(p); return { p, el, world, ag, vaz: [al.clone().setY(al.y + 0.15), p.gyuru ? new THREE.Vector3(...p.gyuru) : al.clone().setY(p.cat === 'info' ? al.y + 1.9 : pinTeto(mag, al, al.y + G + P))] }; }
       const [a, b] = p.ajtok.map(poiWorld);
-      const fa = a.clone().setY(a.y + G), fb = b.clone().setY(b.y + G), kz = fa.clone().lerp(fb, 0.5), tet = kz.clone().setY(pinTeto(mag, kz, kz.y + P));
+      const fa = a.clone().setY(a.y + G), fb = b.clone().setY(b.y + G), kz = fa.clone().lerp(fb, 0.5), tet = p.gyuru ? new THREE.Vector3(...p.gyuru) : kz.clone().setY(pinTeto(mag, kz, kz.y + P));
       return { p, el, world, ag, vaz: [a.clone().setY(a.y + 0.15), fa, fb, b.clone().setY(b.y + 0.15), kz, tet] };
     }
     return { p, el, world };
@@ -2615,7 +2615,8 @@ function pinKozepre(root, pois) {
     // összefüggő egységek (egy hálóban több tetőlap is lehet): 6 m-en belüli háromszög-középpontok egy csoportba
     const cs = [];
     for (const t of tri) { let g = cs.find((g) => g.t.some((q) => Math.hypot(q.x - t.x, q.z - t.z) < 6)); if (!g) { g = { t: [] }; cs.push(g); } g.t.push(t); }
-    for (const g of cs) { const S = g.t.reduce((s, t) => s + t.ter, 0); egys.push({ tip, x: g.t.reduce((s, t) => s + t.x * t.ter, 0) / S, z: g.t.reduce((s, t) => s + t.z * t.ter, 0) / S, S }); }
+    const ym = new T3.Box3().setFromObject(o).max.y;
+    for (const g of cs) { const S = g.t.reduce((s, t) => s + t.ter, 0); egys.push({ tip, x: g.t.reduce((s, t) => s + t.x * t.ter, 0) / S, z: g.t.reduce((s, t) => s + t.z * t.ter, 0) / S, S, y: ym }); }
   });
   const mozg = [];
   for (const p of pois) {
@@ -2625,6 +2626,22 @@ function pinKozepre(root, pois) {
     if (best && bd > 0.3) { mozg.push(`${p.name}: ${bd.toFixed(1)} m`); p.x = best.x; p.y = -best.z; }
   }
   window.__pinMozgas = mozg;
+  // Pinek egy gyűrűvonalon (felhasználó, 2026-11-23): a tetőlapok középpontjaira illesztett, középpontos ellipszis (x²/a² + z²/b² = 1, legkisebb
+  // négyzetek), egy közös magasságban (a legmagasabb tető + 0,8 m); minden szolgáltatás-pin (a lift kivételével) a saját irányszögénél ül a vonalon.
+  // ?pingyuru=0: a régi, szolgáltatásonkénti hely
+  if (QS.get('pingyuru') === '0') return;
+  const E = egys.filter((u) => u.S > 4); if (E.length < 6) return;
+  let s11 = 0, s12 = 0, s22 = 0, b1 = 0, b2 = 0;
+  for (const u of E) { const X = u.x * u.x, Z = u.z * u.z; s11 += X * X; s12 += X * Z; s22 += Z * Z; b1 += X; b2 += Z; }
+  const det = s11 * s22 - s12 * s12; if (Math.abs(det) < 1e-9) return;
+  const ua = (b1 * s22 - b2 * s12) / det, ub = (s11 * b2 - s12 * b1) / det; if (!(ua > 0 && ub > 0)) return;
+  const H = Math.max(...E.map((u) => u.y)) + 0.8;
+  window.__gyuru = { a: 1 / Math.sqrt(ua), b: 1 / Math.sqrt(ub), H };
+  for (const p of pois) {
+    if (['lift', 'szektor', 'paholy', 'kapu', 'info'].includes(p.cat)) continue;
+    const x = p.x, z = -p.y, t = Math.atan2(z, x), c = Math.cos(t), s = Math.sin(t), r = 1 / Math.sqrt(c * c * ua + s * s * ub);
+    p.gyuru = [r * c, H, r * s];
+  }
 }
 // S1 „V3 kinézet” (felhasználó a board chaten, 2026-11-23 este: az élő S1 legyen olyan, mint a jóváhagyott Blender V3 render).
 // A jóváhagyott V3 renderen és az élő nézőn mért területátlagok (lineáris fényerő V3/élő): sétány padló 0,34, küzdőtér 0,44 (kevésbé kék),
