@@ -25,7 +25,7 @@ if (SHOT) { addEventListener('error', (e) => { document.title = 'JSERR ' + e.mes
 const LEVELS = {
   felso:  { key: 'S3', name: 'Felső körüljáró szint', model: 'models/S3.glb', meret: 5683828, data: 'data/S3.json', tier: 'Felső lelátó (3xx)' },
   paholy: { key: 'S2', name: 'Páholy szint (VIP)', model: 'models/S2.glb', meret: 6139900, data: 'data/S2.json', tier: 'Alsó lelátó (2xx)' },
-  also:   { key: 'S1', name: 'Alsó körüljáró szint', model: 'models/S1.glb', meret: 5102292, data: 'data/S1.json', tier: 'Alsó lelátó (2xx)' },
+  also:   { key: 'S1', name: 'Alsó körüljáró szint', model: 'models/S1.glb', meret: 5180424, data: 'data/S1.json', tier: 'Alsó lelátó (2xx)' },
   lobby:  { key: 'S0', name: 'Lobby – Bejárati szint', model: 'models/S0.glb', meret: 1703972, data: 'data/S0.json', tier: 'Küzdőtéri lelátó (1xx)' },
   // a teljes, megépített épület kívülről (homlokzat bekapcsolva, nyitott tető): a kezdőnézet, ha a fájljai megvannak (lásd VAN_EPULET)
   epulet: { key: 'S4', name: 'MVM Dome', model: 'models/S4.glb', meret: 6375816, data: 'data/S4.json', tier: 'Lelátó' },
@@ -2418,7 +2418,7 @@ async function elotoltTobbi() {
     try {
       const d = await fetch(asset(L.data)).then((r) => r.json());
       if (cache[k]) continue;
-      await elotolt(L.model); if (d.lightmap) await elotolt(d.lightmap.file); if (d.lightmap2?.kicsi) await elotolt(d.lightmap2.kicsi); if (d.anim) await elotolt(d.anim.model);
+      await elotolt(L.model); if (d.lightmap) await elotolt(d.lightmap.file); if (d.lightmap2?.kicsi) await elotolt(d.lightmap2.kicsi); if (d.lightmap3?.kicsi && !HOM_REGI) await elotolt(d.lightmap3.kicsi); if (d.anim) await elotolt(d.anim.model);
     } catch (e) { /* nem baj: szintváltáskor rendesen letölti */ }
   }
 }
@@ -2461,9 +2461,13 @@ function sugarLampak(root) {
 // („tegyük vissza a régit a homlokzatra”): a régi S1-ben ezek W_f36_* anyagok voltak (a jelenet fényeivel árnyalva, fénytérkép nélkül).
 // A régi nevet visszaadva a néző ugyanúgy jeleníti meg őket, mint a V3 előtt. A lelátó (W_tb_Lelato…, TS_lelato…) marad a 2. atlaszon.
 // ?hom=uj: a V3 sütött homlokzat
-const HOM_UJ = QS.get('hom') === 'uj';
+const HOM_UJ = false;   // (a V3 tribün-atlaszos homlokzat megszűnt: 22:08-tól a homlokzat saját atlaszt kapott – lightmap3)
+const HOM_REGI = QS.get('hom') === 'regi';   // ?hom=regi: a régi (V3 előtti, fénytérkép nélküli f36) homlokzat
+// a homlokzat-atlasz mérete: asztali gépen 8192 px (~49 px/m, ~340 MB videómemória mipmappel), iPaden / érintős eszközön és kis
+// textúrakorlátnál a 4096-os tartalék (~24 px/m, ~85 MB) – a lap ne omoljon össze (Safari-fül memóriakorlát); ?hom8k / ?hom4k kényszerít
+const HOM_8K = QS.has('hom8k') || (!QS.has('hom4k') && !matchMedia('(pointer: coarse)').matches && !/iPad|iPhone|Macintosh.*Mobile/.test(navigator.userAgent) && navigator.maxTouchPoints < 2);
 function homlokzatRegi(root) {
-  const re = /^W_tb_((EF_|KA_)?Kul(so|ter)_.*|Lobby_(fem|mullion|uveg)(\.\d+)?)$/;
+  const re = /^W_(tb|hm)_((EF_|KA_)?Kul(so|ter)_.*|Lobby_(fem|mullion|uveg)(\.\d+)?)$/;
   root.traverse((o) => { if (!o.isMesh) return; for (const m of (Array.isArray(o.material) ? o.material : [o.material])) if (m && re.test(m.name || '')) m.name = 'W_f36_' + m.name.slice(5); });
 }
 // S1 „V3 kinézet” (felhasználó a board chaten, 2026-11-23 este: az élő S1 legyen olyan, mint a jóváhagyott Blender V3 render).
@@ -2560,15 +2564,23 @@ async function loadLevel(level) {
       const lmKicsi = !!data.lightmap && !QS.has('nokicsi') && !QS.has('lm8k') && /_lm\.webp$/.test(data.lightmap.file);
       const lm2 = data.lightmap && data.lightmap2 && !QS.has('nolm') && !QS.has('nolm2') ? data.lightmap2 : null;
       const lm2P = lm2 ? loadLightmap({ file: lm2.kicsi || lm2.file }).catch((e) => { console.warn('lightmap2', e); return null; }) : null;
+      const lm3 = data.lightmap && data.lightmap3 && !QS.has('nolm') && !HOM_REGI ? data.lightmap3 : null;   // 3. atlasz: homlokzat (W_S1_hom_sutott, W_hm_*)
+      const lm3P = lm3 ? loadLightmap({ file: lm3.kicsi || lm3.file }).catch((e) => { console.warn('lightmap3', e); return null; }) : null;
       const lmP = data.lightmap && !QS.has('nolm') ? loadLightmap(data.lightmap, lmKicsi).catch(() => lmKicsi ? loadLightmap(data.lightmap) : null).catch((e) => { console.warn('lightmap', e); return null; }) : null;
       const gltf = await loadGltf(L.model, (xhr) => { const ossz = xhr.total || L.meret; if (ossz) setProgress(Math.min(0.95, 0.95 * xhr.loaded / ossz)); });   // a tömörítve küldött fájlnál a böngésző nem tudja a teljes méretet → a szint ismert mérete (LEVELS.meret)
-      if (L.key === 'S1' && !HOM_UJ) homlokzatRegi(gltf.scene);   // a régi (V3 előtti) homlokzat
+      if (L.key === 'S1' && HOM_REGI) homlokzatRegi(gltf.scene);   // ?hom=regi: a régi (V3 előtti) homlokzat
       tuneMaterials(gltf.scene, L.key);
       if (AJTO_IGAZIT.has(L.key) && !QS.has('noajto')) { try { mosdoAjtokhoz(gltf.scene, data.pois); } catch (e) { console.warn('mosdó-ajtók', e); } }
       const lmTex = lmP && await lmP;
       if (lmTex) {
         try { c_lm = applyLightmap(gltf.scene, lmTex, Math.PI / data.lightmap.k); c_baked = true; if (lmKicsi && lmTex.image?.width <= 2048) lmCsere(c_lm, data.lightmap); }
         catch (e) { console.warn('lightmap', e); }
+        const lm3Tex = lm3P && await lm3P;
+        if (lm3Tex && c_lm) {
+          try { const k3 = applyLightmap2(gltf.scene, lm3, lm3Tex); c_lm.push(...k3); const teljes = HOM_8K ? lm3.file : (lm3.file4k || lm3.file);
+            if (lm3.kicsi && lm3.kicsi !== teljes && k3.length > 1) lmCsere(k3, { file: teljes }); }
+          catch (e) { console.warn('lightmap3', e); }
+        }
         const lm2Tex = lm2P && await lm2P;
         if (lm2Tex && c_lm) {
           try { const k2 = applyLightmap2(gltf.scene, lm2, lm2Tex); c_lm.push(...k2); if (lm2.kicsi && lm2.kicsi !== lm2.file && k2.length > 1) lmCsere(k2, { file: lm2.file }); }
