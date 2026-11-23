@@ -2701,9 +2701,12 @@ fetch(asset('data/koncert.json')).then((r) => r.json()).then((k) => {
 // nem férne el, kompakt lesz (csak a kép), és csak ha úgy sem fér, halványul el. A szintmenü a badge (vagy a panel) elé igazodik.
 function navIgazit() {
   const L = $('#levels'), K = $('#koncert'); if (!L) return;
-  L.style.transform = ''; if (K) { K.style.transform = ''; K.classList.remove('kompakt', 'rejt'); }
+  L.style.transform = ''; L.classList.remove('szuk', 'szuk2'); if (K) { K.style.transform = ''; K.classList.remove('kompakt', 'rejt'); }
   if (VW() < 1024 || !document.body.classList.contains('panel-open')) return;
-  const hatar = VW() - Math.min(400, VW()) - 24, bal = $('#lang').getBoundingClientRect().right + 32, navW = L.getBoundingClientRect().width;
+  const hatar = VW() - Math.min(400, VW()) - 24, bal = $('#lang').getBoundingClientRect().right + 32;
+  if (L.getBoundingClientRect().width > hatar - bal) L.classList.add('szuk');
+  if (L.getBoundingClientRect().width > hatar - bal) L.classList.add('szuk2');   // még szűkebb (10,5"-es iPad fekve, ~1100 px)   // kis iPad fekve (~1180 px): sűrűbb menü, hogy ne lógjon a panel alá
+  const navW = L.getBoundingClientRect().width;
   let jobb = hatar;
   if (K && !K.hidden && getComputedStyle(K).display !== 'none') {
     let kr = K.getBoundingClientRect();

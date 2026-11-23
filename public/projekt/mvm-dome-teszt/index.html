@@ -10,7 +10,7 @@
 <script>
 // Gyors indulás (V2): a kezdőszint modellje és fénytérképe már a HTML beolvasásakor elkezd letöltődni, nem csak a kód elindulása után
 // MVM_VER: a modellek/adatok verziója – minden modellcserénél EMELNI kell, így a böngésző (iPad Safari is) biztosan az újat tölti
-window.MVM_VER = '2026-11-23n';
+window.MVM_VER = '2026-11-23o';
 (function () {
   var V = window.MVM_VER;
   var S = { lobby: 'S0', also: 'S1', paholy: 'S2', felso: 'S3', epulet: 'S4' }, q = new URLSearchParams(location.search), k = S[q.get('szint')] || 'S4';
@@ -69,6 +69,7 @@ window.MVM_VER = '2026-11-23n';
   /* a menüfelirat az igazi oldalon: 24 px magas link, benne Nunito 500 14 px / 20 px („text-sm-medium”) – mérve 2026-11-22 */
   .levels button{display:inline-flex;align-items:center;height:24px;padding:0;border:0;background:transparent;color:var(--text);font:500 14px/20px Nunito,sans-serif;cursor:pointer;white-space:nowrap;transition:color .3s linear}
   .levels button:hover,.levels button.active{color:var(--yellow)}
+  .levels.szuk{gap:9px}.levels.szuk button{font-size:13px;letter-spacing:-.1px}.levels.szuk2{gap:7px}.levels.szuk2 button{font-size:12px}   /* nyitott panel + szűk hely (app.js navIgazit) */
   /* keskenyebb képernyőn (az igazi oldalon is 90 px a fejléc): logó és nyelvgomb fent, a szintmenü alattuk, oldalra görgethető */
   /* 1024 px alatt (az igazi oldalon is itt vált): 90 px-es fejléc, logó 16/32 px-nél, nyelvgomb mellette 40 px-re; a szintmenü a fejléc alatt, oldalra görgethető */
   @media (max-width:1023px){.brand{height:140px;padding:26px 16px 0;align-items:flex-start}.brand::before{background:linear-gradient(180deg,rgba(29,41,57,.95) 0%,rgba(29,41,57,.9) 64%,rgba(29,41,57,0) 100%)}.brand img{margin-top:6px}
