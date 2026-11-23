@@ -132,7 +132,7 @@ const cache = {};            // betöltött szintek (gyors visszaváltás)
 
 // ---------- Anyag-hangolás ----------
 // A színek a Blender-fájlból jönnek (sima anyagok). Itt csak: üveg ne írjon mélységet, a lelátó anyagai kapják a szektor-kiemelő shadert.
-const alapNev = (n) => (n || '').replace(/^W_(?:nb|tb|f\d+)_/, 'W_');   // 'W_tb_…': az S1 V3 tribün-atlasz anyagai (2026-11-23 este) – enélkül a lelátó nem volt rámutatható / koppintható   // 'W_nb_…' (sütetlen réteg) és 'W_fNN_…' (sík árnyalás) előtag nélkül
+const alapNev = (n) => (n || '').replace(/^W_(?:nb|tb|hm|f\d+)_/, 'W_');   // 'W_tb_…': az S1 V3 tribün-atlasz anyagai (2026-11-23 este) – enélkül a lelátó nem volt rámutatható / koppintható   // 'W_nb_…' (sütetlen réteg) és 'W_fNN_…' (sík árnyalás) előtag nélkül
 const STAND = /^W_(Lelato|TS_lelato|Szek|VIP_szek|Kuzdoter)/i;   // dupla kattintás: ezekre kattintva a szektort választja
 // Szektor-kiemelés (felhasználó, 2026-11-19): a lelátó adott része villog, pontosan a szektor alakjában. A lelátó a modellben 16 egyenes
 // oldalú sokszög, a közlekedőlépcsők az oldalra merőlegesek → egy szektor = néhány téglalap az oldal saját koordinátáiban
@@ -160,7 +160,13 @@ function lelatoHely(p) {
 }
 // hátoldal-eltolás: csak kétoldalas, nem „matrica” anyagokra (a képek / feliratok lapja – akár fordított normállal – a fal előtt marad)
 const hatBias = (m) => !QS.has('nohb') && m.side === THREE.DoubleSide && !(m.polygonOffset && m.polygonOffsetFactor < 0);
+// Állandó (kijelölés nélkül is) tónus az új kinézetben (felhasználó, 2026-11-23): a homlokzat BELSŐ oldala sötét (?facein=0.35), a lelátó-tál
+// és a küzdőtér enyhén visszahúzva (?bowl=0.78); kijelöléskor a homlokzat KÜLSŐ oldala nem halványul. ?dimregi vagy ?bowl=1&facein=1: a régi
+const KAT_HOM = /^W_(EF_|KA_)?(Kulso|Kulter)(?!.*(uveg|szalag|bejaratszam))/, KAT_TAL = /^W_(TS_|UJ_)?(lelato|szek|VIP_szek|kuzdoter)/i;
+const BOWL = QS.has('dimregi') ? 1 : Math.min(1, Math.max(0.1, Number(QS.get('bowl')) || 0.78));
+const FACEIN = QS.has('dimregi') ? 1 : Math.min(1, Math.max(0.05, Number(QS.get('facein')) || 0.35));
 function addSectorShader(m) {
+  const kat = KAT_HOM.test(alapNev(m.name)) ? 1 : KAT_TAL.test(alapNev(m.name)) ? 2 : 0;
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, { uLmGamma: LM.gamma, uLmGain: LM.gain, uLmAmb: LM.amb, uHlOn: HL.on, uHlK: HL.k, uUj: LOOK.uj, uSzN: HL.n, uSzPadlo: HL.padlo, uSzF: HL.F, uSzR: HL.R, uSzQ: HL.Q });
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
@@ -173,7 +179,9 @@ function addSectorShader(m) {
         if (uUj > 0.5) {
         { // új kinézet: visszafogott színezés – a sötét részek kicsit hidegebbek, a világosak kicsit melegebbek
           float gL = dot(gl_FragColor.rgb, vec3(0.2126, 0.7152, 0.0722));
-          gl_FragColor.rgb *= mix(vec3(0.84, 0.93, 1.14), vec3(1.08, 1.0, 0.88), smoothstep(0.06, 0.5, gL)); }   // prémium: hideg kék árnyék / meleg fény (referencia: Halden Arena)
+          gl_FragColor.rgb *= mix(vec3(0.84, 0.93, 1.14), vec3(1.08, 1.0, 0.88), smoothstep(0.06, 0.5, gL)); }
+        ${kat === 1 && FACEIN < 1 ? `if (!gl_FrontFacing) gl_FragColor.rgb *= ${FACEIN.toFixed(3)};   // homlokzat belső oldala` : ''}
+        ${kat === 2 && BOWL < 1 ? `{ float bL = dot(gl_FragColor.rgb, vec3(0.2126, 0.7152, 0.0722)); gl_FragColor.rgb = mix(vec3(bL), gl_FragColor.rgb, 0.85) * ${BOWL.toFixed(3)}; }   // lelátó-tál, küzdőtér` : ''}   // prémium: hideg kék árnyék / meleg fény (referencia: Halden Arena)
         if (uHlOn > 0.5) {
           vec2 hp = vec2(vWPos.x, -vWPos.z);
           float hr = -1e9, ht = 0.0; int hf = 0;
@@ -203,7 +211,7 @@ function addSectorShader(m) {
               if (!b2) { szel = true; break; }
             }
             if (szel) c = mix(c, vec3(1.0, 0.97, 0.9), uHlK);   // éles, vékony világos körvonal
-          } else c = mix(c, mix(vec3(L), c, 0.35) * ${HL_DIM.toFixed(3)}, uHlK);   // a többi rész erősen visszahúzva (felhasználó, 2026-11-23: „nem fedi le eléggé”): ~33 %, színtelenítve; ?dim=
+          } else c = mix(c, mix(vec3(L), c, 0.35) * ${HL_DIM.toFixed(3)}, ${kat === 1 ? '(gl_FrontFacing ? 0.0 : uHlK)' : 'uHlK'});   // a többi rész erősen visszahúzva (felhasználó, 2026-11-23: „nem fedi le eléggé”): ~33 %, színtelenítve; ?dim=
           gl_FragColor.rgb = c;
         }
         } else {
@@ -237,7 +245,7 @@ function addSectorShader(m) {
         // és – a hátlap-eldobással szemben – fordított normálú lap se tűnik el).
         gl_FragDepth = gl_FragCoord.z + (gl_FrontFacing ? 0.0 : 4e-7);` : ''));   // ~7 lépés a 24 bites mélységben: csak a pontosan egy síkba eső lapokra hat
   };
-  m.customProgramCacheKey = () => 'szektor-hl9' + (hatBias(m) ? 'd' : 's') + (UJLOOK ? 'u' : '');
+  m.customProgramCacheKey = () => 'szektor-hl9' + (hatBias(m) ? 'd' : 's') + (UJLOOK ? 'u' : '') + 'k' + kat;
 }
 // Kézi felülírások (felhasználó, 2026-11-18): a lelátó sötét, ne fehér; a lelátó-bejáratok sötét számai (a fehér szektorszám
 // mellett „duplának” látszottak) rejtve
