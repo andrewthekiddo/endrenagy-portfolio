@@ -76,15 +76,23 @@ renderer.toneMapping = THREE.AgXToneMapping;          // mint a Blender-fájl (A
 // ÚJ KINÉZET (felhasználó, 2026-11-23, Halden Arena referencia: „jól nézzen ki, letisztult legyen, az információ könnyen átjöjjön”):
 // sötétebb, de nem sáros hangulat, finom vignetta (index.html), visszafogott hideg árnyék / meleg fény színezés; a kijelölt szektor
 // kivilágosodik vékony fénykörvonallal, minden más kissé halványabb és fakóbb (a pinek, számok, feliratok érintetlenek). Régi kinézet: ?regilook
-const UJLOOK = !QS.has('regilook');
-renderer.toneMappingExposure = UJLOOK ? 0.94 : 1.0;
-if (UJLOOK) document.body.classList.add('ujlook');
+// Szintenként kapcsolható (felhasználó, 2026-11-23: „most csak az alsó körüljáró szintet nézzük … ha jó az irány, a többire is”):
+// a kiterjesztés a többi szintre = a kulcs felvétele ide (pl. new Set(['S1', 'S2', 'S3', 'S0'])).
+const UJLOOK_SZINTEK = new Set(['S1']);
+const UJLOOK = !QS.has('regilook');   // a shader mindkét ágat tartalmazza; szintváltáskor az uUj uniform választ
+const LOOK = { uj: { value: 0 } };
+function lookAlkalmaz(key) {
+  const uj = UJLOOK && UJLOOK_SZINTEK.has(key); LOOK.uj.value = uj ? 1 : 0;
+  renderer.toneMappingExposure = uj ? 0.86 : 1.0;
+  const hatter = uj ? 0x0a1019 : 0x1d2939; scene.background.setHex(hatter); scene.fog.color.setHex(hatter);
+  document.body.classList.toggle('ujlook', uj);
+}
 renderer.localClippingEnabled = true;
 renderer.debug.onShaderError = (gl, prog, vs, fs) => { document.title = 'SHADERERR ' + (gl.getShaderInfoLog(fs) || '') + ' || ' + (gl.getShaderInfoLog(vs) || ''); };
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(UJLOOK ? 0x111a28 : 0x1d2939);   // a mvm-dome.hu oldalháttere (grey-800, 2026-11-22; előtte 0x141d2b); új kinézet: sötétebb kékes
-scene.fog = new THREE.Fog(UJLOOK ? 0x111a28 : 0x1d2939, 320, 700);
+scene.background = new THREE.Color(0x1d2939);   // a mvm-dome.hu oldalháttere (grey-800, 2026-11-22; előtte 0x141d2b); új kinézet (lookAlkalmaz): mélyebb, sötét kék
+scene.fog = new THREE.Fog(0x1d2939, 320, 700);
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 scene.environmentIntensity = 0.35;
@@ -147,17 +155,18 @@ function lelatoHely(p) {
 const hatBias = (m) => !QS.has('nohb') && m.side === THREE.DoubleSide && !(m.polygonOffset && m.polygonOffsetFactor < 0);
 function addSectorShader(m) {
   m.onBeforeCompile = (sh) => {
-    Object.assign(sh.uniforms, { uLmGamma: LM.gamma, uLmGain: LM.gain, uLmAmb: LM.amb, uHlOn: HL.on, uHlK: HL.k, uSzN: HL.n, uSzPadlo: HL.padlo, uSzF: HL.F, uSzR: HL.R, uSzQ: HL.Q });
+    Object.assign(sh.uniforms, { uLmGamma: LM.gamma, uLmGain: LM.gain, uLmAmb: LM.amb, uHlOn: HL.on, uHlK: HL.k, uUj: LOOK.uj, uSzN: HL.n, uSzPadlo: HL.padlo, uSzF: HL.F, uSzR: HL.R, uSzQ: HL.Q });
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
       .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nuniform vec3 uLmAmb;\nuniform float uLmGamma,uLmGain,uHlOn,uHlK,uSzN,uSzPadlo;\nuniform vec3 uSzF[16];\nuniform vec4 uSzR[' + SZ_MAX + '];\nuniform vec3 uSzQ[' + SZ_MAX + '];')
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nuniform vec3 uLmAmb;\nuniform float uLmGamma,uLmGain,uHlOn,uHlK,uUj,uSzN,uSzPadlo;\nuniform vec3 uSzF[16];\nuniform vec4 uSzR[' + SZ_MAX + '];\nuniform vec3 uSzQ[' + SZ_MAX + '];')
       .replace('reflectedLight.indirectDiffuse += lightMapTexel.rgb * lightMapIntensity * RECIPROCAL_PI;',
         'vec3 lmL = lightMapTexel.rgb * lightMapIntensity * RECIPROCAL_PI; lmL *= uLmGain * pow(max(dot(lmL, vec3(0.2126, 0.7152, 0.0722)), 1e-5), uLmGamma - 1.0); reflectedLight.indirectDiffuse += lmL + uLmAmb;')
       .replace('#include <dithering_fragment>', `#include <dithering_fragment>
 ` + (UJLOOK ? `
+        if (uUj > 0.5) {
         { // új kinézet: visszafogott színezés – a sötét részek kicsit hidegebbek, a világosak kicsit melegebbek
           float gL = dot(gl_FragColor.rgb, vec3(0.2126, 0.7152, 0.0722));
-          gl_FragColor.rgb *= mix(vec3(0.95, 0.98, 1.05), vec3(1.04, 1.0, 0.94), smoothstep(0.08, 0.55, gL)); }
+          gl_FragColor.rgb *= mix(vec3(0.84, 0.93, 1.14), vec3(1.08, 1.0, 0.88), smoothstep(0.06, 0.5, gL)); }   // prémium: hideg kék árnyék / meleg fény (referencia: Halden Arena)
         if (uHlOn > 0.5) {
           vec2 hp = vec2(vWPos.x, -vWPos.z);
           float hr = -1e9, ht = 0.0; int hf = 0;
@@ -172,7 +181,7 @@ function addSectorShader(m) {
           vec3 c = gl_FragColor.rgb; float L = dot(c, vec3(0.2126, 0.7152, 0.0722));
           if (bent) {
             bool fel = normalize(cross(dFdx(vWPos), dFdy(vWPos))).y > 0.6;
-            vec3 lit = mix(c * 1.6 + 0.08, vec3(0.94, 0.92, 0.87), fel ? 0.62 : 0.3);   // „kivilágított” szektor: meleg fehér fény a sorokon
+            vec3 lit = mix(c * 1.6 + 0.08, vec3(0.95, 0.94, 0.90), fel ? 0.74 : 0.34);   // szinte fehérre kivilágított sorok   // „kivilágított” szektor: meleg fehér fény a sorokon
             c = mix(c, lit, uHlK);
             // vékony fénykörvonal: a szektor szélén (a belső téglalap-határokon nem – ott a szomszéd pont is a szektorban van)
             float d = 0.28; bool szel = false;
@@ -185,6 +194,20 @@ function addSectorShader(m) {
             if (fel && szel) c = mix(c, vec3(1.0, 0.94, 0.76), uHlK);
           } else c = mix(c, vec3(L) * 0.5, 0.62 * uHlK);   // minden más: ~35 %-kal sötétebb és fakóbb (de olvasható; a pinek, számok, feliratok nem halványulnak)
           gl_FragColor.rgb = c;
+        }
+        } else {
+        if (uHlOn > 0.5 && normalize(cross(dFdx(vWPos), dFdy(vWPos))).y > 0.6) {   // felfelé néző lap (a normál a képernyő-deriváltakból)
+          vec2 hp = vec2(vWPos.x, -vWPos.z);
+          float hr = -1e9, ht = 0.0; int hf = 0;
+          for (int i = 0; i < 16; i++) { vec3 f = uSzF[i]; float r = dot(f.xy, hp) - f.z; if (r > hr) { hr = r; hf = i; ht = dot(vec2(-f.y, f.x), hp); } }
+          float hz = vWPos.y + uSzPadlo;
+          for (int i = 0; i < ${SZ_MAX}; i++) {
+            if (float(i) >= uSzN) break;
+            vec4 q = uSzR[i]; vec3 e = uSzQ[i];
+            float dz = hz - mix(e.y, e.z, clamp((hr - q.z) / (q.w - q.z), 0.0, 1.0));   // magasság a sorok lejtőjéhez képest (alatta a körüljáró padlója sötét marad)
+            if (int(e.x + 0.5) == hf && ht > q.x && ht < q.y && hr > q.z && hr < q.w && dz > -0.5 && dz < 1.2) { gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(0.99, 0.75, 0.13), uHlK); break; }
+          }
+        }
         }` : `
         if (uHlOn > 0.5 && normalize(cross(dFdx(vWPos), dFdy(vWPos))).y > 0.6) {   // felfelé néző lap (a normál a képernyő-deriváltakból)
           vec2 hp = vec2(vWPos.x, -vWPos.z);
@@ -537,6 +560,18 @@ const ZONA_IKON = { CLOAKROOM: 'ruhatar', TOILET_IKON: 'wc' };   // TOILET_IKON:
 const MERCH_SZIN = 0x9b5cff;   // lila (felhasználó, 2026-11-22: a zöld a páholy szinten a „szabad” színe, ne keveredjen; előtte 0x00e5b4)
 // Telítettebb, kontrasztosabb kiemelő színek (felhasználó, 2026-11-20): csak a jelölő lapok / szegélyek színe, minden szinten
 const ZONA_PALETTA = { bar: 0xff1468, wc: 0x168dff, ruhatar: 0xffb000, merch: 0x9b5cff }, ZONA_FEDES = 0.74;
+// A színes szolgáltatás-kiemelések (mosdó / büfé / ruhatár / merch) ERŐSSÉGE egy helyen (felhasználó, 2026-11-23: „könnyen halkítható vagy
+// kikapcsolható legyen” a prémium kinézet kedvéért): 1 = mostani, 0,5 = halványabb, 0 = nincs (a lapok, szegélyek, feliratok, ikonok is el).
+// Próbához URL-ből is: ?zona=0.5
+const ZONA_ERO = QS.has('zona') ? Math.max(0, Number(QS.get('zona')) || 0) : 1;
+const ZONA_ANYAG = /UJ_zona_|^WEB_(zona|wc_|wc$|menny|tetoblokk|homlokzat)/;
+function zonaEro(root) {
+  if (ZONA_ERO === 1) return;
+  root.traverse((o) => { if (!o.isMesh && !o.isLine) return; for (const m of (Array.isArray(o.material) ? o.material : [o.material])) {
+    if (!m || !ZONA_ANYAG.test(m.name || '') || m.userData.zonaEro) continue; m.userData.zonaEro = true;
+    if (ZONA_ERO <= 0) { m.visible = false; continue; }
+    if (!/felirat|ikon|betu/.test(m.name)) { m.transparent = true; m.opacity = (m.opacity ?? 1) * ZONA_ERO; m.needsUpdate = true; } } });
+}
 // CSAK ruhatár helyén lehet merch shop, szintenként egy (felhasználó, 2026-11-20) – S1: a keleti (Blender x 46, y 7) ruhatár, S3: a keleti-északi ruhatár;
 // a páholy szinten nincs ruhatár, ott nincs merch shop.
 const MERCH_HELY = { S1: { x0: 38, x1: 54, z0: -16, z1: 1 }, S3: { x0: 48, x1: 58, z0: -16, z1: -2 } };
@@ -1870,7 +1905,7 @@ $('#panelX').addEventListener('click', () => closePanel(true));
 function highlightSector(s) {
   const rects = s && current && SZEKTOR ? SZEKTOR.szektorok[s.id.slice(8)] : null;
   if (!rects) { HL.on.value = 0; HL.k.value = 0; HL.szek = null; return; }
-  if (HL.szek !== s.id) { HL.szek = s.id; if (UJLOOK) HL.k.value = 0; }
+  if (HL.szek !== s.id) { HL.szek = s.id; if (LOOK.uj.value) HL.k.value = 0; }
   rects.slice(0, SZ_MAX).forEach((q, i) => { HL.R.value[i].set(q[1], q[2], q[3], q[4]); HL.Q.value[i].set(q[0], q[5], q[6]); });
   HL.n.value = Math.min(rects.length, SZ_MAX); HL.padlo.value = current.data.padlo || 0;
   HL.on.value = 1;
@@ -2399,6 +2434,7 @@ async function loadLevel(level) {
         let vanModellben = false; gltf.scene.traverse((o) => { if (o.isMesh) for (const m of (Array.isArray(o.material) ? o.material : [o.material])) if (/UJ_zona_wc/.test(m.name || '')) vanModellben = true; });
         const t = !vanModellben && wcTetok(gltf.scene, data.pois); if (t) gltf.scene.add(t);
       } catch (e) { console.warn('wc-tető', e); } }
+      zonaEro(gltf.scene);
       // a sütött-fény átalakítás új anyagpéldányt adhat, a szektor-kiemelő shader pedig felülírja az onBeforeCompile-t → a zóna-elrejtést a végleges anyagokra újra rátesszük
       if (ZONA_REJT[L.key] && !QS.has('norejt')) gltf.scene.traverse((o) => { if (!o.isMesh) return; for (const m of (Array.isArray(o.material) ? o.material : [o.material])) { const d = ZONA_REJT[L.key].filter((d) => d.minta.test(m.name || '')); if (d.length && !String(m.customProgramCacheKey?.() || '').includes('|zonarejt')) zonaRejt(m, d); } });
       c = cache[level] = { level, baked: c_baked, lm: c_lm, root: gltf.scene, anim: animObj, data, path: buildPath(data.camera) };
@@ -2415,6 +2451,7 @@ async function loadLevel(level) {
     const pk = c.pois || c.data.pois;
     current = { ...c, pois: pk, markers: buildMarkers(pk, c.data.padlo || 0), lights: c.baked ? [] : addPoiLights(pk) };
     camShift = [c.data.camera.shift_x || 0, c.data.camera.shift_y || 0];
+    lookAlkalmaz(LEVELS[level].key);
     LM.gain.value = Number(QS.get('lmg')) || c.data.lightmap?.gain || 1; LM.gamma.value = Number(QS.get('lmgam')) || c.data.lightmap?.gamma || 1;
     hfov = 2 * Math.atan(c.data.camera.sensor / 2 / c.data.camera.lens) * 180 / Math.PI;
     resize();
@@ -2468,7 +2505,7 @@ renderer.setAnimationLoop((now) => {
   if (current?.anim) current.anim.mixer.update(dt);
   stepAnim(now);
   stepTour(now);
-  if (HL.on.value) HL.k.value = QS.has('hlk') ? Number(QS.get('hlk')) : UJLOOK ? Math.min(1, HL.k.value + dt * 6) : 0.5 + 0.32 * Math.sin(now / 320);   // új kinézet: villogás helyett lágy, ~0,17 s-os felúszás
+  if (HL.on.value) HL.k.value = QS.has('hlk') ? Number(QS.get('hlk')) : LOOK.uj.value ? Math.min(1, HL.k.value + dt * 6) : 0.5 + 0.32 * Math.sin(now / 320);   // új kinézet: villogás helyett lágy, ~0,17 s-os felúszás
   const cel = mode === 'tour' ? 1 : 0;
   if (Math.abs(cel - shiftK) > 0.001) { shiftK += (cel - shiftK) * (SHOT ? 1 : 0.08); applyShift(); camera.updateProjectionMatrix(); }
   { const u = uiCel(), v = uiCelY(); if (Math.abs(u - uiEltol) > 0.5 || Math.abs(v - uiEltolY) > 0.5) { uiEltol += (u - uiEltol) * (SHOT ? 1 : 0.1); uiEltolY += (v - uiEltolY) * (SHOT ? 1 : 0.1); applyShift(); camera.updateProjectionMatrix(); } }

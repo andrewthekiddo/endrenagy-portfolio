@@ -10,7 +10,7 @@
 <script>
 // Gyors indulás (V2): a kezdőszint modellje és fénytérképe már a HTML beolvasásakor elkezd letöltődni, nem csak a kód elindulása után
 // MVM_VER: a modellek/adatok verziója – minden modellcserénél EMELNI kell, így a böngésző (iPad Safari is) biztosan az újat tölti
-window.MVM_VER = '2026-11-23h';
+window.MVM_VER = '2026-11-23i';
 (function () {
   var V = window.MVM_VER;
   var S = { lobby: 'S0', also: 'S1', paholy: 'S2', felso: 'S3', epulet: 'S4' }, q = new URLSearchParams(location.search), k = S[q.get('szint')] || 'S4';
@@ -136,7 +136,7 @@ window.MVM_VER = '2026-11-23h';
   body.ujlook .hovtip{background:rgba(11,18,32,.94);color:#fff;border:1px solid rgba(255,255,255,.14);box-shadow:0 12px 32px rgba(0,0,0,.55);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
   body.ujlook .hovtip small{color:#98a2b3}
   .vignetta{display:none}
-  body.ujlook .vignetta{display:block;position:fixed;inset:0;pointer-events:none;z-index:1;background:radial-gradient(ellipse 75% 70% at 50% 52%,rgba(4,8,16,0) 55%,rgba(4,8,16,.42) 100%)}
+  body.ujlook .vignetta{display:block;position:fixed;inset:0;pointer-events:none;z-index:1;background:radial-gradient(ellipse 75% 70% at 50% 52%,rgba(3,6,12,0) 50%,rgba(3,6,12,.55) 100%)}
   .mk.szektor.hov .pin{background:var(--yellow);color:var(--navy);transform:scale(1.15)}
 
   /* --- filter panel (most a „Szolgáltatások” fül tartalma) --- */
