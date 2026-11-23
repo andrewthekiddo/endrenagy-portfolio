@@ -10,7 +10,7 @@
 <script>
 // Gyors indulás (V2): a kezdőszint modellje és fénytérképe már a HTML beolvasásakor elkezd letöltődni, nem csak a kód elindulása után
 // MVM_VER: a modellek/adatok verziója – minden modellcserénél EMELNI kell, így a böngésző (iPad Safari is) biztosan az újat tölti
-window.MVM_VER = '2026-11-23zj';
+window.MVM_VER = '2026-11-23zk';
 (function () {
   var V = window.MVM_VER;
   var S = { lobby: 'S0', also: 'S1', paholy: 'S2', felso: 'S3', epulet: 'S4' }, q = new URLSearchParams(location.search), k = S[q.get('szint')] || 'S4';
@@ -140,6 +140,22 @@ window.MVM_VER = '2026-11-23zj';
   /* új kinézet (2026-11-23, ?regilook nélkül): sötét, letisztult infókártya + finom vignetta a kép szélein */
   body.ujlook .hovtip{background:rgba(11,18,32,.94);color:#fff;border:1px solid rgba(255,255,255,.14);box-shadow:0 12px 32px rgba(0,0,0,.55);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
   body.ujlook .hovtip small{color:#98a2b3}
+  /* ---- 2026-11-23 éjjel: négyzetes pinek, nagyobb szektorszámok, hosszabb fejléc-átmenet ---- */
+  /* lekerekített négyzetes pin (a navigációs gombok formája: 44 px / 12 px → 36 px / 10 px); kijelölve a szolgáltatás színével kitöltve, fehér négyzet nélkül; ?pinkor */
+  body.pinnegyzet .mk:not(.szektor) .pin,body.pinnegyzet .mk .pin .ik{border-radius:10px}
+  body.pinnegyzet.ujlook .mk.sel:not(.szektor) .pin,body.pinnegyzet.ujlook .mk.hov:not(.szektor) .pin{border-radius:10px;background:transparent;border-color:transparent;box-shadow:0 6px 18px rgba(0,0,0,.45),0 0 22px var(--pin)}
+  body.pinnegyzet .mk.focus:not(.szektor) .pin{box-shadow:0 6px 18px rgba(0,0,0,.45),0 0 26px 4px var(--pin)}
+  body.pinnegyzet .mk.focus .pin{animation:none}
+  /* szektorszám-pirula ~ +18 % (?szamregi: a régi) */
+  body:not(.szamregi) .mk.szektor .pin{height:26px;padding:0 8px;font-size:13px;border-radius:7px}
+  /* fejléc: hosszabb, lágyabb átmenet, alatta tömör sáv (a fellépő-kártya teljes magasságában); ?navregi */
+  @media (min-width:1024px){
+  body:not(.navregi) .brand::before{bottom:auto;height:calc(100% + 70px);-webkit-mask-image:none;mask-image:none;
+    background:linear-gradient(180deg,rgba(var(--fejlec),.97) 0,rgba(var(--fejlec),.97) 104px,rgba(var(--fejlec),.9) 116px,rgba(var(--fejlec),.74) 128px,rgba(var(--fejlec),.52) 139px,rgba(var(--fejlec),.3) 149px,rgba(var(--fejlec),.13) 158px,rgba(var(--fejlec),.03) 164px,rgba(var(--fejlec),0) 100%)}
+  body:not(.navregi) .side,body:not(.navregi) .sideOpen{z-index:13}   /* a bal panel a hosszabb átmenet FÖLÖTT (a kereső ne kerüljön alá) */
+  }
+  body{--fejlec:10,16,25}
+  body.ujlook{--fejlec:6,13,23}
   /* ---- epikus betöltő (v3, 2026-11-23): a látható szalag a logó VALÓDI kitöltött alakja (sima sávval vágva); csak egy egyenes élű ablak
      mozog rajta (transform, kompozitor – a betöltés akadása nem rántja meg); a fényfej egy keskeny rés ugyanazon a szalagon belül ---- */
   .lepik{width:min(320px,74vw);margin-bottom:6px;--dur:.85s;--ease:cubic-bezier(.4,0,.2,1)}

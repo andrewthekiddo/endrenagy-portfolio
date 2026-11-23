@@ -141,6 +141,9 @@ const STAND = /^W_(Lelato|TS_lelato|Szek|VIP_szek|Kuzdoter)/i;   // dupla kattin
 // csak a felfelé néző lapokat színezi. A kattintás (sectorAt) ugyanebből az adatból keres.
 const SZ_MAX = 12;                                   // téglalap / szektor (most legfeljebb 10)
 let SZEKTOR = null;                                  // { oldalak: [[nx, ny, d] × 16], szektorok: { '203': [[oldal, t0, t1, r0, r1, z0, z1], …] } }
+// a kijelölt / rámutatott szektoron kívüli rész fényereje (egyetlen állandó; ?dim=0.35 próbára; ?dimregi: a régi 0,8)
+const HL_DIM = QS.has('dimregi') ? 0.8 : Math.min(1, Math.max(0.05, Number(QS.get('dim')) || 0.33));
+const DIM_ANYAG = [];   // a shader nélküli, de halványítandó anyagok (színes tetőlapok, lámpafoltok): színük a kiemelés erősségével csökken
 const HL = { on: { value: 0 }, k: { value: 0 }, n: { value: 0 }, padlo: { value: 0 },
              F: { value: Array.from({ length: 16 }, () => new THREE.Vector3(1, 0, 1e6)) },
              R: { value: Array.from({ length: SZ_MAX }, () => new THREE.Vector4()) },
@@ -200,7 +203,7 @@ function addSectorShader(m) {
               if (!b2) { szel = true; break; }
             }
             if (szel) c = mix(c, vec3(1.0, 0.97, 0.9), uHlK);   // éles, vékony világos körvonal
-          } else c = mix(c, c * 0.8, uHlK);   // a többi szektor megtartja a nyugodt sötét kinézetét a sorokkal – csak finoman csendesebb
+          } else c = mix(c, mix(vec3(L), c, 0.35) * ${HL_DIM.toFixed(3)}, uHlK);   // a többi rész erősen visszahúzva (felhasználó, 2026-11-23: „nem fedi le eléggé”): ~33 %, színtelenítve; ?dim=
           gl_FragColor.rgb = c;
         }
         } else {
@@ -1387,7 +1390,23 @@ const ICON = (cat, nev) => `<img class="ik" src="${ikonUrl(nev || IKONFAJL[cat])
 // kivéve az információt és a liftet, azok mindig színesek (felhasználó, 2026-11-20). A szűrőgombokon marad a színes.
 const MINDIG_SZINES = new Set(['info', 'lift']);
 const semUrl = (nev) => (nev === 'info' ? ikonUrl(nev) : IKON_ADAT[nev + '_s'] || asset(`img/ikonok/ikon_${nev}_s.svg`));
-const ICON2 = (cat, nev) => { const n = nev || IKONFAJL[cat]; return `<img class="ik szin" src="${ikonUrl(n)}" alt=""><img class="ik sem" src="${semUrl(n)}" alt="">`; };
+// Lekerekített négyzetes pin (felhasználó, 2026-11-23: ugyanaz a forma, mint a jobb oldali navigációs gomboké – 44 px / 12 px sarok):
+// az ikon-SVG első alakzata (a kör alakú háttér) helyett ugyanakkora, ugyanolyan kitöltésű / körvonalú lekerekített négyzet. ?pinkor: a régi körök
+const PIN_KOR = QS.has('pinkor'); const _negyz = new Map();
+function negyzetes(url) {
+  if (PIN_KOR || !url || !url.startsWith('data:image/svg+xml')) return url;
+  if (_negyz.has(url)) return _negyz.get(url);
+  let ki = url;
+  try {
+    const i = url.indexOf(','), fej = url.slice(0, i + 1), svg = decodeURIComponent(url.slice(i + 1));
+    const vb = /viewBox="([\d.\-]+) ([\d.\-]+) ([\d.\-]+) ([\d.\-]+)"/.exec(svg);
+    const m = /<circle cx="[^"]*" cy="[^"]*" r="[^"]*"([^>]*)\/>/.exec(svg) || /<path d="M[^"]*Z"([^>]*)\/>/.exec(svg);   // a háttér: <circle> vagy az első (kör alakú) <path>
+    if (vb && m) { const [x, y, w, h] = vb.slice(1).map(Number), b = w * 0.0106, s = w - 2 * b;
+      ki = fej + encodeURIComponent(svg.replace(m[0], `<rect x="${x + b}" y="${y + b}" width="${s}" height="${s}" rx="${(s * 12 / 44).toFixed(2)}"${m[1]}/>`)); }
+  } catch (e) { /* marad a kör */ }
+  _negyz.set(url, ki); return ki;
+}
+const ICON2 = (cat, nev) => { const n = nev || IKONFAJL[cat]; return `<img class="ik szin" src="${negyzetes(ikonUrl(n))}" alt=""><img class="ik sem" src="${negyzetes(semUrl(n))}" alt="">`; };
 const poiWorld = (p) => new THREE.Vector3(p.x, p.z, -p.y);
 
 // Mosdók összevonása (felhasználó, V2, 2026-11-19): az egymás melletti férfi és női mosdó EGY közös pin (férfi-női piktogram),
@@ -1449,6 +1468,8 @@ function osszevonMosdo(pois, szintKulcs) {
   }
   return ki;
 }
+document.body.classList.toggle('pinnegyzet', !QS.has('pinkor')); document.body.classList.toggle('szamregi', QS.has('szamregi')); document.body.classList.toggle('navregi', QS.has('navregi'));
+const SZAR_MINDIG = QS.has('pinregi'); let hovPinEl = null;   // ?pinregi: mindig látszó szárak
 const AGAK = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); AGAK.setAttribute('class', 'agak');
 // A szektorszám helye: a szektor KÖZEPE a lelátón (felhasználó, 2026-11-20: „nagyon a nézőtér legtetején van … lehetne a szektorok közepén”).
 // A szektor-alaprajzból (data/szektorok.json) számolva: a szám a saját oldalán, a sorok (r) és a magasság (z) közepén ül; ha nincs adat, marad a régi hely.
@@ -1467,7 +1488,14 @@ function szektorKozep(p, padlo) {
   const x = o[0] * (rm + o[2]) - o[1] * t, y = o[1] * (rm + o[2]) + o[0] * t;
   return new THREE.Vector3(x, z - padlo + 0.9, -y);
 }
-function buildMarkers(pois, padlo = 0) {
+// Pinek lejjebb (felhasználó, 2026-11-23): a pin a szolgáltatás teteje fölött kb. 0,6 m-rel (a magasságtérképből, ±1,5 m-es környezet
+// legmagasabb pontja), de legalább 2,4 m-rel a padló fölött és legfeljebb a régi magasságban (5,7 m). ?pinregi: a régi egységes magasság
+function pinTeto(mag, al, regi) {
+  if (!mag || QS.has('pinregi')) return regi;
+  let h = -1e9; for (let dx = -1.5; dx <= 1.5; dx += 0.75) for (let dz = -1.5; dz <= 1.5; dz += 0.75) { const v = mag[wcCy(al.z + dz) * WC_N + wcCx(al.x + dx)]; if (v > h) h = v; }
+  return Math.min(regi, Math.max(al.y + 2.4, h + 0.6));
+}
+function buildMarkers(pois, padlo = 0, mag = null) {
   markersEl.innerHTML = ''; AGAK.innerHTML = ''; markersEl.appendChild(AGAK);
   return pois.map((p) => {
     const el = document.createElement('div');
@@ -1482,6 +1510,7 @@ function buildMarkers(pois, padlo = 0) {
     }
     el.addEventListener('click', (e) => { e.stopPropagation(); const mk = current.markers.find((x) => x.el === el); if (mk?.csopN > 1) csoportKozelit(mk); else selectPoi(p); });
     el.addEventListener('dblclick', (e) => e.stopPropagation());
+    el.addEventListener('pointerenter', () => { hovPinEl = el; }); el.addEventListener('pointerleave', () => { if (hovPinEl === el) hovPinEl = null; });
     markersEl.appendChild(el);
     const world = (p.cat === 'szektor' && !QS.has('regiszektor') && szektorKozep(p, padlo)) || poiWorld(p); if (p.cat !== 'szektor' || world.x === p.x) world.y += p.cat === 'szektor' ? 1.5 : 1.2;
     if (p.cat !== 'szektor') {   // minden szolgáltatás-pin EGY magasságban (felhasználó, V2): a padlótól 5,7 m-rel följebb, 3D-s szárral; a közös mosdó szára elágazik
@@ -1490,9 +1519,9 @@ function buildMarkers(pois, padlo = 0) {
       // 3D-s váz (világkoordináta): ajtó alja → ajtó fölött (gerinc vége) … gerinc a fal vonalában … → másik ajtó alja; a gerinc közepéről föl a pinhez
       const G = 3.3, P = 2.4;
       // az információs pult pinje alacsonyabban áll (felhasználó, 2026-11-19): a lobbyban a mögötte lévő ruhatár-pinnel egybelógott
-      if (!p.ajtok) { const al = poiWorld(p); return { p, el, world, ag, vaz: [al.clone().setY(al.y + 0.15), al.clone().setY(al.y + (p.cat === 'info' ? 1.9 : G + P))] }; }
+      if (!p.ajtok) { const al = poiWorld(p); return { p, el, world, ag, vaz: [al.clone().setY(al.y + 0.15), al.clone().setY(p.cat === 'info' ? al.y + 1.9 : pinTeto(mag, al, al.y + G + P))] }; }
       const [a, b] = p.ajtok.map(poiWorld);
-      const fa = a.clone().setY(a.y + G), fb = b.clone().setY(b.y + G), kz = fa.clone().lerp(fb, 0.5), tet = kz.clone().setY(kz.y + P);
+      const fa = a.clone().setY(a.y + G), fb = b.clone().setY(b.y + G), kz = fa.clone().lerp(fb, 0.5), tet = kz.clone().setY(pinTeto(mag, kz, kz.y + P));
       return { p, el, world, ag, vaz: [a.clone().setY(a.y + 0.15), fa, fb, b.clone().setY(b.y + 0.15), kz, tet] };
     }
     return { p, el, world };
@@ -1611,8 +1640,8 @@ function updateMarkers() {
     const a = g.fo, m = a.m, n = g.tagok.length;
     const t = a.q[a.q.length - 1];
     const tk = takarJel(m, m.vaz[m.vaz.length - 1]);
-    m.ag.setAttribute('d', szar(a.q)); m.ag.style.display = tk ? 'none' : '';
-    m.ag.style.opacity = a.halv ? 0.3 : 0.9; m.ag.style.strokeWidth = a.focus ? 2.6 : 2;
+    m.ag.setAttribute('d', szar(a.q)); m.ag.style.display = tk || !(SZAR_MINDIG || m.el === selectedEl || m.el === hovPinEl) ? 'none' : '';   // szár csak a kiválasztott (és a rámutatott) pinnél
+    m.ag.style.opacity = a.halv ? 0.3 : (m.el === hovPinEl && m.el !== selectedEl ? 0.45 : 0.9); m.ag.style.strokeWidth = a.focus ? 2.6 : 2;
     m.ag.style.stroke = a.focus || m.el === selectedEl || MINDIG_SZINES.has(m.p.cat) ? CATS[m.p.cat].color : 'rgba(252,191,32,.5)';   // semleges állapotban halvány sárga szár
     m.el.style.transform = `translate(${t[0]}px,${t[1]}px) translate(-50%,-100%) scale(${a.s})`;
     // rétegezés (felhasználó, 2026-11-20): a szolgáltatás-pin mindig a szektorszámok fölött van, egymás között a közelebbi felül
@@ -2454,7 +2483,7 @@ function sugarLampak(root) {
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
   const im = new THREE.InstancedMesh(new THREE.PlaneGeometry(QS.has('eleslampa') ? 5 : 12, QS.has('eleslampa') ? 5 : 12).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ name: 'WEB_lampafolt', map: t, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, opacity: 0.9 }), pont.length);
   const M = new THREE.Matrix4(); pont.forEach(([x, z], i) => { M.makeTranslation(x, 0.03, z); im.setMatrixAt(i, M); });
-  im.renderOrder = 4; im.frustumCulled = false; im.raycast = () => {}; im.name = 'WEB_lampak';
+  im.renderOrder = 4; im.frustumCulled = false; im.raycast = () => {}; im.name = 'WEB_lampak'; im.material.userData.alapSzin = im.material.color.clone(); DIM_ANYAG.push(im.material);
   return im;
 }
 // A V3 sütés (2026-11-23 este) a homlokzatot is a tribün-atlaszba (W_tb_*) tette, ~8 px/m felbontással – a felhasználónak ez elfogadhatatlan
@@ -2526,6 +2555,7 @@ function s1LookV3(root) {
       if (z) {   // tetőlap: telítettebb, „izzó” szín (a tónusleképezés nem fakítja), és neon-keret köré
         const tip = z[1] || m.userData.zonaTipus || ZONA_SZIN_TIPUS[m.color?.getHex()] || null; if (tip) m.userData.zonaTipus = tip;
         if (tip && S1_LAP[tip]) { m.color.setHex(S1_LAP[tip]); m.toneMapped = false; m.opacity = 0.9; m.needsUpdate = true; }
+        m.userData.alapSzin = m.color.clone(); if (!DIM_ANYAG.includes(m)) DIM_ANYAG.push(m);
         lapok.push([o, tip]); continue;
       }
       if (/L1_fal_teto/.test(n) && !QS.has('feketeteto')) {   // a sétány fekete tetejű tömbjei: sötét navy (a referencián (6,15,24) – egy árnyalattal világosabb, hogy felület legyen, ne lyuk)
@@ -2683,7 +2713,7 @@ async function loadLevel(level) {
     }
     scene.add(c.root); if (c.anim) scene.add(c.anim.root);
     const pk = c.pois || c.data.pois;
-    current = { ...c, pois: pk, markers: buildMarkers(pk, c.data.padlo || 0), lights: c.baked ? [] : addPoiLights(pk) };
+    current = { ...c, pois: pk, markers: buildMarkers(pk, c.data.padlo || 0, QS.has('pinregi') ? null : wcMagassagTerkep(c.root)), lights: c.baked ? [] : addPoiLights(pk) };
     camShift = [c.data.camera.shift_x || 0, c.data.camera.shift_y || 0];
     lookAlkalmaz(LEVELS[level].key);
     LM.gain.value = Number(QS.get('lmg')) || c.data.lightmap?.gain || 1; LM.gamma.value = Number(QS.get('lmgam')) || c.data.lightmap?.gamma || 1;
@@ -2742,6 +2772,7 @@ renderer.setAnimationLoop((now) => {
   stepTour(now);
   if (HL.on.value) HL.k.value = QS.has('hlk') ? Number(QS.get('hlk')) : LOOK.uj.value ? (HL.cel === 0 ? Math.max(0, HL.k.value - dt * 7) : Math.min(1, HL.k.value + dt * 7)) : 0.5 + 0.32 * Math.sin(now / 320);   // új kinézet: villogás helyett lágy, ~0,17 s-os felúszás
   if (HL.on.value && HL.cel === 0 && HL.k.value <= 0) HL.on.value = 0;
+  { const k = HL.on.value ? HL.k.value * (1 - HL_DIM) : 0; for (const m of DIM_ANYAG) { const a0 = m.userData.alapSzin; if (!a0) continue; if (m.userData.dimK !== k) { m.userData.dimK = k; m.color.copy(a0).multiplyScalar(1 - k); } } }
   const cel = mode === 'tour' ? 1 : 0;
   if (Math.abs(cel - shiftK) > 0.001) { shiftK += (cel - shiftK) * (SHOT ? 1 : 0.08); applyShift(); camera.updateProjectionMatrix(); }
   { const u = uiCel(), v = uiCelY(); if (Math.abs(u - uiEltol) > 0.5 || Math.abs(v - uiEltolY) > 0.5) { uiEltol += (u - uiEltol) * (SHOT ? 1 : 0.1); uiEltolY += (v - uiEltolY) * (SHOT ? 1 : 0.1); applyShift(); camera.updateProjectionMatrix(); } }
