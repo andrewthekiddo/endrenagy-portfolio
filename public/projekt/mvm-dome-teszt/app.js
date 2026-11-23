@@ -168,7 +168,9 @@ const FACEIN = QS.has('dimregi') ? 1 : Math.min(1, Math.max(0.05, Number(QS.get(
 // az alsó (100-as) tál a sétány szintje alatt: külön, erősebb állandó (?low=0.38); a 200-as sorok (a sétány fölött) a BOWL-t kapják, a kettő között lágy átmenet
 const LOW = QS.has('dimregi') ? 1 : Math.min(1, Math.max(0.05, Number(QS.get('low')) || 0.45));   // shader-érték; mérve a 100-as sorok ≈ 30 %-os, a 200-asok ≈ 55 %-os fényerőn (a kikapcsolthoz képest)
 function addSectorShader(m) {
-  const kat = KAT_HOM.test(alapNev(m.name)) ? 1 : KAT_TAL.test(alapNev(m.name)) ? 2 : 0;
+  // 3 = világító / külső jelzés (homlokzati fénycsík, kapuszám, kapukontúr, minden emisszív anyag): semmilyen halványítás nem éri
+  const fenyes = /szalag|bejaratszam|kapukontur|kapuszam|jeloles_feny|fenyveto/i.test(m.name || '') || !!m.emissiveMap || (!!m.emissive && m.emissive.getHex() !== 0 && (m.emissiveIntensity ?? 1) > 0);
+  const kat = fenyes ? 3 : KAT_HOM.test(alapNev(m.name)) ? 1 : KAT_TAL.test(alapNev(m.name)) ? 2 : 0;
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, { uLmGamma: LM.gamma, uLmGain: LM.gain, uLmAmb: LM.amb, uHlOn: HL.on, uHlK: HL.k, uUj: LOOK.uj, uSzN: HL.n, uSzPadlo: HL.padlo, uSzF: HL.F, uSzR: HL.R, uSzQ: HL.Q });
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
@@ -216,7 +218,7 @@ function addSectorShader(m) {
               if (!b2) { szel = true; break; }
             }
             if (szel) c = mix(c, vec3(1.0, 0.97, 0.9), uHlK);   // éles, vékony világos körvonal
-          } else c = mix(c, mix(vec3(L), c, 0.35) * ${HL_DIM.toFixed(3)}, ${kat === 1 ? '(gl_FrontFacing ? 0.0 : uHlK)' : 'uHlK'});   // a többi rész erősen visszahúzva (felhasználó, 2026-11-23: „nem fedi le eléggé”): ~33 %, színtelenítve; ?dim=
+          } else c = mix(c, mix(vec3(L), c, 0.35) * ${HL_DIM.toFixed(3)}, ${kat === 3 ? '0.0' : kat === 1 ? '(gl_FrontFacing ? 0.0 : uHlK)' : 'uHlK'});   // a többi rész erősen visszahúzva (felhasználó, 2026-11-23: „nem fedi le eléggé”): ~33 %, színtelenítve; ?dim=
           gl_FragColor.rgb = c;
         }
         } else {
@@ -1725,7 +1727,9 @@ function enterTour(dur = 1600) {
   anim = { from: { p: camera.position.clone(), t: controls.target.clone() }, to: { p, t: tg }, t0: performance.now(), dur };
 }
 // a kiválasztott hely felé repülés távolsága (felhasználó, 2026-11-23: „nagyon közel megy”): ×1,7 – a szolgáltatás és a környezete is látszik; ?fokusz=1.7, ?fokuszregi
-const FOKUSZ = QS.has('fokuszregi') ? 1 : Math.min(3, Math.max(0.5, Number(QS.get('fokusz')) || 1.7));
+const FOKUSZ = QS.has('fokuszregi') ? 1 : Math.min(3, Math.max(0.5, Number(QS.get('fokuszszek')) || 1.7));
+// szolgáltatásra kattintva még távolabb (felhasználó, 2026-11-23: „még mindig közel”): ×2,6 az eredetihez képest; ?fokusz=2.6
+const FOKUSZ_SZOLG = QS.has('fokuszregi') ? 1 : Math.min(4, Math.max(0.5, Number(QS.get('fokusz')) || 2.6));
 function enterDetail(anchor, distance = 34, height = 24, irany = null) {
   distance *= FOKUSZ; height *= FOKUSZ;
   mode = 'detail'; nincsUresjarat = false; controls.maxDistance = 160; controls.minPolarAngle = Math.PI * 0.08;
@@ -2005,7 +2009,7 @@ function selectPoi(p, anchor) {
   panel.classList.add('show'); document.body.classList.add('panel-open');
   const at = anchor ? anchor.clone() : poiWorld(p);
   if (p.cat === 'kapu') enterDetail(at, 42, 22, new THREE.Vector3(at.x, 0, at.z).normalize());
-  else enterDetail(at, pahoz ? 34 : szek ? 46 : 30, pahoz ? 30 : szek ? 30 : 20);
+  else { const k = szek || pahoz ? 1 : FOKUSZ_SZOLG / FOKUSZ; enterDetail(at, (pahoz ? 34 : szek ? 46 : 30) * k, (pahoz ? 30 : szek ? 30 : 20) * k); }   // szolgáltatás: távolabb (2,6×), szektor / páholy: 1,7×
   hlFrissit();
 }
 function closePanel(backToTour = true) {
