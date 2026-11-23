@@ -521,6 +521,9 @@ function zonaAtszinez(m, d, szin) {
 }
 function zonaFeliratPontokra(pontok, y, szoveg, szin = 0x0b1220, haromszogek = null) {
   // pontok: [[x, z], …] világkoordinátában
+  // a FELIRAT (BAR, MERCH SHOP …) csak a felülről látható részre: a kézi eresz alá eső pontok kimaradnak, így a felirat a lap kilátszó
+  // elejére kerül és ott fér el (felhasználó, 2026-11-23: „a BAR/MERCH feliratok előrébb … olvashatóan”). Az ikonoknál ezt a lenti háromszög-keresés intézi.
+  if (haromszogek?.lathato && !ZONA_IKON[szoveg] && !QS.has('regifelirat')) { const lp = pontok.filter(([x, z]) => haromszogek.lathato(x, z)); if (lp.length >= Math.max(12, pontok.length * 0.12) && lp.length < pontok.length * 0.95) pontok = lp; }
   const n = pontok.length; if (n < 3) return null;
   let mx = 0, mz = 0; for (const [x, z] of pontok) { mx += x; mz += z; } mx /= n; mz /= n;
   let sxx = 0, szz = 0, sxz = 0; for (const [x, z] of pontok) { const dx = x - mx, dz = z - mz; sxx += dx * dx; szz += dz * dz; sxz += dx * dz; }
