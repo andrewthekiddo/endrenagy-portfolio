@@ -642,7 +642,8 @@ function zonaFeliratPontokra(pontok, y, szoveg, szin = 0x0b1220, haromszogek = n
       for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) { if (!ben[j * nx + i]) continue; const x = x0 + (i - 1) * L, z = z0 + (j - 1) * L; let m = 1e9; for (const [ox, oz] of kint) { const t = (ox - x) ** 2 + (oz - z) ** 2; if (t < m) m = t; } m = Math.sqrt(m); tav.push([x, z, m]); tmax = Math.max(tmax, m); }
       let vx = 0, vz = 0; for (const [x, z] of tav) { vx += x; vz += z; } vx /= tav.length || 1; vz /= tav.length || 1;   // a látható rész súlypontja
       // a látható tetőrész súlypontjához legközelebbi pont, ahol az ikon elfér (felhasználó, 2026-11-23: a 213-as mosdó ikonja nem az egész tető közepén ült)
-      const kell = QS.has('regikozep') ? tmax * 0.9 : Math.min(tmax * 0.9, 0.875 * FELIRAT_M);
+      // a lobbyn pontosan a látható kék rész súlypontja (ott, ahol már elfér egy kisebb ikon is); máshol a nagy ikonnak elég helyet keres
+      const kell = QS.has('regikozep') ? tmax * 0.9 : IKON_SZINT === 'S0' ? Math.min(tmax * 0.9, 0.55) : Math.min(tmax * 0.9, 0.875 * FELIRAT_M);
       let leg = null, lt = 1e9; for (const [x, z, m] of tav) { if (m < kell) continue; const t = (x - vx) ** 2 + (z - vz) ** 2; if (t < lt) { lt = t; leg = [x, z, m]; } }
       if (leg) { kx = leg[0]; kz = leg[1]; d = Math.min(1.4 * FELIRAT_M, 2 * leg[2] * 0.8); }
     }
@@ -717,7 +718,8 @@ function modellLapFeliratok(root, minta, szoveg, kihagy = () => false, szovegFn 
     if (kihagy(pp)) continue;
     const g0 = gy(cs[0]), hsz = ZONA_IKON[typeof szovegFn === 'function' ? szovegFn(pp) : szoveg] ? tri.filter((q) => gy(q[0]) === g0).map((q) => q.flatMap((j) => [pts[j][0], pts[j][2]])) : null;
     // csak a felülről LÁTHATÓ rész számít (a lobby mosdó-lapjának belső fele a lelátó alatt van – oda tett ikon a kék sáv szélén ült)
-    if (hsz && !(IKON_SZINT === 'S0' && !QS.has('regikozep'))) { const mag = wcMagassagTerkep(root), ef = ereszFedes(root); hsz.lathato = (x, z) => mag[wcCy(z) * WC_N + wcCx(x)] < y + 0.6 && ef(x, z) < y + 0.3; }   // a lobbyn a teljes lap közepe (felhasználó, 2026-11-23)
+    // a látható (felülről nem takart) kék rész számít – a felhasználó ezt látja (2026-11-23: a teljes laphoz igazítva „túltoltad”)
+    if (hsz) { const mag = wcMagassagTerkep(root), ef = ereszFedes(root); hsz.lathato = (x, z) => mag[wcCy(z) * WC_N + wcCx(x)] < y + 0.6 && ef(x, z) < y + 0.3; }   // a lobbyn a teljes lap közepe (felhasználó, 2026-11-23)
     const f = zonaFeliratPontokra(pp, y, typeof szovegFn === 'function' ? szovegFn(pp) : szoveg, undefined, hsz); if (f) out.push(f);
   }
   return out;
