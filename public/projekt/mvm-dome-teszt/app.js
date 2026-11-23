@@ -645,6 +645,13 @@ function zonaFeliratPontokra(pontok, y, szoveg, szin = 0x0b1220, haromszogek = n
       // a lobbyn pontosan a látható kék rész súlypontja (ott, ahol már elfér egy kisebb ikon is); máshol a nagy ikonnak elég helyet keres
       const kell = QS.has('regikozep') ? tmax * 0.9 : IKON_SZINT === 'S0' ? Math.min(tmax * 0.9, 0.55) : Math.min(tmax * 0.9, 0.875 * FELIRAT_M);
       let leg = null, lt = 1e9; for (const [x, z, m] of tav) { if (m < kell) continue; const t = (x - vx) ** 2 + (z - vz) ** 2; if (t < lt) { lt = t; leg = [x, z, m]; } }
+      // keresztirányban a látható sáv KÖZEPÉRE (felhasználó, 2026-11-23, lobby WC: „a bal széléhez közel, a jobbhoz háromszor messzebb”): a fő tengely
+      // mentén a súlypontnál marad, a rá merőleges irányban a legbelsőbb (mindkét széltől egyformán távoli) pont – az ikon helyén mért keresztmetszet közepe
+      if (leg && !QS.has('regikozep')) { let sxx = 0, szz = 0, sxz = 0; for (const [x, z] of tav) { sxx += (x - vx) ** 2; szz += (z - vz) ** 2; sxz += (x - vx) * (z - vz); }
+        const fi = 0.5 * Math.atan2(2 * sxz, sxx - szz), ux = Math.cos(fi), uz = Math.sin(fi), sl = (leg[0] - vx) * ux + (leg[1] - vz) * uz;
+        let jo = null, k0 = 1e9, k1 = -1e9; const vx2 = -uz, vz2 = ux;
+        for (const p of tav) { if (Math.abs((p[0] - vx) * ux + (p[1] - vz) * uz - sl) > 0.3) continue; if (!jo || p[2] > jo[2]) jo = p; const kk = (p[0] - vx) * vx2 + (p[1] - vz) * vz2; k0 = Math.min(k0, kk); k1 = Math.max(k1, kk); }
+        if (jo) { const km = (k0 + k1) / 2, kj = (jo[0] - vx) * vx2 + (jo[1] - vz) * vz2; leg = [jo[0] + (km - kj) * vx2, jo[1] + (km - kj) * vz2, jo[2]]; } }   // pontosan a két látható szél felezője
       if (leg) { kx = leg[0]; kz = leg[1]; d = Math.min(1.4 * FELIRAT_M, 2 * leg[2] * 0.8); }
     }
     d *= ikonNagy();   // +15 % (felhasználó, 2026-11-23: a tetőn fekvő ruhatár- és mosdó-ikonok 10–20 %-kal nagyobbak)
