@@ -133,7 +133,7 @@ const cache = {};            // betöltött szintek (gyors visszaváltás)
 // ---------- Anyag-hangolás ----------
 // A színek a Blender-fájlból jönnek (sima anyagok). Itt csak: üveg ne írjon mélységet, a lelátó anyagai kapják a szektor-kiemelő shadert.
 const alapNev = (n) => (n || '').replace(/^W_(?:nb|tb|hm|f\d+)_/, 'W_');   // 'W_tb_…': az S1 V3 tribün-atlasz anyagai (2026-11-23 este) – enélkül a lelátó nem volt rámutatható / koppintható   // 'W_nb_…' (sütetlen réteg) és 'W_fNN_…' (sík árnyalás) előtag nélkül
-const STAND = /^W_(Lelato|TS_lelato|Szek|VIP_szek|Kuzdoter)/i;   // dupla kattintás: ezekre kattintva a szektort választja
+const STAND = /^W_(Lelato|TS_lelato|UJ_lelato|Szek|VIP_szek|Kuzdoter)/i;   // UJ_lelato: a lelátó lépcsője (S1 V3) – nélküle a lépcsősávokon „lyukas” volt a rámutatás   // dupla kattintás: ezekre kattintva a szektort választja
 // Szektor-kiemelés (felhasználó, 2026-11-19): a lelátó adott része villog, pontosan a szektor alakjában. A lelátó a modellben 16 egyenes
 // oldalú sokszög, a közlekedőlépcsők az oldalra merőlegesek → egy szektor = néhány téglalap az oldal saját koordinátáiban
 // (oldal, t0..t1 az oldal mentén, r0..r1 az oldaltól kifelé, z0 / z1 = az első / utolsó sor szintje). Adat: data/szektorok.json – a modell székeiből
@@ -144,7 +144,8 @@ let SZEKTOR = null;                                  // { oldalak: [[nx, ny, d] 
 // a kijelölt / rámutatott szektoron kívüli rész fényereje (egyetlen állandó; ?dim=0.35 próbára; ?dimregi: a régi 0,8)
 const HL_DIM = QS.has('dimregi') ? 0.8 : Math.min(1, Math.max(0.05, Number(QS.get('dim')) || 0.33));
 const DIM_ANYAG = [];   // a shader nélküli, de halványítandó anyagok (színes tetőlapok, lámpafoltok): színük a kiemelés erősségével csökken
-const HL = { on: { value: 0 }, k: { value: 0 }, n: { value: 0 }, padlo: { value: 0 },
+// HL.d: a háttér-halványítás erőssége – külön a kiemeléstől (k), így szektorváltáskor nem villan vissza
+const HL = { on: { value: 0 }, k: { value: 0 }, d: { value: 0 }, elT: 0, n: { value: 0 }, padlo: { value: 0 },
              F: { value: Array.from({ length: 16 }, () => new THREE.Vector3(1, 0, 1e6)) },
              R: { value: Array.from({ length: SZ_MAX }, () => new THREE.Vector4()) },
              Q: { value: Array.from({ length: SZ_MAX }, () => new THREE.Vector3()) } };
@@ -172,10 +173,10 @@ function addSectorShader(m) {
   const fenyes = /szalag|bejaratszam|kapukontur|kapuszam|jeloles_feny|fenyveto/i.test(m.name || '') || !!m.emissiveMap || (!!m.emissive && m.emissive.getHex() !== 0 && (m.emissiveIntensity ?? 1) > 0);
   const kat = fenyes ? 3 : KAT_HOM.test(alapNev(m.name)) ? 1 : KAT_TAL.test(alapNev(m.name)) ? 2 : 0;
   m.onBeforeCompile = (sh) => {
-    Object.assign(sh.uniforms, { uLmGamma: LM.gamma, uLmGain: LM.gain, uLmAmb: LM.amb, uHlOn: HL.on, uHlK: HL.k, uUj: LOOK.uj, uSzN: HL.n, uSzPadlo: HL.padlo, uSzF: HL.F, uSzR: HL.R, uSzQ: HL.Q });
+    Object.assign(sh.uniforms, { uLmGamma: LM.gamma, uLmGain: LM.gain, uLmAmb: LM.amb, uHlOn: HL.on, uHlK: HL.k, uDimK: HL.d, uUj: LOOK.uj, uSzN: HL.n, uSzPadlo: HL.padlo, uSzF: HL.F, uSzR: HL.R, uSzQ: HL.Q });
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
       .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nuniform vec3 uLmAmb;\nuniform float uLmGamma,uLmGain,uHlOn,uHlK,uUj,uSzN,uSzPadlo;\nuniform vec3 uSzF[16];\nuniform vec4 uSzR[' + SZ_MAX + '];\nuniform vec3 uSzQ[' + SZ_MAX + '];')
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nuniform vec3 uLmAmb;\nuniform float uLmGamma,uLmGain,uHlOn,uHlK,uDimK,uUj,uSzN,uSzPadlo;\nuniform vec3 uSzF[16];\nuniform vec4 uSzR[' + SZ_MAX + '];\nuniform vec3 uSzQ[' + SZ_MAX + '];')
       .replace('reflectedLight.indirectDiffuse += lightMapTexel.rgb * lightMapIntensity * RECIPROCAL_PI;',
         'vec3 lmL = lightMapTexel.rgb * lightMapIntensity * RECIPROCAL_PI; lmL *= uLmGain * pow(max(dot(lmL, vec3(0.2126, 0.7152, 0.0722)), 1e-5), uLmGamma - 1.0); reflectedLight.indirectDiffuse += lmL + uLmAmb;')
       .replace('#include <dithering_fragment>', `#include <dithering_fragment>
@@ -218,7 +219,7 @@ function addSectorShader(m) {
               if (!b2) { szel = true; break; }
             }
             if (szel) c = mix(c, vec3(1.0, 0.97, 0.9), uHlK);   // éles, vékony világos körvonal
-          } else c = mix(c, mix(vec3(L), c, 0.35) * ${HL_DIM.toFixed(3)}, ${kat === 3 ? '0.0' : kat === 1 ? '(gl_FrontFacing ? 0.0 : uHlK)' : 'uHlK'});   // a többi rész erősen visszahúzva (felhasználó, 2026-11-23: „nem fedi le eléggé”): ~33 %, színtelenítve; ?dim=
+          } else c = mix(c, mix(vec3(L), c, 0.35) * ${HL_DIM.toFixed(3)}, ${kat === 3 ? '0.0' : kat === 1 ? '(gl_FrontFacing ? 0.0 : uDimK)' : 'uDimK'});   // a többi rész erősen visszahúzva (felhasználó, 2026-11-23: „nem fedi le eléggé”): ~33 %, színtelenítve; ?dim=
           gl_FragColor.rgb = c;
         }
         } else {
@@ -2109,7 +2110,7 @@ function syncSorok() {
 function setHover(s, pont) {
   if (s !== hovSec) { hovSec = s; hlFrissit(); syncSorok(); }
   canvas.style.cursor = s && pont ? 'pointer' : '';
-  if (s && pont) {
+  if (s && pont && !(s.cat === 'szektor' && !QS.has('tipregi'))) {   // szektornál nincs kártya rámutatáskor (felhasználó: a számot ismételte) – csak kiemelés; ?tipregi
     hovtip.innerHTML = s.cat === 'paholy' ? `${s.name}<small>VIP páholy · ${ALLAPOT[s.allapot]}</small>` : s.cat === 'kapu' ? `${s.name}<small>Bejárat · ${side(s)}${s.fotok ? ' · fotó' : ''}</small>` : s.cat !== 'szektor' ? `${s.name}<small>${CATS[s.cat]?.label || ''} · ${side(s)}</small>` : `${s.name}<small>${TIER[s.id[8]] || LEVELS[current.level].tier} · ${side(s)}</small>`;
     hovtip.style.transform = `translate(${pont.x + 16}px, ${pont.y - 52}px)`; hovtip.classList.add('show');
   } else hovtip.classList.remove('show');
@@ -2174,7 +2175,7 @@ function szektorKepponton(x, y) {
   const hit = sugarTalalatok(x, y).find((h) => (h.object.userData.paholy || !(h.object.material?.transparent)) && h.object.visible);
   if (hit?.object.userData.paholy) return { s: hit.object.userData.paholy, pont: hit.point };
   if (!hit || !STAND.test(alapNev(hit.object.material?.name))) return null;
-  const s = sectorAt(hit.point, true);
+  const s = sectorAt(hit.point, true) || (QS.has('hoverregi') ? null : sectorAt(hit.point));   // az ülés / korlát a sorok sávja fölött van: tartalékként a szektor alaprajza dönt (mint a koppintásnál)
   return s ? { s, pont: hit.point } : null;
 }
 
@@ -2664,6 +2665,14 @@ async function loadLevel(level) {
         data.pois = data.pois.filter((p) => !ki.has(p)); }
       if (!QS.has('kulonwc')) data.pois = osszevonMosdo(data.pois, L.key);   // férfi + női mosdó egy közös pin
       if (KAMERAK[L.key] && !QS.has('regikamera')) data.camera = KAMERAK[L.key];   // V2: tág áttekintő kamera (data/kamerak.json)
+      // körüljáró-szintek kezdő kamerája (felhasználó, 2026-11-23, célkép): laposabb, ferdébb rálátás – a túloldali lelátófal és a homlokzat belseje
+      // is látszik, a gyűrű ellipszis; kicsit közelebb, mint az eddigi 208 m / 123 m-es pálya. A legnagyobb kitávolítás nem változik. ?kamregi: a régi;
+      // próbához ?kamR=…&kamH=… (vízszintes sugár / magasság, m)
+      if (['S1', 'S2', 'S3'].includes(L.key) && data.camera?.path && !QS.has('kamregi')) {
+        const KR = { S1: [165, 76], S2: [190, 86], S3: [205, 95] }[L.key], R = Number(QS.get('kamR')) || KR[0], H = Number(QS.get('kamH')) || KR[1], E = 6;   // E: a célpont a középponton túl, a túloldal felé (a közeli bódék ne vágódjanak le)
+        data.camera = { ...data.camera, path: data.camera.path.map((q) => { const dx = q[0] - q[3], dy = q[1] - q[4], d = Math.hypot(dx, dy) || 1, ux = dx / d, uy = dy / d;
+          return [ux * R, uy * R, H, -ux * E, -uy * E, 1]; }) };
+      }
       let c_baked = false, c_lm = null;
       // a modell és a lightmap egyszerre töltődik (V2: gyorsabb betöltés), nem egymás után
       const lmKicsi = !!data.lightmap && !QS.has('nokicsi') && !QS.has('lm8k') && /_lm\.webp$/.test(data.lightmap.file);
@@ -2817,8 +2826,12 @@ renderer.setAnimationLoop((now) => {
   stepAnim(now);
   stepTour(now);
   if (HL.on.value) HL.k.value = QS.has('hlk') ? Number(QS.get('hlk')) : LOOK.uj.value ? (HL.cel === 0 ? Math.max(0, HL.k.value - dt * 7) : Math.min(1, HL.k.value + dt * 7)) : 0.5 + 0.32 * Math.sin(now / 320);   // új kinézet: villogás helyett lágy, ~0,17 s-os felúszás
-  if (HL.on.value && HL.cel === 0 && HL.k.value <= 0) HL.on.value = 0;
-  { const k = HL.on.value ? HL.k.value * (1 - HL_DIM) : 0; for (const m of DIM_ANYAG) { const a0 = m.userData.alapSzin; if (!a0) continue; if (m.userData.dimK !== k) { m.userData.dimK = k; m.color.copy(a0).multiplyScalar(1 - k); } } }
+  // a háttér-halványítás (d) a kiemelés mögött: amíg bármely szektor rámutatott / kijelölt, a célja 1; elengedéskor ~150 ms türelmi idő után halványul el
+  // (szektorról szektorra mozgatva így nem villan vissza a normál fényerő); ?hoverregi: a régi (a kiemeléssel együtt mozgó) viselkedés
+  { const van = HL.on.value && HL.cel !== 0; if (van) HL.elT = now;
+    HL.d.value = QS.has('hoverregi') ? HL.k.value : (van || now - HL.elT < 150 ? Math.min(1, HL.d.value + dt * 7) : Math.max(0, HL.d.value - dt * 7)); }
+  if (HL.on.value && HL.cel === 0 && HL.k.value <= 0 && HL.d.value <= 0) HL.on.value = 0;
+  { const k = HL.on.value ? HL.d.value * (1 - HL_DIM) : 0; for (const m of DIM_ANYAG) { const a0 = m.userData.alapSzin; if (!a0) continue; if (m.userData.dimK !== k) { m.userData.dimK = k; m.color.copy(a0).multiplyScalar(1 - k); } } }
   const cel = mode === 'tour' ? 1 : 0;
   if (Math.abs(cel - shiftK) > 0.001) { shiftK += (cel - shiftK) * (SHOT ? 1 : 0.08); applyShift(); camera.updateProjectionMatrix(); }
   { const u = uiCel(), v = uiCelY(); if (Math.abs(u - uiEltol) > 0.5 || Math.abs(v - uiEltolY) > 0.5) { uiEltol += (u - uiEltol) * (SHOT ? 1 : 0.1); uiEltolY += (v - uiEltolY) * (SHOT ? 1 : 0.1); applyShift(); camera.updateProjectionMatrix(); } }
@@ -2889,7 +2902,7 @@ loadLevel(LEVELS[start] && (start !== 'epulet' || VAN_EPULET) ? start : ALAP)
   }
 });
 
-window.__mvm = { scene, camera, controls, THREE, loadLevel, modellLapFeliratok, zonaFeliratPontokra, magTerkep: () => wcMagassagTerkep(current.root), WC_N, WC_R, get current() { return current; }, get mode() { return mode; }, hl: (sz) => { hovSec = sz ? current.pois.find((p) => p.id === 'szektor_' + sz) || null : null; hlFrissit(); return !!hovSec; } };   // hl: tesztekhez (szektor kiemelése kóddal)
+window.__mvm = { HL, scene, camera, controls, THREE, loadLevel, modellLapFeliratok, zonaFeliratPontokra, magTerkep: () => wcMagassagTerkep(current.root), WC_N, WC_R, get current() { return current; }, get mode() { return mode; }, hl: (sz) => { hovSec = sz ? current.pois.find((p) => p.id === 'szektor_' + sz) || null : null; hlFrissit(); return !!hovSec; } };   // hl: tesztekhez (szektor kiemelése kóddal)
 
 // ---------------------------------------------------------------------------------------------
 // Nyelvválasztó HU / EN (2026-11-22, a mvm-dome.hu fejléce szerint). A felület feliratait egy szótár fordítja:
