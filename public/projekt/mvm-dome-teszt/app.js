@@ -2361,7 +2361,7 @@ function setupAnim(gltf, clipTop) {
 // ---------- Szintbetöltés ----------
 function showLoader(name) {
   lvlNameEl.textContent = `${name} betöltése`;
-  if (window.__elo && !window.__elo.kesz) { window.__elo.kesz = true; pctAlap = window.__elo.p / 100; } else pctAlap = 0;
+  if (window.__elo && !window.__elo.kesz) { window.__elo.kesz = true; pctAlap = window.__elo.p / 100; } else { pctAlap = 0; window.__lepik?.indit(true); }   // szintváltás: a szalagos logó újra, rövid (~1,5 s) változatban
   loaderEl.classList.remove('hide'); setProgress(0);
 }
 // A százalék folyamatosan számol föl (felhasználó, V2): a cél a tényleges letöltés, a kiírt szám egyesével követi – nem ugrik 0-ról 100-ra
@@ -2553,7 +2553,8 @@ async function loadLevel(level) {
     renderer.compile(scene, camera);
     await Promise.race([Promise.all(IKON_ELO.map((k) => k.decode?.().catch(() => {}))), new Promise((r) => setTimeout(r, 1500))]);   // a betöltő csak akkor tűnik el, ha az ikonok is megvannak
     if (!performance.getEntriesByName('mvm-kesz').length) performance.mark('mvm-kesz');   // a push rutin mérése ehhez igazodik
-    setTimeout(() => { loaderEl.classList.add('hide'); if (SHOT) loaderEl.style.display = 'none'; }, SHOT ? 250 : (document.body.classList.contains('lepik-be') ? 1300 : 450));   // epikus betöltő: rövid kitartás a lezárás (villanás, fénysáv) után   // a számláló még kifut 100-ig
+    const rejt = () => { loaderEl.classList.add('hide'); if (SHOT) loaderEl.style.display = 'none'; };
+    if (SHOT) setTimeout(rejt, 250); else if (window.__lepik) window.__lepik.vege(rejt); else setTimeout(rejt, 450);   // epikus betöltő: a lezárás (villanás, fénysáv) + rövid kitartás után tűnik el   // epikus betöltő: rövid kitartás a lezárás (villanás, fénysáv) után   // a számláló még kifut 100-ig
     tour.zoom = alapZoom(); tour.dir = 1;
     tour.u = c.path.closed ? 0 : 0.5;
     const p = new THREE.Vector3(), t = new THREE.Vector3(); pathAt(tour.u, p, t);
