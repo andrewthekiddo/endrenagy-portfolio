@@ -23,10 +23,10 @@ if (SHOT) { addEventListener('error', (e) => { document.title = 'JSERR ' + e.mes
 // 4 szint + a teljes épület, mindegyik a saját padlóján (y = 0), az aréna középpontja az origó. A modellek a Blender showreel-fájlból
 // (00_Teljes_epulet/…_showreel_v01.blend) jönnek: _Blender_Projects/00_Web_export/scripts/export_web.py + web_adat.py
 const LEVELS = {
-  felso:  { key: 'S3', name: 'Felső körüljáró szint', model: 'models/S3.glb', meret: 5737108, data: 'data/S3.json', tier: 'Felső lelátó (3xx)' },
-  paholy: { key: 'S2', name: 'Páholy szint (VIP)', model: 'models/S2.glb', meret: 6179920, data: 'data/S2.json', tier: 'Alsó lelátó (2xx)' },
-  also:   { key: 'S1', name: 'Alsó körüljáró szint', model: 'models/S1.glb', meret: 4358096, data: 'data/S1.json', tier: 'Alsó lelátó (2xx)' },
-  lobby:  { key: 'S0', name: 'Lobby – Bejárati szint', model: 'models/S0.glb', meret: 1733080, data: 'data/S0.json', tier: 'Küzdőtéri lelátó (1xx)' },
+  felso:  { key: 'S3', name: 'Felső körüljáró szint', model: 'models/S3.glb', meret: 5683828, data: 'data/S3.json', tier: 'Felső lelátó (3xx)' },
+  paholy: { key: 'S2', name: 'Páholy szint (VIP)', model: 'models/S2.glb', meret: 6139900, data: 'data/S2.json', tier: 'Alsó lelátó (2xx)' },
+  also:   { key: 'S1', name: 'Alsó körüljáró szint', model: 'models/S1.glb', meret: 4318684, data: 'data/S1.json', tier: 'Alsó lelátó (2xx)' },
+  lobby:  { key: 'S0', name: 'Lobby – Bejárati szint', model: 'models/S0.glb', meret: 1703972, data: 'data/S0.json', tier: 'Küzdőtéri lelátó (1xx)' },
   // a teljes, megépített épület kívülről (homlokzat bekapcsolva, nyitott tető): a kezdőnézet, ha a fájljai megvannak (lásd VAN_EPULET)
   epulet: { key: 'S4', name: 'MVM Dome', model: 'models/S4.glb', meret: 6375816, data: 'data/S4.json', tier: 'Lelátó' },
 };
@@ -275,7 +275,7 @@ const SIK_LELATO = Number(QS.get('lelato')) || 0.4;
 // (felhasználó: „letisztult … az információ könnyen átjöjjön”); próbához: ?szovet=0.3
 // 2026-11-23 este: a felhasználónak a minta „nagyon blokki … katonai szerű” → ALAPBÓL KI (sima sötét lelátó, mint korábban), amíg nyugodtabb
 // minta nem jön; bekapcsolás próbára: ?szovet=0.1 (az érték a minta fényessége). A lejárók padlója is ezt az anyagot kapta → ott is sima lesz.
-const SIK_SZOVET = QS.has('szovet') ? Number(QS.get('szovet')) || 0 : 0;   // a sötét lelátó / küzdőtér (f100 osztály) fényessége – a Blender-képen szinte fekete
+const SIK_SZOVET = QS.has('szovet') ? Number(QS.get('szovet')) || 0 : 0.12;   // 16:30: az ÚJ, nyugodt mintával (a felhasználó jóváhagyta) újra BE, visszafogottan; ?szovet=0 ki   // a sötét lelátó / küzdőtér (f100 osztály) fényessége – a Blender-képen szinte fekete
 // A sütött fény görbéje: fény' = erősítés × fény^gamma (a fényesség szerint, a színarány megtartásával). A Cycles-sütés árnyékai
 // mélyebbek, mint a Blender (EEVEE, árnyék nélküli lámpák) képe; a gamma < 1 megemeli az árnyékokat. Szintenként a data/<S>.json adja.
 const LM = { gamma: { value: 1.0 }, gain: { value: 1.0 }, amb: { value: new THREE.Vector3(0.02, 0.024, 0.033).multiplyScalar(QS.has('amb') ? Number(QS.get('amb')) : 1) } };   // amb: kis alapfény, hogy az árnyék se legyen csupa fekete
