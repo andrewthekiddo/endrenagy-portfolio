@@ -10,7 +10,18 @@
 <script>
 // Gyors indulás (V2): a kezdőszint modellje és fénytérképe már a HTML beolvasásakor elkezd letöltődni, nem csak a kód elindulása után
 // MVM_VER: a modellek/adatok verziója – minden modellcserénél EMELNI kell, így a böngésző (iPad Safari is) biztosan az újat tölti
-window.MVM_VER = '2026-11-23zk';
+window.MVM_VER = '2026-11-23zl';
+// Mindig a legfrissebb kiadás (felhasználó, 2026-11-23: „egy link legyen, ne ezer verzió”): betöltés után és amikor a lap újra előtérbe kerül
+// (iPad Safari a nyitva hagyott lapot a memóriából mutatja), a néző gyorsítótár nélkül lekéri a saját HTML-jét; ha abban újabb MVM_VER áll,
+// egyszer újratölt (munkamenetenként egy kiadásra legfeljebb egyszer – nincs töltési hurok). ?nofrissit: kikapcsolva
+(function(){var q=new URLSearchParams(location.search);if(q.has('nofrissit')||!/^https?:/.test(location.protocol))return;
+  var V=window.MVM_VER,fut=false;function nez(){if(fut)return;fut=true;
+    fetch(location.pathname+'?verzio='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():''}).then(function(t){
+      var m=/MVM_VER = '([^']+)'/.exec(t);if(m&&m[1]!==V){var k='mvm_frissit_'+m[1];try{if(sessionStorage.getItem(k))return;sessionStorage.setItem(k,'1')}catch(e){}location.reload();}
+    }).catch(function(){}).then(function(){fut=false;});}
+  addEventListener('pageshow',function(e){if(e.persisted)nez();});
+  document.addEventListener('visibilitychange',function(){if(!document.hidden)nez();});
+  addEventListener('focus',nez);setTimeout(nez,5000);})();
 (function () {
   var V = window.MVM_VER;
   var S = { lobby: 'S0', also: 'S1', paholy: 'S2', felso: 'S3', epulet: 'S4' }, q = new URLSearchParams(location.search), k = S[q.get('szint')] || 'S4';
@@ -140,6 +151,8 @@ window.MVM_VER = '2026-11-23zk';
   /* új kinézet (2026-11-23, ?regilook nélkül): sötét, letisztult infókártya + finom vignetta a kép szélein */
   body.ujlook .hovtip{background:rgba(11,18,32,.94);color:#fff;border:1px solid rgba(255,255,255,.14);box-shadow:0 12px 32px rgba(0,0,0,.55);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
   body.ujlook .hovtip small{color:#98a2b3}
+  .verzio{position:fixed;right:76px;bottom:6px;z-index:9;font:600 10px/1 Nunito,system-ui,sans-serif;color:rgba(252,252,253,.32);letter-spacing:.02em;pointer-events:none;user-select:none}
+  body.panel-open .verzio{display:none}
   /* ---- 2026-11-23 éjjel: négyzetes pinek, nagyobb szektorszámok, hosszabb fejléc-átmenet ---- */
   /* lekerekített négyzetes pin (a navigációs gombok formája: 44 px / 12 px → 36 px / 10 px); kijelölve a szolgáltatás színével kitöltve, fehér négyzet nélkül; ?pinkor */
   body.pinnegyzet .mk:not(.szektor) .pin,body.pinnegyzet .mk .pin .ik{border-radius:10px}
@@ -431,6 +444,7 @@ window.MVM_VER = '2026-11-23zk';
     <a class="more" id="panelMore" href="https://mvm-dome.hu/hu/szolgaltatasok" target="_blank" rel="noopener">Bővebben <span>›</span></a>
   </div>
 </aside>
+<div class="verzio" id="verzio" aria-hidden="true"></div>
 <div class="tools" id="tools">
   <button id="tPlusz" class="negyzet" aria-label="Nagyítás"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span class="t">Nagyítás</span></button>
   <button id="tMinusz" class="negyzet" aria-label="Távolítás"><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg><span class="t">Távolítás</span></button>
@@ -537,5 +551,6 @@ window.MVM_VER = '2026-11-23zk';
 } }
 </script>
 <script type="module" src="/projekt/mvm-dome-teszt/app.js"></script>
+<script>(function(){var e=document.getElementById('verzio');if(e)e.textContent='v '+(window.MVM_VER||'');})();</script>
 </body>
 </html>
