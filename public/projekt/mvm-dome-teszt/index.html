@@ -10,7 +10,7 @@
 <script>
 // Gyors indulás (V2): a kezdőszint modellje és fénytérképe már a HTML beolvasásakor elkezd letöltődni, nem csak a kód elindulása után
 // MVM_VER: a modellek/adatok verziója – minden modellcserénél EMELNI kell, így a böngésző (iPad Safari is) biztosan az újat tölti
-window.MVM_VER = '2026-11-23g';
+window.MVM_VER = '2026-11-23h';
 (function () {
   var V = window.MVM_VER;
   var S = { lobby: 'S0', also: 'S1', paholy: 'S2', felso: 'S3', epulet: 'S4' }, q = new URLSearchParams(location.search), k = S[q.get('szint')] || 'S4';
@@ -132,6 +132,11 @@ window.MVM_VER = '2026-11-23g';
   .hovtip{position:fixed;left:0;top:0;z-index:20;pointer-events:none;background:#fff;color:var(--navy);border-radius:10px;padding:8px 12px;font:800 14px Nunito,sans-serif;box-shadow:0 10px 28px rgba(0,0,0,.45);white-space:nowrap;opacity:0;transition:opacity .12s}
   .hovtip small{display:block;color:#475467;font-weight:600;font-size:12px;margin-top:1px}
   .hovtip.show{opacity:1}
+  /* új kinézet (2026-11-23, ?regilook nélkül): sötét, letisztult infókártya + finom vignetta a kép szélein */
+  body.ujlook .hovtip{background:rgba(11,18,32,.94);color:#fff;border:1px solid rgba(255,255,255,.14);box-shadow:0 12px 32px rgba(0,0,0,.55);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+  body.ujlook .hovtip small{color:#98a2b3}
+  .vignetta{display:none}
+  body.ujlook .vignetta{display:block;position:fixed;inset:0;pointer-events:none;z-index:1;background:radial-gradient(ellipse 75% 70% at 50% 52%,rgba(4,8,16,0) 55%,rgba(4,8,16,.42) 100%)}
   .mk.szektor.hov .pin{background:var(--yellow);color:var(--navy);transform:scale(1.15)}
 
   /* --- filter panel (most a „Szolgáltatások” fül tartalma) --- */
@@ -330,6 +335,7 @@ window.MVM_VER = '2026-11-23g';
   <div class="pane" id="paneTalalat" hidden></div>
 </aside>
 <button class="sideOpen" id="sideOpen"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Szektorok és szolgáltatások</button>
+<div class="vignetta"></div>
 <div class="hovtip" id="hovtip"></div>
 
 <aside class="panel" id="panel">

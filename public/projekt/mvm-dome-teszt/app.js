@@ -73,13 +73,18 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPrefere
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.AgXToneMapping;          // mint a Blender-fájl (AgX) – a sütött fény így a showreel képéhez hasonlít
-renderer.toneMappingExposure = 1.0;
+// ÚJ KINÉZET (felhasználó, 2026-11-23, Halden Arena referencia: „jól nézzen ki, letisztult legyen, az információ könnyen átjöjjön”):
+// sötétebb, de nem sáros hangulat, finom vignetta (index.html), visszafogott hideg árnyék / meleg fény színezés; a kijelölt szektor
+// kivilágosodik vékony fénykörvonallal, minden más kissé halványabb és fakóbb (a pinek, számok, feliratok érintetlenek). Régi kinézet: ?regilook
+const UJLOOK = !QS.has('regilook');
+renderer.toneMappingExposure = UJLOOK ? 0.94 : 1.0;
+if (UJLOOK) document.body.classList.add('ujlook');
 renderer.localClippingEnabled = true;
 renderer.debug.onShaderError = (gl, prog, vs, fs) => { document.title = 'SHADERERR ' + (gl.getShaderInfoLog(fs) || '') + ' || ' + (gl.getShaderInfoLog(vs) || ''); };
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x1d2939);   // a mvm-dome.hu oldalháttere (grey-800, 2026-11-22; előtte 0x141d2b)
-scene.fog = new THREE.Fog(0x1d2939, 320, 700);
+scene.background = new THREE.Color(UJLOOK ? 0x111a28 : 0x1d2939);   // a mvm-dome.hu oldalháttere (grey-800, 2026-11-22; előtte 0x141d2b); új kinézet: sötétebb kékes
+scene.fog = new THREE.Fog(UJLOOK ? 0x111a28 : 0x1d2939, 320, 700);
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 scene.environmentIntensity = 0.35;
@@ -149,6 +154,38 @@ function addSectorShader(m) {
       .replace('reflectedLight.indirectDiffuse += lightMapTexel.rgb * lightMapIntensity * RECIPROCAL_PI;',
         'vec3 lmL = lightMapTexel.rgb * lightMapIntensity * RECIPROCAL_PI; lmL *= uLmGain * pow(max(dot(lmL, vec3(0.2126, 0.7152, 0.0722)), 1e-5), uLmGamma - 1.0); reflectedLight.indirectDiffuse += lmL + uLmAmb;')
       .replace('#include <dithering_fragment>', `#include <dithering_fragment>
+` + (UJLOOK ? `
+        { // új kinézet: visszafogott színezés – a sötét részek kicsit hidegebbek, a világosak kicsit melegebbek
+          float gL = dot(gl_FragColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+          gl_FragColor.rgb *= mix(vec3(0.95, 0.98, 1.05), vec3(1.04, 1.0, 0.94), smoothstep(0.08, 0.55, gL)); }
+        if (uHlOn > 0.5) {
+          vec2 hp = vec2(vWPos.x, -vWPos.z);
+          float hr = -1e9, ht = 0.0; int hf = 0;
+          for (int i = 0; i < 16; i++) { vec3 f = uSzF[i]; float r = dot(f.xy, hp) - f.z; if (r > hr) { hr = r; hf = i; ht = dot(vec2(-f.y, f.x), hp); } }
+          float hz = vWPos.y + uSzPadlo; bool bent = false;
+          for (int i = 0; i < ${SZ_MAX}; i++) {
+            if (float(i) >= uSzN) break;
+            vec4 q = uSzR[i]; vec3 e = uSzQ[i];
+            float dz = hz - mix(e.y, e.z, clamp((hr - q.z) / (q.w - q.z), 0.0, 1.0));
+            if (int(e.x + 0.5) == hf && ht > q.x && ht < q.y && hr > q.z && hr < q.w && dz > -0.5 && dz < 1.2) { bent = true; break; }
+          }
+          vec3 c = gl_FragColor.rgb; float L = dot(c, vec3(0.2126, 0.7152, 0.0722));
+          if (bent) {
+            bool fel = normalize(cross(dFdx(vWPos), dFdy(vWPos))).y > 0.6;
+            vec3 lit = mix(c * 1.6 + 0.08, vec3(0.94, 0.92, 0.87), fel ? 0.62 : 0.3);   // „kivilágított” szektor: meleg fehér fény a sorokon
+            c = mix(c, lit, uHlK);
+            // vékony fénykörvonal: a szektor szélén (a belső téglalap-határokon nem – ott a szomszéd pont is a szektorban van)
+            float d = 0.28; bool szel = false;
+            for (int k = 0; k < 4; k++) {
+              float pt = ht + (k == 0 ? d : k == 1 ? -d : 0.0), pr = hr + (k == 2 ? d : k == 3 ? -d : 0.0); bool b2 = false;
+              for (int i = 0; i < ${SZ_MAX}; i++) { if (float(i) >= uSzN) break; vec4 q = uSzR[i]; vec3 e = uSzQ[i];
+                if (int(e.x + 0.5) == hf && pt > q.x && pt < q.y && pr > q.z && pr < q.w) { b2 = true; break; } }
+              if (!b2) { szel = true; break; }
+            }
+            if (fel && szel) c = mix(c, vec3(1.0, 0.94, 0.76), uHlK);
+          } else c = mix(c, vec3(L) * 0.5, 0.62 * uHlK);   // minden más: ~35 %-kal sötétebb és fakóbb (de olvasható; a pinek, számok, feliratok nem halványulnak)
+          gl_FragColor.rgb = c;
+        }` : `
         if (uHlOn > 0.5 && normalize(cross(dFdx(vWPos), dFdy(vWPos))).y > 0.6) {   // felfelé néző lap (a normál a képernyő-deriváltakból)
           vec2 hp = vec2(vWPos.x, -vWPos.z);
           float hr = -1e9, ht = 0.0; int hf = 0;
@@ -160,13 +197,13 @@ function addSectorShader(m) {
             float dz = hz - mix(e.y, e.z, clamp((hr - q.z) / (q.w - q.z), 0.0, 1.0));   // magasság a sorok lejtőjéhez képest (alatta a körüljáró padlója sötét marad)
             if (int(e.x + 0.5) == hf && ht > q.x && ht < q.y && hr > q.z && hr < q.w && dz > -0.5 && dz < 1.2) { gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(0.99, 0.75, 0.13), uHlK); break; }
           }
-        }` + (hatBias(m) ? `
+        }`) + (hatBias(m) ? `
         // Nulla vastagságú falak (pl. büfé-fülke belső hátfala = a tömb külső oldala, egy síkban, ellentétes normállal): mindkét lap
         // mindkét oldalról rajzolódik → a hátoldal kicsit hátrébb kerül a mélységben, így mindig a néző felé forduló lap látszik (nincs villogás,
         // és – a hátlap-eldobással szemben – fordított normálú lap se tűnik el).
         gl_FragDepth = gl_FragCoord.z + (gl_FrontFacing ? 0.0 : 4e-7);` : ''));   // ~7 lépés a 24 bites mélységben: csak a pontosan egy síkba eső lapokra hat
   };
-  m.customProgramCacheKey = () => 'szektor-hl9' + (hatBias(m) ? 'd' : 's');
+  m.customProgramCacheKey = () => 'szektor-hl9' + (hatBias(m) ? 'd' : 's') + (UJLOOK ? 'u' : '');
 }
 // Kézi felülírások (felhasználó, 2026-11-18): a lelátó sötét, ne fehér; a lelátó-bejáratok sötét számai (a fehér szektorszám
 // mellett „duplának” látszottak) rejtve
@@ -1832,7 +1869,8 @@ $('#panelX').addEventListener('click', () => closePanel(true));
 // Szektor-kiemelés: a kiválasztott szektor téglalapjai a shader uniformjaiba (alak: data/szektorok.json)
 function highlightSector(s) {
   const rects = s && current && SZEKTOR ? SZEKTOR.szektorok[s.id.slice(8)] : null;
-  if (!rects) { HL.on.value = 0; return; }
+  if (!rects) { HL.on.value = 0; HL.k.value = 0; HL.szek = null; return; }
+  if (HL.szek !== s.id) { HL.szek = s.id; if (UJLOOK) HL.k.value = 0; }
   rects.slice(0, SZ_MAX).forEach((q, i) => { HL.R.value[i].set(q[1], q[2], q[3], q[4]); HL.Q.value[i].set(q[0], q[5], q[6]); });
   HL.n.value = Math.min(rects.length, SZ_MAX); HL.padlo.value = current.data.padlo || 0;
   HL.on.value = 1;
@@ -2430,7 +2468,7 @@ renderer.setAnimationLoop((now) => {
   if (current?.anim) current.anim.mixer.update(dt);
   stepAnim(now);
   stepTour(now);
-  if (HL.on.value) HL.k.value = QS.has('hlk') ? Number(QS.get('hlk')) : 0.5 + 0.32 * Math.sin(now / 320);
+  if (HL.on.value) HL.k.value = QS.has('hlk') ? Number(QS.get('hlk')) : UJLOOK ? Math.min(1, HL.k.value + dt * 6) : 0.5 + 0.32 * Math.sin(now / 320);   // új kinézet: villogás helyett lágy, ~0,17 s-os felúszás
   const cel = mode === 'tour' ? 1 : 0;
   if (Math.abs(cel - shiftK) > 0.001) { shiftK += (cel - shiftK) * (SHOT ? 1 : 0.08); applyShift(); camera.updateProjectionMatrix(); }
   { const u = uiCel(), v = uiCelY(); if (Math.abs(u - uiEltol) > 0.5 || Math.abs(v - uiEltolY) > 0.5) { uiEltol += (u - uiEltol) * (SHOT ? 1 : 0.1); uiEltolY += (v - uiEltolY) * (SHOT ? 1 : 0.1); applyShift(); camera.updateProjectionMatrix(); } }
@@ -2501,7 +2539,7 @@ loadLevel(LEVELS[start] && (start !== 'epulet' || VAN_EPULET) ? start : ALAP)
   }
 });
 
-window.__mvm = { scene, camera, controls, THREE, loadLevel, modellLapFeliratok, zonaFeliratPontokra, magTerkep: () => wcMagassagTerkep(current.root), WC_N, WC_R, get current() { return current; }, get mode() { return mode; } };
+window.__mvm = { scene, camera, controls, THREE, loadLevel, modellLapFeliratok, zonaFeliratPontokra, magTerkep: () => wcMagassagTerkep(current.root), WC_N, WC_R, get current() { return current; }, get mode() { return mode; }, hl: (sz) => { hovSec = sz ? current.pois.find((p) => p.id === 'szektor_' + sz) || null : null; hlFrissit(); return !!hovSec; } };   // hl: tesztekhez (szektor kiemelése kóddal)
 
 // ---------------------------------------------------------------------------------------------
 // Nyelvválasztó HU / EN (2026-11-22, a mvm-dome.hu fejléce szerint). A felület feliratait egy szótár fordítja:
