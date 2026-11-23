@@ -567,7 +567,8 @@ const ZONA_SZOVEG = { bar: 'BAR', ruhatar: 'CLOAKROOM', wc: 'TOILET', merch: 'ME
 // minden felirat ugyanakkora (FELIRAT_M méter magas); ha nem fér el a helyiségben, a rövidebb változat jön (RÖVID), és csak ha az sem, akkor kisebb.
 const FELIRAT_M = 2.2;
 const ZONA_ROVID = { 'MERCH SHOP': 'MERCH' };
-const ZONA_IKON_NAGY = QS.has('regiikon') ? 1 : 1.15;
+let IKON_SZINT = '';   // a betöltés alatt épülő szint kulcsa (a tető-ikonok szintfüggő beállításaihoz)
+const ikonNagy = () => (QS.has('regiikon') || IKON_SZINT === 'S0' ? 1 : 1.15);   // +15 % az alsó szinten; a lobbyn a korábbi méret (felhasználó, 2026-11-23)
 // a mosdók pontos szövege típusonként (felhasználó, 2026-11-23: a 211-es „Férfi mosdó 2” paneljén „Női, férfi és akadálymentes” állt)
 const WC_SZOVEG = {
   wc_ferfi: 'Férfi mosdó. A mosdók a körüljáróról nyílnak, a szektorbejáratok közelében.',
@@ -645,7 +646,7 @@ function zonaFeliratPontokra(pontok, y, szoveg, szin = 0x0b1220, haromszogek = n
       let leg = null, lt = 1e9; for (const [x, z, m] of tav) { if (m < kell) continue; const t = (x - vx) ** 2 + (z - vz) ** 2; if (t < lt) { lt = t; leg = [x, z, m]; } }
       if (leg) { kx = leg[0]; kz = leg[1]; d = Math.min(1.4 * FELIRAT_M, 2 * leg[2] * 0.8); }
     }
-    d *= ZONA_IKON_NAGY;   // +15 % (felhasználó, 2026-11-23: a tetőn fekvő ruhatár- és mosdó-ikonok 10–20 %-kal nagyobbak)
+    d *= ikonNagy();   // +15 % (felhasználó, 2026-11-23: a tetőn fekvő ruhatár- és mosdó-ikonok 10–20 %-kal nagyobbak)
     if (d < 0.7) return null;
     // „felfelé” az aréna közepe felé, de egyenesen: a lap saját (fő)tengelyeinek 4 iránya közül a sugárirányhoz legközelebbi
     // (felhasználó, 2026-11-21: a ruhatár-ikon „egy picit el van forgatva, nem egyenes”)
@@ -716,7 +717,7 @@ function modellLapFeliratok(root, minta, szoveg, kihagy = () => false, szovegFn 
     if (kihagy(pp)) continue;
     const g0 = gy(cs[0]), hsz = ZONA_IKON[typeof szovegFn === 'function' ? szovegFn(pp) : szoveg] ? tri.filter((q) => gy(q[0]) === g0).map((q) => q.flatMap((j) => [pts[j][0], pts[j][2]])) : null;
     // csak a felülről LÁTHATÓ rész számít (a lobby mosdó-lapjának belső fele a lelátó alatt van – oda tett ikon a kék sáv szélén ült)
-    if (hsz) { const mag = wcMagassagTerkep(root), ef = ereszFedes(root); hsz.lathato = (x, z) => mag[wcCy(z) * WC_N + wcCx(x)] < y + 0.6 && ef(x, z) < y + 0.3; }
+    if (hsz && !(IKON_SZINT === 'S0' && !QS.has('regikozep'))) { const mag = wcMagassagTerkep(root), ef = ereszFedes(root); hsz.lathato = (x, z) => mag[wcCy(z) * WC_N + wcCx(x)] < y + 0.6 && ef(x, z) < y + 0.3; }   // a lobbyn a teljes lap közepe (felhasználó, 2026-11-23)
     const f = zonaFeliratPontokra(pp, y, typeof szovegFn === 'function' ? szovegFn(pp) : szoveg, undefined, hsz); if (f) out.push(f);
   }
   return out;
@@ -2492,6 +2493,7 @@ async function loadLevel(level) {
           else if (/UJ_zona_merch_(teto|szegely)/.test(m.name || '')) m.color.setHex(MERCH_SZIN);   // a modell saját (türkiz) merch-anyaga is lila
           else if (mh && /UJ_zona_ruhatar_(teto|szegely)/.test(m.name || '') && !String(m.customProgramCacheKey?.() || '').includes('|atszinez')) zonaAtszinez(m, mh, MERCH_SZIN);
         } });
+        IKON_SZINT = L.key;
         const g = new THREE.Group(); g.name = 'WEB_feliratok'; const kozep = (pp) => { let x = 0, z = 0; for (const [a, b] of pp) { x += a; z += b; } return [x / pp.length, z / pp.length]; };
         const blokkban = (pp) => { const [x, z] = kozep(pp); return tbRejt.some((d) => x > d.x0 - 2 && x < d.x1 + 2 && z > d.z0 - 2 && z < d.z1 + 2); };
         for (const [t, sz0] of Object.entries(ZONA_SZOVEG)) for (const f of modellLapFeliratok(gltf.scene, new RegExp(`UJ_zona_${t}_teto`), L.key === 'S0' && t === 'wc' ? 'TOILET_IKON' : sz0, (pp) => (t === 'ruhatar' && dobozban(mh, ...kozep(pp))) || (t === 'bar' && blokkban(pp)) || (t === 'ruhatar' && mtRejt.some((d) => dobozban(d, ...kozep(pp)))))) g.add(f);
@@ -2500,7 +2502,8 @@ async function loadLevel(level) {
         if (L.key === 'S0') { const mag = wcMagassagTerkep(gltf.scene), N = WC_N;
           for (const m of g.children) { if (m.material?.name !== 'WEB_zona_ikon') continue; const r = m.geometry.parameters.width / 2 + 0.6; let hm = m.position.y;
             for (let dz = -r; dz <= r; dz += 0.25) for (let dx = -r; dx <= r; dx += 0.25) { const h = mag[wcCy(m.position.z + dz) * N + wcCx(m.position.x + dx)]; if (h < m.position.y + 1.5) hm = Math.max(hm, h); }   // csak a közvetlen környezet (a lelátó ne emelje meg)
-            m.position.y = hm + 0.08; } }
+            m.position.y = QS.has('regilift') ? hm + 0.08 : m.position.y - 0.045;   // 2026-11-23: a felhasználó szerint a ruhatár-ikon ~50 cm-rel a mennyezet fölött lebegett → pontosan a lapon (1,5 cm), a takarást mélység-eltolás oldja
+            if (!QS.has('regilift')) { m.material.polygonOffset = true; m.material.polygonOffsetFactor = -6; m.material.polygonOffsetUnits = -6; m.renderOrder = 9; } } }
         if (g.children.length) gltf.scene.add(g);
       }
       if (ZONA_MIND.has(L.key) && !QS.has('noujra')) { try { const u = zonaMind(gltf.scene, L.key, data.pois); if (u) gltf.scene.add(u); } catch (e) { console.warn('zóna-mind', e); } }
