@@ -83,6 +83,7 @@ const LAMPA_BE = true;    // S1 V3 utóeffektek (lámpafoltok, homlokzati fényc
 const UJLOOK = !QS.has('regilook');   // a shader mindkét ágat tartalmazza; szintváltáskor az uUj uniform választ
 const LOOK = { uj: { value: 0 } };
 function lookAlkalmaz(key) {
+  homkBeallit(key);
   const uj = UJLOOK && UJLOOK_SZINTEK.has(key); LOOK.uj.value = uj ? 1 : 0;
   const v3 = uj && (LAMPA_BE || QS.has('lampa'));   // az S1 V3 utóeffektjei (sötétkék háttér, −0,25 EV) a V3 sütéssel együtt élesednek
   renderer.toneMappingExposure = uj ? (v3 ? 0.84 : 0.86) : 1.0;   // v3: ≈ −0,25 EV, mint a jóváhagyott S1 V3 előkép (AgX alap)
@@ -167,26 +168,37 @@ const KAT_HOM = /^W_(EF_|KA_)?(Kulso|Kulter)(?!.*(uveg|szalag|bejaratszam))/, KA
 const BOWL = QS.has('dimregi') ? 1 : Math.min(1, Math.max(0.1, Number(QS.get('bowl')) || 0.62));   // a tál külső (sétány felőli) peremén; befelé, a küzdőtér közepe felé lágyan tovább sötétül (BOWL × 0,7)
 const FACEIN = QS.has('dimregi') ? 1 : Math.min(1, Math.max(0.05, Number(QS.get('facein')) || 0.2));
 // az alsó (100-as) tál a sétány szintje alatt: külön, erősebb állandó (?low=0.38); a 200-as sorok (a sétány fölött) a BOWL-t kapják, a kettő között lágy átmenet
+// a sétány (padló, falak, bódétestek) alapból, kijelölés nélkül is enyhén visszahúzva (?walk=0.75); a tetők, kiemelő lapok, pinek, számok érintetlenek
+const WALK = QS.has('dimregi') ? 1 : Math.min(1, Math.max(0.1, Number(QS.get('walk')) || 0.75));
+const STAIRSKEEP = QS.get('stairskeep') !== '0';
+// A külső homlokzat (a lapok KÜLSŐ oldala) szintenként sötétebb, a jóváhagyott Blender V3 render szerint (felhasználó, 2026-11-23: „nem azt beszéltük?”):
+// a V3-on a homlokzat sötét, csak a fénycsíkok, kapuszámok, üveg világítanak (ezek kimaradnak). ?homk=0.5 (minden szintre), ?homkregi: a régi
+const HOMK_SZINT = { S0: 1, S1: 0.38, S2: 0.4, S3: 0.32, S4: 0.42 };
+const HOMK_U = { value: 1 };
+function homkBeallit(key) { HOMK_U.value = QS.has('homkregi') ? 1 : QS.has('homk') ? Number(QS.get('homk')) || 1 : (HOMK_SZINT[key] ?? 1); }
 const LOW = QS.has('dimregi') ? 1 : Math.min(1, Math.max(0.05, Number(QS.get('low')) || 0.45));   // shader-érték; mérve a 100-as sorok ≈ 30 %-os, a 200-asok ≈ 55 %-os fényerőn (a kikapcsolthoz képest)
 function addSectorShader(m) {
   // 3 = világító / külső jelzés (homlokzati fénycsík, kapuszám, kapukontúr, minden emisszív anyag): semmilyen halványítás nem éri
   const fenyes = /szalag|bejaratszam|kapukontur|kapuszam|jeloles_feny|fenyveto/i.test(m.name || '') || !!m.emissiveMap || (!!m.emissive && m.emissive.getHex() !== 0 && (m.emissiveIntensity ?? 1) > 0);
-  const kat = fenyes ? 3 : KAT_HOM.test(alapNev(m.name)) ? 1 : KAT_TAL.test(alapNev(m.name)) ? 2 : 0;
+  // 4 = a lelátó világos lépcsősávjai: a tál-halványítást kapják, de kijelöléskor NEM sötétülnek (?stairskeep=0: régi); 5 = a sétány tömbjeinek navy teteje: semmi
+  const nv = alapNev(m.name), kat = fenyes ? 3 : (STAIRSKEEP && /UJ_lelato_lepcso/.test(nv)) ? 4 : /fal_teto/.test(nv) ? 5 : KAT_HOM.test(nv) ? 1 : KAT_TAL.test(nv) ? 2 : 0;
   m.onBeforeCompile = (sh) => {
-    Object.assign(sh.uniforms, { uLmGamma: LM.gamma, uLmGain: LM.gain, uLmAmb: LM.amb, uHlOn: HL.on, uHlK: HL.k, uDimK: HL.d, uUj: LOOK.uj, uSzN: HL.n, uSzPadlo: HL.padlo, uSzF: HL.F, uSzR: HL.R, uSzQ: HL.Q });
+    Object.assign(sh.uniforms, { uLmGamma: LM.gamma, uLmGain: LM.gain, uLmAmb: LM.amb, uHlOn: HL.on, uHlK: HL.k, uDimK: HL.d, uHomK: HOMK_U, uUj: LOOK.uj, uSzN: HL.n, uSzPadlo: HL.padlo, uSzF: HL.F, uSzR: HL.R, uSzQ: HL.Q });
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
       .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nuniform vec3 uLmAmb;\nuniform float uLmGamma,uLmGain,uHlOn,uHlK,uDimK,uUj,uSzN,uSzPadlo;\nuniform vec3 uSzF[16];\nuniform vec4 uSzR[' + SZ_MAX + '];\nuniform vec3 uSzQ[' + SZ_MAX + '];')
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nuniform vec3 uLmAmb;\nuniform float uLmGamma,uLmGain,uHlOn,uHlK,uDimK,uHomK,uUj,uSzN,uSzPadlo;\nuniform vec3 uSzF[16];\nuniform vec4 uSzR[' + SZ_MAX + '];\nuniform vec3 uSzQ[' + SZ_MAX + '];')
       .replace('reflectedLight.indirectDiffuse += lightMapTexel.rgb * lightMapIntensity * RECIPROCAL_PI;',
         'vec3 lmL = lightMapTexel.rgb * lightMapIntensity * RECIPROCAL_PI; lmL *= uLmGain * pow(max(dot(lmL, vec3(0.2126, 0.7152, 0.0722)), 1e-5), uLmGamma - 1.0); reflectedLight.indirectDiffuse += lmL + uLmAmb;')
       .replace('#include <dithering_fragment>', `#include <dithering_fragment>
 ` + (UJLOOK ? `
+        ${kat === 1 ? 'if (gl_FrontFacing) gl_FragColor.rgb *= uHomK;   // külső homlokzat szintenként sötétítve (V3 szerint)' : ''}
         if (uUj > 0.5) {
         { // új kinézet: visszafogott színezés – a sötét részek kicsit hidegebbek, a világosak kicsit melegebbek
           float gL = dot(gl_FragColor.rgb, vec3(0.2126, 0.7152, 0.0722));
           gl_FragColor.rgb *= mix(vec3(0.84, 0.93, 1.14), vec3(1.08, 1.0, 0.88), smoothstep(0.06, 0.5, gL)); }
         ${kat === 1 && FACEIN < 1 ? `if (!gl_FrontFacing) gl_FragColor.rgb *= ${FACEIN.toFixed(3)};   // homlokzat belső oldala` : ''}
-        ${kat === 2 && BOWL < 1 ? `{ float bL = dot(gl_FragColor.rgb, vec3(0.2126, 0.7152, 0.0722)); float bR = length(vWPos.xz);   // lelátó-tál, küzdőtér: lágy, sugárirányú elsötétülés a közép felé (nincs éles határ)
+        ${kat === 0 && WALK < 1 ? `gl_FragColor.rgb *= ${WALK.toFixed(3)};   // sétány: alap halványítás` : ''}
+        ${(kat === 2 || kat === 4) && BOWL < 1 ? `{ float bL = dot(gl_FragColor.rgb, vec3(0.2126, 0.7152, 0.0722)); float bR = length(vWPos.xz);   // lelátó-tál, küzdőtér: lágy, sugárirányú elsötétülés a közép felé (nincs éles határ)
           float bF = mix(${LOW.toFixed(3)}, ${BOWL.toFixed(3)}, smoothstep(-2.6, -0.2, vWPos.y)) * mix(0.7, 1.0, smoothstep(12.0, 58.0, bR));
           bF = mix(bF, 1.0, smoothstep(0.32, 0.85, bL) * 0.55);   // a meleg lépcsőfény-csíkok olvashatók maradnak
           gl_FragColor.rgb = mix(vec3(bL), gl_FragColor.rgb, 0.8) * bF; }` : ''}   // prémium: hideg kék árnyék / meleg fény (referencia: Halden Arena)
@@ -219,7 +231,7 @@ function addSectorShader(m) {
               if (!b2) { szel = true; break; }
             }
             if (szel) c = mix(c, vec3(1.0, 0.97, 0.9), uHlK);   // éles, vékony világos körvonal
-          } else c = mix(c, mix(vec3(L), c, 0.35) * ${HL_DIM.toFixed(3)}, ${kat === 3 ? '0.0' : kat === 1 ? '(gl_FrontFacing ? 0.0 : uDimK)' : 'uDimK'});   // a többi rész erősen visszahúzva (felhasználó, 2026-11-23: „nem fedi le eléggé”): ~33 %, színtelenítve; ?dim=
+          } else c = mix(c, mix(vec3(L), c, 0.35) * ${HL_DIM.toFixed(3)}, ${kat === 3 || kat === 4 || kat === 5 ? '0.0' : kat === 1 ? '(gl_FrontFacing ? 0.0 : uDimK)' : 'uDimK'});   // a többi rész erősen visszahúzva (felhasználó, 2026-11-23: „nem fedi le eléggé”): ~33 %, színtelenítve; ?dim=
           gl_FragColor.rgb = c;
         }
         } else {
@@ -405,7 +417,13 @@ function lepcsoFade(root, v) {
     if (!o.isMesh || !o.material) return;
     for (const m of (Array.isArray(o.material) ? o.material : [o.material])) {
       // a külső homlokzat (f36 osztály: EF_/KA_Kulso, Kulter, homlokzati üveg/fém, záróoszlop) NEM halványul (felhasználó, 2026-11-22: a II. kapunál átlátszott)
-      if (kesz.has(m) || FACADE.test(alapNev(m.name)) || /^W_(f36|hm)_|_(Kulso|Kulter)_|kapuszam|szalag/.test(m.name || '') || /UJ_(?!lelato_lepcso)/.test(m.name) || /lelato|szek|Kuzdoter/i.test(m.name || '')) continue; kesz.add(m);   // homlokzat, kapuszám, fénycsík, lelátó, küzdőtér: nem halványul
+      // CSAK a lépcső / mozgólépcső anyagai halványulnak (engedélylista, felhasználó 2026-11-23: a mögötte lévő ablaksáv és a molinó is elsötétült,
+      // a Pepsi-logó villogott) – minden más (ablak, keret, molinó, logó, oszlop, fal, felirat) tömör marad. ?fadeterulet: a régi, dobozon belüli kijelölés
+      const nv = alapNev(m.name || '');
+      if (kesz.has(m)) continue;
+      if (QS.has('fadeterulet') ? (FACADE.test(nv) || /^W_(f36|hm)_|_(Kulso|Kulter)_|kapuszam|szalag/.test(m.name || '') || /UJ_(?!lelato_lepcso)/.test(m.name) || /lelato|szek|Kuzdoter/i.test(m.name || ''))
+        : !(/mozgolepcso|mlepcso|mozgo_|lepcso_beton|lepcso_homlok|^W_L3_(acel|uveg)|Lobby_gumi/i.test(nv)) || /lelato|Kulso|Kulter/i.test(nv)) continue;
+      kesz.add(m);
       const elozo = m.onBeforeCompile, kulcs = m.customProgramCacheKey?.bind(m);
       m.onBeforeCompile = (sh, r) => {
         elozo?.call(m, sh, r);
