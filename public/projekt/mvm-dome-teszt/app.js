@@ -79,12 +79,14 @@ renderer.toneMapping = THREE.AgXToneMapping;          // mint a Blender-fájl (A
 // Szintenként kapcsolható (felhasználó, 2026-11-23: „most csak az alsó körüljáró szintet nézzük … ha jó az irány, a többire is”):
 // a kiterjesztés a többi szintre = a kulcs felvétele ide (pl. new Set(['S1', 'S2', 'S3', 'S0'])).
 const UJLOOK_SZINTEK = new Set(['S1']);
+const LAMPA_BE = false;   // S1 V3 utóeffektek (lámpafoltok, homlokzati fénycsík, sötétkék háttér): az S1 V3 csomaggal együtt true; addig próbára ?lampa
 const UJLOOK = !QS.has('regilook');   // a shader mindkét ágat tartalmazza; szintváltáskor az uUj uniform választ
 const LOOK = { uj: { value: 0 } };
 function lookAlkalmaz(key) {
   const uj = UJLOOK && UJLOOK_SZINTEK.has(key); LOOK.uj.value = uj ? 1 : 0;
-  renderer.toneMappingExposure = uj ? 0.86 : 1.0;
-  const hatter = uj ? 0x0a1019 : 0x1d2939; scene.background.setHex(hatter); scene.fog.color.setHex(hatter);
+  const v3 = uj && (LAMPA_BE || QS.has('lampa'));   // az S1 V3 utóeffektjei (sötétkék háttér, −0,25 EV) a V3 sütéssel együtt élesednek
+  renderer.toneMappingExposure = uj ? (v3 ? 0.84 : 0.86) : 1.0;   // v3: ≈ −0,25 EV, mint a jóváhagyott S1 V3 előkép (AgX alap)
+  const hatter = uj ? (v3 ? 0x060d17 : 0x0a1019) : 0x1d2939; scene.background.setHex(hatter); scene.fog.color.setHex(hatter);   // új kinézet: sötétkék (6, 13, 23) a fekete helyett
   document.body.classList.toggle('ujlook', uj);
 }
 renderer.localClippingEnabled = true;
@@ -326,7 +328,7 @@ function applyLightmap(root, tex, intensity) {
 }
 // Rétegsorrend az egy síkba eső lapokra (villogás ellen): a képes / feliratos „matrica” lapok előre, a szerkezeti felületek
 // (padló, födém, fal, tömb) hátra kerülnek a mélységpufferben; a burkolatok, bútorok a kettő között maradnak.
-const RETEG_ELO = /tv_kep|TV_MVM|_foto|grafika|Logo_|felirat|Felirat|szam|Szam|szoveg|nyil|taktilis|szonyeg|szennyfogo|csik|kijelzo|kepernyo|LED/;
+const RETEG_ELO = /polc_kinalat|tv_kep|TV_MVM|_foto|grafika|Logo_|felirat|Felirat|szam|Szam|szoveg|nyil|taktilis|szonyeg|szennyfogo|csik|kijelzo|kepernyo|LED/;
 const RETEG_PADLO = /padlo|Padlo|terrazzo|fodem|beton/;
 const RETEG_FAL = /fal_|_fal|belso_sotet|hullam|teto|Teto|sav|labazat|piller/;
 function reteg(m) {
@@ -563,7 +565,13 @@ const ZONA_SZOVEG = { bar: 'BAR', ruhatar: 'CLOAKROOM', wc: 'TOILET', merch: 'ME
 // minden felirat ugyanakkora (FELIRAT_M méter magas); ha nem fér el a helyiségben, a rövidebb változat jön (RÖVID), és csak ha az sem, akkor kisebb.
 const FELIRAT_M = 2.2;
 const ZONA_ROVID = { 'MERCH SHOP': 'MERCH' };
-const ZONA_IKON = { CLOAKROOM: 'ruhatar', TOILET_IKON: 'wc' };   // TOILET_IKON: a lobbyn a TOILET szöveg helyett a kék mosdó-piktogram (felhasználó, 2026-11-21)   // felirat helyett piktogram
+const ZONA_IKON_NAGY = QS.has('regiikon') ? 1 : 1.15;
+// a mosdók pontos szövege típusonként (felhasználó, 2026-11-23: a 211-es „Férfi mosdó 2” paneljén „Női, férfi és akadálymentes” állt)
+const WC_SZOVEG = {
+  wc_ferfi: 'Férfi mosdó. A mosdók a körüljáróról nyílnak, a szektorbejáratok közelében.',
+  wc_noi: 'Női mosdó. A mosdók a körüljáróról nyílnak, a szektorbejáratok közelében.',
+  akadalymentes: 'Akadálymentes mosdó, kerekesszékkel is használható. A körüljáróról nyílik, a szektorbejáratok közelében.' };
+const ZONA_IKON = { CLOAKROOM: 'ruhatar', TOILET_IKON: 'wc', TOILET_FERFI: 'wc_ferfi', TOILET_NOI: 'wc_noi' };   // TOILET_IKON: a lobbyn a TOILET szöveg helyett a kék mosdó-piktogram (felhasználó, 2026-11-21)   // felirat helyett piktogram
 // Szintenként legalább EGY merch shop (felhasználó, 2026-11-20: „valamelyiket véletlenszerűen válaszd ki, egy darab legyen legalább minden szinten”).
 // A lobbyn a modellben van; a többi szinten egy-egy büfé lesz merch shop, a lobby merch-színével (türkizzöld). Világkoordináta (x, z) doboz.
 const MERCH_SZIN = 0x9b5cff;   // lila (felhasználó, 2026-11-22: a zöld a páholy szinten a „szabad” színe, ne keveredjen; előtte 0x00e5b4)
@@ -630,9 +638,12 @@ function zonaFeliratPontokra(pontok, y, szoveg, szin = 0x0b1220, haromszogek = n
       const tav = []; let tmax = 0;
       for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) { if (!ben[j * nx + i]) continue; const x = x0 + (i - 1) * L, z = z0 + (j - 1) * L; let m = 1e9; for (const [ox, oz] of kint) { const t = (ox - x) ** 2 + (oz - z) ** 2; if (t < m) m = t; } m = Math.sqrt(m); tav.push([x, z, m]); tmax = Math.max(tmax, m); }
       let vx = 0, vz = 0; for (const [x, z] of tav) { vx += x; vz += z; } vx /= tav.length || 1; vz /= tav.length || 1;   // a látható rész súlypontja
-      let leg = null, lt = 1e9; for (const [x, z, m] of tav) { if (m < tmax * 0.9) continue; const t = (x - vx) ** 2 + (z - vz) ** 2; if (t < lt) { lt = t; leg = [x, z, m]; } }
+      // a látható tetőrész súlypontjához legközelebbi pont, ahol az ikon elfér (felhasználó, 2026-11-23: a 213-as mosdó ikonja nem az egész tető közepén ült)
+      const kell = QS.has('regikozep') ? tmax * 0.9 : Math.min(tmax * 0.9, 0.875 * FELIRAT_M);
+      let leg = null, lt = 1e9; for (const [x, z, m] of tav) { if (m < kell) continue; const t = (x - vx) ** 2 + (z - vz) ** 2; if (t < lt) { lt = t; leg = [x, z, m]; } }
       if (leg) { kx = leg[0]; kz = leg[1]; d = Math.min(1.4 * FELIRAT_M, 2 * leg[2] * 0.8); }
     }
+    d *= ZONA_IKON_NAGY;   // +15 % (felhasználó, 2026-11-23: a tetőn fekvő ruhatár- és mosdó-ikonok 10–20 %-kal nagyobbak)
     if (d < 0.7) return null;
     // „felfelé” az aréna közepe felé, de egyenesen: a lap saját (fő)tengelyeinek 4 iránya közül a sugárirányhoz legközelebbi
     // (felhasználó, 2026-11-21: a ruhatár-ikon „egy picit el van forgatva, nem egyenes”)
@@ -686,7 +697,7 @@ function ereszFedes(root) {
   const f = (x, z) => cel.get(Math.round(x / L) + ',' + Math.round(z / L)) ?? -1e9;
   root.userData.ereszFedes = f; return f;
 }
-function modellLapFeliratok(root, minta, szoveg, kihagy = () => false) {
+function modellLapFeliratok(root, minta, szoveg, kihagy = () => false, szovegFn = null) {
   // a lap háromszögei összetartoznak (egy tömb), és a 2,5 m-nél közelebbi csúcsok is (a blokkok közti rések átívelése)
   root.updateMatrixWorld(true); const pts = [], szulo = [], tri = [];
   const gy = (i) => { while (szulo[i] !== i) { szulo[i] = szulo[szulo[i]]; i = szulo[i]; } return i; }, egyesit = (a, b) => { a = gy(a); b = gy(b); if (a !== b) szulo[a] = b; };
@@ -701,15 +712,29 @@ function modellLapFeliratok(root, minta, szoveg, kihagy = () => false) {
   for (const cs of csop.values()) {
     const pp = cs.map((j) => [pts[j][0], pts[j][2]]), y = Math.max(...cs.map((j) => pts[j][1]));
     if (kihagy(pp)) continue;
-    const g0 = gy(cs[0]), hsz = ZONA_IKON[szoveg] ? tri.filter((q) => gy(q[0]) === g0).map((q) => q.flatMap((j) => [pts[j][0], pts[j][2]])) : null;
+    const g0 = gy(cs[0]), hsz = ZONA_IKON[typeof szovegFn === 'function' ? szovegFn(pp) : szoveg] ? tri.filter((q) => gy(q[0]) === g0).map((q) => q.flatMap((j) => [pts[j][0], pts[j][2]])) : null;
     // csak a felülről LÁTHATÓ rész számít (a lobby mosdó-lapjának belső fele a lelátó alatt van – oda tett ikon a kék sáv szélén ült)
     if (hsz) { const mag = wcMagassagTerkep(root), ef = ereszFedes(root); hsz.lathato = (x, z) => mag[wcCy(z) * WC_N + wcCx(x)] < y + 0.6 && ef(x, z) < y + 0.3; }
-    const f = zonaFeliratPontokra(pp, y, szoveg, undefined, hsz); if (f) out.push(f);
+    const f = zonaFeliratPontokra(pp, y, typeof szovegFn === 'function' ? szovegFn(pp) : szoveg, undefined, hsz); if (f) out.push(f);
   }
   return out;
 }
 // Rács-cellahalmazból (magasságtérkép-indexek) SIMA kiemelő lap: a külső körvonal egyenes szakaszokra egyszerűsítve (Douglas–Peucker),
 // abból háromszögelt lap + szegély – a cellák lépcsős, „pixeles” széle helyett (felhasználó, 2026-11-21, alsó szint)
+// a helyiség kitöltése KONVEX BUROKKAL (felhasználó, 2026-11-23: a 210-es ruhatár és a 203-as merch lapjának sarka hiányzott – egy
+// sarokbeli tárgy / oszlop a rács-kitöltésből kiharapott egy darabot). A pultok helyiségei konvexek, így a burok a falon belül marad. ?regisarok: régi út
+function burokPoligon(cellak) {
+  const N = WC_N, cm = 2 * WC_R / (N - 1), h = cm / 2, pt = [];
+  for (const i of cellak) { const x = i % N, y = (i - x) / N; if (cellak.has(i - 1) && cellak.has(i + 1) && cellak.has(i - N) && cellak.has(i + N)) continue;
+    const wx = wcX(x), wz = wcZ(y); pt.push([wx - h, wz - h], [wx + h, wz - h], [wx + h, wz + h], [wx - h, wz + h]); }
+  if (pt.length < 3) return null;
+  pt.sort((p, q) => p[0] - q[0] || p[1] - q[1]);
+  const kr = (o, p, q) => (p[0] - o[0]) * (q[1] - o[1]) - (p[1] - o[1]) * (q[0] - o[0]), lo = [], up = [];
+  for (const p of pt) { while (lo.length >= 2 && kr(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
+  for (let i = pt.length - 1; i >= 0; i--) { const p = pt[i]; while (up.length >= 2 && kr(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
+  const hull = lo.slice(0, -1).concat(up.slice(0, -1));
+  return hull.length >= 3 ? hull : null;
+}
 function racsPoligon(cellak, tures = 0.3, sarokTag = false) {
   const N = WC_N, cm = 2 * WC_R / (N - 1), ki = new Map();
   const el = (ax, ay, bx, by) => { const k = ax + ',' + ay; if (!ki.has(k)) ki.set(k, []); ki.get(k).push([bx, by]); };
@@ -790,7 +815,7 @@ function poligonLap(poli, y, szin, nev) {
   const v = new THREE.LineLoop(sg, new THREE.LineBasicMaterial({ name: nev + '_szegely', color: szin })); v.renderOrder = 6; v.frustumCulled = false;
   return [lap, v];
 }
-function zonaMind(root, key) {
+function zonaMind(root, key, pois = []) {
   const mag = wcMagassagTerkep(root), N = WC_N, cm = 2 * WC_R / (N - 1);
   root.updateMatrixWorld(true);
   // a modell zóna-lapjai: csúcsok egységenként (5 m-en belül összefüggő csoportok), típus és szín az anyagból
@@ -842,7 +867,7 @@ function zonaMind(root, key) {
   // közös helyiség (ruhatár + bár): EGY körvonal az egész helyiségre, egyetlen egyenes vágással kettéosztva → a két lap pontosan
   // összeér, se rés, se átfedés (felhasználó, 2026-11-21). A vágás iránya a helyiség fő tengelyére merőleges, ha ±25°-on belül van.
   const kozosPoli = (u) => {
-    const p = u.par, osszes = new Set([...u.lat, ...p.lat]), szoba = racsPoligon(osszes); if (!szoba) return null;
+    const p = u.par, osszes = new Set([...u.lat, ...p.lat]), szoba = QS.has('regisarok') ? racsPoligon(osszes) : burokPoligon(osszes); if (!szoba) return null;
     const kp = (s) => { let x = 0, z = 0; for (const c of s) { x += wcX(c % N); z += wcZ((c - c % N) / N); } return [x / s.size, z / s.size]; };
     const [ax, az] = kp(u.lat), [bx, bz] = kp(p.lat); let nx = bx - ax, nz = bz - az; const L = Math.hypot(nx, nz) || 1; nx /= L; nz /= L;
     { let lh = 0, fx = 1, fz = 0; for (let i = 0; i < szoba.length; i++) { const q = szoba[i], r = szoba[(i + 1) % szoba.length], h = Math.hypot(r[0] - q[0], r[1] - q[1]); if (h > lh) { lh = h; fx = (r[0] - q[0]) / h; fz = (r[1] - q[1]) / h; } }
@@ -868,7 +893,7 @@ function zonaMind(root, key) {
     for (const i of bov) { const x = i % N, yy = (i - x) / N, xa = wcX(x) - cm / 2, xb = wcX(x) + cm / 2, za = wcZ(yy) + cm / 2, zb = wcZ(yy) - cm / 2, yv = y + 0.02;
       if (!bov.has(i - 1)) sz.push(xa, yv, za, xa, yv, zb); if (!bov.has(i + 1)) sz.push(xb, yv, za, xb, yv, zb);
       if (!bov.has(i - N)) sz.push(xa, yv, za, xb, yv, za); if (!bov.has(i + N)) sz.push(xa, yv, zb, xb, yv, zb); }
-    const poli = QS.has('pixeles') ? null : ((u.par && u.par.lat && !QS.has('nokozos') && kozosPoli(u)) || racsPoligon(QS.has('bov') ? bov : lat, 0.3, u.tipus === 'ruhatar' && !u.par));   // a különálló ruhatár téglalap: a ferde sarok-levágás is elhagyható   // a fal BELSŐ oldaláig (a kihízlalt „bov” a falon túl lógott – felhasználó, 2026-11-21)
+    const poli = QS.has('pixeles') ? null : ((u.par && u.par.lat && !QS.has('nokozos') && kozosPoli(u)) || (QS.has('regisarok') ? racsPoligon(QS.has('bov') ? bov : lat, 0.3, u.tipus === 'ruhatar' && !u.par) : burokPoligon(lat)));   // a különálló ruhatár téglalap: a ferde sarok-levágás is elhagyható   // a fal BELSŐ oldaláig (a kihízlalt „bov” a falon túl lógott – felhasználó, 2026-11-21)
     if (poli) { for (const o of poligonLap(poli, y, ZONA_PALETTA[u.tipus] ?? u.szin, 'WEB_zona')) csop.add(o); }
     else {
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(cs, 3)); g.setIndex(ix);
@@ -884,7 +909,12 @@ function zonaMind(root, key) {
       let hsz = null; if (poli) { const tr = THREE.ShapeUtils.triangulateShape(poli.map(([x, z]) => new THREE.Vector2(x, z)), []); hsz = tr.map((q) => q.flatMap((k) => poli[k])); const ef = ereszFedes(root); hsz.lathato = (x, z) => mag[wcCy(z) * N + wcCx(x)] < y + 0.6 && ef(x, z) < y + 0.3; }
       const f = zonaFeliratPontokra([...lat].map((i) => [wcX(i % N), wcZ((i - i % N) / N)]), y, ZONA_SZOVEG[u.tipus] || u.tipus.toUpperCase(), undefined, hsz); if (f) csop.add(f); }
   }
-  for (const f of modellLapFeliratok(root, /UJ_zona_wc_teto/, 'TOILET_IKON')) csop.add(f);   // alsó szint: felirat helyett kék mosdó-ikon, mint a lobbyban (felhasználó, 2026-11-21)
+  // a tetőn a tömb valódi típusa: ha csak férfi (+ akadálymentes) mosdó van benne → férfi-ikon, csak női → női, vegyes → közös piktogram
+  const wcTipus = (pp) => { let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (const [x, z] of pp) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
+    const bent = pois.filter((p) => p.cat === 'wc' && p.x > x0 - 3 && p.x < x1 + 3 && -p.y > z0 - 3 && -p.y < z1 + 3).map((p) => p.ikon);
+    const f = bent.includes('wc_ferfi'), n = bent.includes('wc_noi');
+    return QS.has('regiwcikon') || f === n ? 'TOILET_IKON' : f ? 'TOILET_FERFI' : 'TOILET_NOI'; };
+  for (const f of modellLapFeliratok(root, /UJ_zona_wc_teto/, 'TOILET_IKON', undefined, wcTipus)) csop.add(f);   // alsó szint: felirat helyett kék mosdó-ikon, mint a lobbyban (felhasználó, 2026-11-21)   // alsó szint: felirat helyett kék mosdó-ikon, mint a lobbyban (felhasználó, 2026-11-21)
   // a modell zóna-anyagai (a mosdó kivételével) az újrarajzolt egységek dobozaiban eldobva
   if (rejt.length) root.traverse((o) => { if (!o.isMesh) return; for (const m of (Array.isArray(o.material) ? o.material : [o.material]))
     if (/UJ_zona_(?!wc)[a-z]+_(teto|szegely|betu|felirathatter)/.test(m.name || '') && !String(m.customProgramCacheKey?.() || '').includes('|zonarejt')) zonaRejt(m, rejt.concat(ZONA_REJT[key] || [])); });
@@ -1877,7 +1907,7 @@ function selectPoi(p, anchor) {
   $('#panelTitle').textContent = p.name;
   $('#panelText').textContent = p.cat === 'szektor'
     ? `${TIER[p.id[8]] || LEVELS[current.level].tier}. A szektor bejárata a körüljáróról nyílik; a legközelebbi mosdó és büfé a bejárat közelében található.`
-    : (p.szoveg || c.text);
+    : (p.szoveg || (p.cat === 'wc' && WC_SZOVEG[p.ikon]) || c.text);
   $('#panelNear').innerHTML = '';
   // Újratervezés (2026-11-22): szektornál tényadatok + a legközelebbi szolgáltatások; szolgáltatásnál a legközelebbi szektorok – mind kattintható
   const pahoz = p.cat === 'paholy', szek = p.cat === 'szektor' || pahoz;
@@ -2366,6 +2396,38 @@ const loadGltf = async (url, onProg) => { const f = await forras(url); return ne
 
 const KAMERAK = await ELO.kamerak.then((r) => r.json()).catch(() => ({}));
 let loading = false;
+// ---------- Új kinézet, nem sütött fények (felhasználó, 2026-11-23, S1 V3 jóváhagyva; referencia: C_01_stilizalt…): kerek, meleg
+// fényfoltok szabályos ritmusban a sétány padlóján (a magasságtérképből: a homlokzat előtti utolsó padlósáv közepén, ~7 m-enként),
+// és meleg fényű homlokzati csíkok. Egy InstancedMesh, egy rajzolás → iPaden is olcsó. Csak az új kinézetű szinten (UJLOOK_SZINTEK);
+// kikapcsolás: ?nolampa
+function sugarLampak(root) {
+  const mag = wcMagassagTerkep(root), N = WC_N, h = (x, z) => mag[wcCy(z) * N + wcCx(x)];
+  const pont = [];
+  let szog = 0;
+  while (szog < Math.PI * 2) {
+    const dx = Math.cos(szog), dz = -Math.sin(szog);
+    // kívülről befelé: a külső üres tér, majd a homlokzat / külső tömbök, és az első padlósáv (|y| < 0,3 m) a fő sétány
+    let s = -1, e = -1, r = 110;
+    while (r > 35 && h(dx * r, dz * r) < -1) r -= 0.25;
+    while (r > 35 && Math.abs(h(dx * r, dz * r)) >= 0.3) r -= 0.25;
+    while (r > 35 && Math.abs(h(dx * r, dz * r)) < 0.3) { if (e < 0) e = r; s = r; r -= 0.25; }
+    const rk = e > 0 && e - s >= 3 ? (s + e) / 2 : 0;
+    if (rk) pont.push([dx * rk, dz * rk]);
+    szog += 7 / Math.max(rk || 65, 30);   // ~7 m ív
+  }
+  if (!pont.length) return null;
+  const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'), gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  gr.addColorStop(0, 'rgba(255,236,205,1)'); gr.addColorStop(0.07, 'rgba(255,226,180,.95)'); gr.addColorStop(0.16, 'rgba(255,190,120,.42)'); gr.addColorStop(0.5, 'rgba(255,170,95,.12)'); gr.addColorStop(1, 'rgba(255,160,90,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  const im = new THREE.InstancedMesh(new THREE.PlaneGeometry(5, 5).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ name: 'WEB_lampafolt', map: t, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, opacity: 0.9 }), pont.length);
+  const M = new THREE.Matrix4(); pont.forEach(([x, z], i) => { M.makeTranslation(x, 0.03, z); im.setMatrixAt(i, M); });
+  im.renderOrder = 4; im.frustumCulled = false; im.raycast = () => {}; im.name = 'WEB_lampak';
+  return im;
+}
+function homlokzatFeny(root) {   // a homlokzat fehér csíkjai meleg, „világító” színnel (az AgX nem fakítja ki)
+  root.traverse((o) => { if (!o.isMesh) return; for (const m of (Array.isArray(o.material) ? o.material : [o.material])) if (m && /Kulso_szalag_feher/.test(m.name || '') && !m.userData.feny) { m.userData.feny = true; m.color.setHex(0xffd9a8); m.toneMapped = false; m.needsUpdate = true; } });
+}
 async function loadLevel(level) {
   zonaKiemMesh?.parent?.remove(zonaKiemMesh); zonaKiemMesh = null; zonaKiemKulcs = ''; hovZona = selZona = null; zonaKiemCache.clear(); zonaKomp.clear();   // mennyezeti kiemelés: szintváltáskor újra
   if (loading || current?.level === level) return;
@@ -2439,7 +2501,7 @@ async function loadLevel(level) {
             m.position.y = hm + 0.08; } }
         if (g.children.length) gltf.scene.add(g);
       }
-      if (ZONA_MIND.has(L.key) && !QS.has('noujra')) { try { const u = zonaMind(gltf.scene, L.key); if (u) gltf.scene.add(u); } catch (e) { console.warn('zóna-mind', e); } }
+      if (ZONA_MIND.has(L.key) && !QS.has('noujra')) { try { const u = zonaMind(gltf.scene, L.key, data.pois); if (u) gltf.scene.add(u); } catch (e) { console.warn('zóna-mind', e); } }
       if (ZONA_UJRA[L.key] && !QS.has('noujra')) { try { const u = zonaUjra(gltf.scene, ZONA_UJRA[L.key]); if (u) gltf.scene.add(u); } catch (e) { console.warn('zóna-újra', e); } }
       // ahol a modell már ad kék mosdó-tetőt (UJ_zona_wc…), ott a néző nem épít másikat – különben duplán lenne
       if (WC_SZINT.has(L.key) && !QS.has('nowcteto')) { try {
@@ -2447,6 +2509,8 @@ async function loadLevel(level) {
         const t = !vanModellben && wcTetok(gltf.scene, data.pois); if (t) gltf.scene.add(t);
       } catch (e) { console.warn('wc-tető', e); } }
       zonaEro(gltf.scene);
+      // a lámpafoltok + homlokzati fénycsík az S1 V3 sütéssel együtt élesednek; addig csak próbára: ?lampa (LAMPA_BE = true kapcsolja be véglegesen)
+      if (UJLOOK && UJLOOK_SZINTEK.has(L.key) && (LAMPA_BE || QS.has('lampa')) && !QS.has('nolampa')) { try { const l = sugarLampak(gltf.scene); if (l) gltf.scene.add(l); homlokzatFeny(gltf.scene); } catch (e) { console.warn('lámpák', e); } }
       // a sütött-fény átalakítás új anyagpéldányt adhat, a szektor-kiemelő shader pedig felülírja az onBeforeCompile-t → a zóna-elrejtést a végleges anyagokra újra rátesszük
       if (ZONA_REJT[L.key] && !QS.has('norejt')) gltf.scene.traverse((o) => { if (!o.isMesh) return; for (const m of (Array.isArray(o.material) ? o.material : [o.material])) { const d = ZONA_REJT[L.key].filter((d) => d.minta.test(m.name || '')); if (d.length && !String(m.customProgramCacheKey?.() || '').includes('|zonarejt')) zonaRejt(m, d); } });
       c = cache[level] = { level, baked: c_baked, lm: c_lm, root: gltf.scene, anim: animObj, data, path: buildPath(data.camera) };
@@ -2599,6 +2663,9 @@ const EN = [
   // mondatok (szolgáltatás- és szektorleírások)
   ['A szektor bejárata a körüljáróról nyílik; a legközelebbi mosdó és büfé a bejárat közelében található.', 'The sector entrance opens from the concourse; the nearest toilets and bar are close to the entrance.'],
   ['Privát VIP páholy a páholy szinten, saját bejárattal a körüljáróról és saját erkéllyel a küzdőtér felé. A foglaltság most mintaadat.', 'Private VIP box on the box level, with its own entrance from the concourse and its own balcony facing the arena. Availability is sample data for now.'],
+  ['Férfi mosdó. A mosdók a körüljáróról nyílnak, a szektorbejáratok közelében.', 'Men’s toilet. The toilets open from the concourse, close to the sector entrances.'],
+  ['Női mosdó. A mosdók a körüljáróról nyílnak, a szektorbejáratok közelében.', 'Women’s toilet. The toilets open from the concourse, close to the sector entrances.'],
+  ['Akadálymentes mosdó, kerekesszékkel is használható. A körüljáróról nyílik, a szektorbejáratok közelében.', 'Accessible toilet, wheelchair friendly. It opens from the concourse, close to the sector entrances.'],
   ['Női, férfi és akadálymentes mosdó. A mosdók a körüljáróról nyílnak, a szektorbejáratok közelében.', 'Women’s, men’s and accessible toilets. The toilets open from the concourse, close to the sector entrances.'],
   ['Pelenkázó és szoptatóhelyiség, csendes, elkülönített térben.', 'Baby changing and nursing room in a quiet, separate space.'],
   ['Italok, snackek, kávé. Kártyás és mobilos fizetés. A rendezvény kezdete előtt egy órával nyit.', 'Drinks, snacks and coffee. Card and mobile payment. Opens one hour before the event starts.'],
