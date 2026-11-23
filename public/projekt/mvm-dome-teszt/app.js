@@ -78,7 +78,9 @@ renderer.toneMapping = THREE.AgXToneMapping;          // mint a Blender-fájl (A
 // kivilágosodik vékony fénykörvonallal, minden más kissé halványabb és fakóbb (a pinek, számok, feliratok érintetlenek). Régi kinézet: ?regilook
 // Szintenként kapcsolható (felhasználó, 2026-11-23: „most csak az alsó körüljáró szintet nézzük … ha jó az irány, a többire is”):
 // a kiterjesztés a többi szintre = a kulcs felvétele ide (pl. new Set(['S1', 'S2', 'S3', 'S0'])).
-const UJLOOK_SZINTEK = new Set(['S1']);
+// az alsó szint UI-szabványa minden szinten (felhasználó, 2026-11-24 – _CLAUDE/ALSO_SZINT_SZABVANY.md); ?szabvany=S1: csak az alsó szinten (a régi)
+const SZABVANY_S1 = QS.get('szabvany') === 'S1';
+const UJLOOK_SZINTEK = new Set(SZABVANY_S1 ? ['S1'] : ['S0', 'S1', 'S2', 'S3']);
 const LAMPA_BE = true;    // S1 V3 utóeffektek (lámpafoltok, homlokzati fénycsík, sötétkék háttér): az S1 V3 csomaggal együtt true; addig próbára ?lampa
 const UJLOOK = !QS.has('regilook');   // a shader mindkét ágat tartalmazza; szintváltáskor az uUj uniform választ
 const LOOK = { uj: { value: 0 } };
@@ -2599,12 +2601,12 @@ function homlokzatRegi(root) {
 }
 // Pinek a szolgáltatás közepére (felhasználó, 2026-11-23: a 212-es bár és a 201-es pinje oldalra csúszott): a bár / ruhatár / Merch / WC pin
 // x–z helye a hozzá legközelebbi (15 m-en belüli), azonos típusú kiemelő tetőlap területi súlypontja. ?pinregi: a régi (export) helyek
-function pinKozepre(root, pois) {
+function pinKozepre(root, pois, key = 'S1') {
   const T3 = THREE, egys = [];
   root.updateMatrixWorld(true);
   root.traverse((o) => {
     if (!o.isMesh) return; const mt = [].concat(o.material)[0]; const n = mt?.name || '';
-    const z = /^WEB_zona_teto|UJ_zona_(wc)_teto/.exec(n); if (!z) return;
+    const z = /^WEB_zona_teto|UJ_zona_(bar|wc|ruhatar|merch)_teto/.exec(n); if (!z) return;
     const tip = z[1] || mt.userData.zonaTipus || ZONA_SZIN_TIPUS[mt.color?.getHex()]; if (!tip) return;
     const p = o.geometry.attributes.position, ix = o.geometry.index ? o.geometry.index.array : null, nt = ix ? ix.length / 3 : p.count / 3;
     const tri = []; const A = new T3.Vector3(), B = new T3.Vector3(), C = new T3.Vector3();
@@ -2629,7 +2631,7 @@ function pinKozepre(root, pois) {
   // Pinek egy gyűrűvonalon (felhasználó, 2026-11-23): a tetőlapok középpontjaira illesztett, középpontos ellipszis (x²/a² + z²/b² = 1, legkisebb
   // négyzetek), egy közös magasságban (a legmagasabb tető + 0,8 m); minden szolgáltatás-pin (a lift kivételével) a saját irányszögénél ül a vonalon.
   // ?pingyuru=0: a régi, szolgáltatásonkénti hely
-  if (QS.get('pingyuru') === '0') return;
+  if (QS.get('pingyuru') === '0' || key === 'S2') return;   // a páholyszinten a szolgáltatások nem alkotnak gyűrűt
   const E = egys.filter((u) => u.S > 4); if (E.length < 6) return;
   let s11 = 0, s12 = 0, s22 = 0, b1 = 0, b2 = 0;
   for (const u of E) { const X = u.x * u.x, Z = u.z * u.z; s11 += X * X; s12 += X * Z; s22 += Z * Z; b1 += X; b2 += Z; }
@@ -2811,7 +2813,7 @@ async function loadLevel(level) {
         if (g.children.length) gltf.scene.add(g);
       }
       if (ZONA_MIND.has(L.key) && !QS.has('noujra')) { try { const u = zonaMind(gltf.scene, L.key, data.pois); if (u) gltf.scene.add(u); } catch (e) { console.warn('zóna-mind', e); } }
-      if (L.key === 'S1' && !QS.has('pinregi')) { try { pinKozepre(gltf.scene, data.pois); } catch (e) { console.warn('pin-közép', e); } }
+      if ((L.key === 'S1' || (!SZABVANY_S1 && (L.key === 'S2' || L.key === 'S3'))) && !QS.has('pinregi')) { try { pinKozepre(gltf.scene, data.pois, L.key); } catch (e) { console.warn('pin-közép', e); } }
       if (ZONA_UJRA[L.key] && !QS.has('noujra')) { try { const u = zonaUjra(gltf.scene, ZONA_UJRA[L.key]); if (u) gltf.scene.add(u); } catch (e) { console.warn('zóna-újra', e); } }
       // ahol a modell már ad kék mosdó-tetőt (UJ_zona_wc…), ott a néző nem épít másikat – különben duplán lenne
       if (WC_SZINT.has(L.key) && !QS.has('nowcteto')) { try {
@@ -2820,7 +2822,8 @@ async function loadLevel(level) {
       } catch (e) { console.warn('wc-tető', e); } }
       zonaEro(gltf.scene);
       // a lámpafoltok + homlokzati fénycsík az S1 V3 sütéssel együtt élesednek; addig csak próbára: ?lampa (LAMPA_BE = true kapcsolja be véglegesen)
-      if (UJLOOK && UJLOOK_SZINTEK.has(L.key) && (LAMPA_BE || QS.has('lampa')) && !QS.has('nolampa')) { try { const l = sugarLampak(gltf.scene); if (l) gltf.scene.add(l); homlokzatFeny(gltf.scene); } catch (e) { console.warn('lámpák', e); } }
+      if (UJLOOK && UJLOOK_SZINTEK.has(L.key) && (LAMPA_BE || QS.has('lampa')) && !QS.has('nolampa')) { try { const l = L.key === 'S1' ? sugarLampak(gltf.scene) : null; if (l) gltf.scene.add(l);   // a lámpafoltok csak az alsó szinten (a többin a sétány-sáv keresése nincs hangolva)
+ homlokzatFeny(gltf.scene); } catch (e) { console.warn('lámpák', e); } }
       if (L.key === 'S1' && S1LOOK && UJLOOK) { try { const n = s1LookV3(gltf.scene); if (n) gltf.scene.add(n); } catch (e) { console.warn('s1 V3 kinézet', e); } }
       // a sütött-fény átalakítás új anyagpéldányt adhat, a szektor-kiemelő shader pedig felülírja az onBeforeCompile-t → a zóna-elrejtést a végleges anyagokra újra rátesszük
       if (ZONA_REJT[L.key] && !QS.has('norejt')) gltf.scene.traverse((o) => { if (!o.isMesh) return; for (const m of (Array.isArray(o.material) ? o.material : [o.material])) { const d = ZONA_REJT[L.key].filter((d) => d.minta.test(m.name || '')); if (d.length && !String(m.customProgramCacheKey?.() || '').includes('|zonarejt')) zonaRejt(m, d); } });
