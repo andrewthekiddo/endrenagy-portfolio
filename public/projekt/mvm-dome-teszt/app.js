@@ -164,7 +164,9 @@ const hatBias = (m) => !QS.has('nohb') && m.side === THREE.DoubleSide && !(m.pol
 // és a küzdőtér enyhén visszahúzva (?bowl=0.78); kijelöléskor a homlokzat KÜLSŐ oldala nem halványul. ?dimregi vagy ?bowl=1&facein=1: a régi
 const KAT_HOM = /^W_(EF_|KA_)?(Kulso|Kulter)(?!.*(uveg|szalag|bejaratszam))/, KAT_TAL = /^W_(TS_|UJ_)?(lelato|szek|VIP_szek|kuzdoter)/i;
 const BOWL = QS.has('dimregi') ? 1 : Math.min(1, Math.max(0.1, Number(QS.get('bowl')) || 0.62));   // a tál külső (sétány felőli) peremén; befelé, a küzdőtér közepe felé lágyan tovább sötétül (BOWL × 0,7)
-const FACEIN = QS.has('dimregi') ? 1 : Math.min(1, Math.max(0.05, Number(QS.get('facein')) || 0.35));
+const FACEIN = QS.has('dimregi') ? 1 : Math.min(1, Math.max(0.05, Number(QS.get('facein')) || 0.2));
+// az alsó (100-as) tál a sétány szintje alatt: külön, erősebb állandó (?low=0.38); a 200-as sorok (a sétány fölött) a BOWL-t kapják, a kettő között lágy átmenet
+const LOW = QS.has('dimregi') ? 1 : Math.min(1, Math.max(0.05, Number(QS.get('low')) || 0.45));   // shader-érték; mérve a 100-as sorok ≈ 30 %-os, a 200-asok ≈ 55 %-os fényerőn (a kikapcsolthoz képest)
 function addSectorShader(m) {
   const kat = KAT_HOM.test(alapNev(m.name)) ? 1 : KAT_TAL.test(alapNev(m.name)) ? 2 : 0;
   m.onBeforeCompile = (sh) => {
@@ -182,7 +184,7 @@ function addSectorShader(m) {
           gl_FragColor.rgb *= mix(vec3(0.84, 0.93, 1.14), vec3(1.08, 1.0, 0.88), smoothstep(0.06, 0.5, gL)); }
         ${kat === 1 && FACEIN < 1 ? `if (!gl_FrontFacing) gl_FragColor.rgb *= ${FACEIN.toFixed(3)};   // homlokzat belső oldala` : ''}
         ${kat === 2 && BOWL < 1 ? `{ float bL = dot(gl_FragColor.rgb, vec3(0.2126, 0.7152, 0.0722)); float bR = length(vWPos.xz);   // lelátó-tál, küzdőtér: lágy, sugárirányú elsötétülés a közép felé (nincs éles határ)
-          float bF = ${BOWL.toFixed(3)} * mix(0.7, 1.0, smoothstep(12.0, 58.0, bR));
+          float bF = mix(${LOW.toFixed(3)}, ${BOWL.toFixed(3)}, smoothstep(-2.6, -0.2, vWPos.y)) * mix(0.7, 1.0, smoothstep(12.0, 58.0, bR));
           bF = mix(bF, 1.0, smoothstep(0.32, 0.85, bL) * 0.55);   // a meleg lépcsőfény-csíkok olvashatók maradnak
           gl_FragColor.rgb = mix(vec3(bL), gl_FragColor.rgb, 0.8) * bF; }` : ''}   // prémium: hideg kék árnyék / meleg fény (referencia: Halden Arena)
         if (uHlOn > 0.5) {
@@ -1722,7 +1724,10 @@ function enterTour(dur = 1600) {
   const p = new THREE.Vector3(), tg = new THREE.Vector3(); pathAt(tour.u, p, tg);
   anim = { from: { p: camera.position.clone(), t: controls.target.clone() }, to: { p, t: tg }, t0: performance.now(), dur };
 }
+// a kiválasztott hely felé repülés távolsága (felhasználó, 2026-11-23: „nagyon közel megy”): ×1,7 – a szolgáltatás és a környezete is látszik; ?fokusz=1.7, ?fokuszregi
+const FOKUSZ = QS.has('fokuszregi') ? 1 : Math.min(3, Math.max(0.5, Number(QS.get('fokusz')) || 1.7));
 function enterDetail(anchor, distance = 34, height = 24, irany = null) {
+  distance *= FOKUSZ; height *= FOKUSZ;
   mode = 'detail'; nincsUresjarat = false; controls.maxDistance = 160; controls.minPolarAngle = Math.PI * 0.08;
   controls.enabled = true;
   overviewBtn.classList.add('show');
