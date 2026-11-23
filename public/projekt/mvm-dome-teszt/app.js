@@ -132,7 +132,7 @@ const cache = {};            // betöltött szintek (gyors visszaváltás)
 
 // ---------- Anyag-hangolás ----------
 // A színek a Blender-fájlból jönnek (sima anyagok). Itt csak: üveg ne írjon mélységet, a lelátó anyagai kapják a szektor-kiemelő shadert.
-const alapNev = (n) => (n || '').replace(/^W_(?:nb|f\d+)_/, 'W_');   // 'W_nb_…' (sütetlen réteg) és 'W_fNN_…' (sík árnyalás) előtag nélkül
+const alapNev = (n) => (n || '').replace(/^W_(?:nb|tb|f\d+)_/, 'W_');   // 'W_tb_…': az S1 V3 tribün-atlasz anyagai (2026-11-23 este) – enélkül a lelátó nem volt rámutatható / koppintható   // 'W_nb_…' (sütetlen réteg) és 'W_fNN_…' (sík árnyalás) előtag nélkül
 const STAND = /^W_(Lelato|TS_lelato|Szek|VIP_szek|Kuzdoter)/i;   // dupla kattintás: ezekre kattintva a szektort választja
 // Szektor-kiemelés (felhasználó, 2026-11-19): a lelátó adott része villog, pontosan a szektor alakjában. A lelátó a modellben 16 egyenes
 // oldalú sokszög, a közlekedőlépcsők az oldalra merőlegesek → egy szektor = néhány téglalap az oldal saját koordinátáiban
@@ -2449,10 +2449,10 @@ function sugarLampak(root) {
   const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'), gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
   if (QS.has('eleslampa')) { gr.addColorStop(0, 'rgba(255,236,205,1)'); gr.addColorStop(0.07, 'rgba(255,226,180,.95)'); gr.addColorStop(0.16, 'rgba(255,190,120,.42)'); gr.addColorStop(0.5, 'rgba(255,170,95,.12)'); gr.addColorStop(1, 'rgba(255,160,90,0)'); }
   else { // lágy, széles, mag nélküli fényfolt (felhasználó, 2026-11-23: „nagyon éles, spotlámpa-szerű” → mint a referencián: puha meleg tócsa)
-    [[0, .34], [0.15, .3], [0.3, .22], [0.45, .13], [0.6, .065], [0.75, .025], [0.9, .006], [1, 0]].forEach(([s, a]) => gr.addColorStop(s, `rgba(255,${Math.round(196 - 30 * s)},${Math.round(128 - 40 * s)},${a})`)); }
+    [[0, .24], [0.15, .21], [0.3, .155], [0.45, .095], [0.6, .05], [0.75, .02], [0.9, .005], [1, 0]].forEach(([s, a]) => gr.addColorStop(s, `rgba(255,${Math.round(196 - 30 * s)},${Math.round(128 - 40 * s)},${a})`)); }
   g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
-  const im = new THREE.InstancedMesh(new THREE.PlaneGeometry(QS.has('eleslampa') ? 5 : 9, QS.has('eleslampa') ? 5 : 9).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ name: 'WEB_lampafolt', map: t, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, opacity: 0.9 }), pont.length);
+  const im = new THREE.InstancedMesh(new THREE.PlaneGeometry(QS.has('eleslampa') ? 5 : 12, QS.has('eleslampa') ? 5 : 12).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ name: 'WEB_lampafolt', map: t, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, opacity: 0.9 }), pont.length);
   const M = new THREE.Matrix4(); pont.forEach(([x, z], i) => { M.makeTranslation(x, 0.03, z); im.setMatrixAt(i, M); });
   im.renderOrder = 4; im.frustumCulled = false; im.raycast = () => {}; im.name = 'WEB_lampak';
   return im;
@@ -2482,7 +2482,7 @@ function s1LookV3(root) {
   const f = s1x('padlo', 0.33), fk = s1x('kuzd', 1.2), fh = s1x('homl', 0.3), fl = s1x('lelato', 1.85);
   const SZ = [[/Kuzdoter/i, [0.55 * fk, 0.45 * fk, 0.33 * fk]], [/padlo|terrazzo/i, [f * 1.05, f * 0.97, f * 0.94]],
     ...(HOM_UJ ? [[/^W_(tb|f\d+)_.*(Kulso|Kulter|Homlokzat|Bejarat)(?!.*(szalag|bejaratszam|uveg))/, [fh, fh, fh]]] : []),
-    [/^W_(f\d+_)?L1_(fal|bufe_krem)/, [s1x('fal', 0.45), s1x('fal', 0.45), s1x('fal', 0.45) * 0.95]], [/lelato(?!.*uveg)/i, [fl, fl * 0.97, fl * 0.84]]];
+    [/^W_(f\d+_)?L1_(fal|bufe_krem)/, [s1x('fal', 0.45), s1x('fal', 0.45), s1x('fal', 0.45) * 0.95]], [/lelato(?!.*(uveg|lepcso))/i, [fl, fl * 0.97, fl * 0.84]]];
   const kesz = new Set(), lapok = [];
   root.updateMatrixWorld(true);
   root.traverse((o) => {
@@ -2505,7 +2505,7 @@ function s1LookV3(root) {
       for (const [re, k] of SZ) if (re.test(n)) { m.color.setRGB(m.color.r * k[0], m.color.g * k[1], m.color.b * k[2]); break; }
     }
   });
-  if (!(s1x('neon', 1) > 0)) return null;
+  if (!(s1x('neon', 0) > 0)) return null;   // a tetőn a neon-keret kettőzte a kiemelés körvonalát (felhasználó: „duplázott”) → alapból KI; próbára ?s1x=neon:1
   // neon-keret: a tetőlap háló szabad élei (csak egy háromszöghöz tartozó élek) mentén 0,32 m széles, világító szalag
   const csop = new THREE.Group(); csop.name = 'WEB_s1_neon'; const mats = {};
   const v = new THREE.Vector3();
