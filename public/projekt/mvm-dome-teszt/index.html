@@ -10,7 +10,7 @@
 <script>
 // Gyors indulás (V2): a kezdőszint modellje és fénytérképe már a HTML beolvasásakor elkezd letöltődni, nem csak a kód elindulása után
 // MVM_VER: a modellek/adatok verziója – minden modellcserénél EMELNI kell, így a böngésző (iPad Safari is) biztosan az újat tölti
-window.MVM_VER = '2026-11-25c';
+window.MVM_VER = '2026-11-25d';
 for (const k of ['navbal', 'koncertregi', 'mobilregi', 'telefonregi', 'fejlecregi']) if (new RegExp('[?&]' + k + '(=|&|$)').test(location.search)) document.documentElement.classList.add(k);
 // Mindig a legfrissebb kiadás (felhasználó, 2026-11-23: „egy link legyen, ne ezer verzió”): betöltés után és amikor a lap újra előtérbe kerül
 // (iPad Safari a nyitva hagyott lapot a memóriából mutatja), a néző gyorsítótár nélkül lekéri a saját HTML-jét; ha abban újabb MVM_VER áll,
@@ -123,6 +123,10 @@ for (const k of ['navbal', 'koncertregi', 'mobilregi', 'telefonregi', 'fejlecreg
     html:not(.fejlecregi):not(.mobilregi) .levels{left:var(--szel);right:var(--szel);justify-content:space-between;gap:8px}
     html:not(.fejlecregi):not(.mobilregi) .koncert{right:var(--szel)}
     html:not(.fejlecregi) body .side,html:not(.fejlecregi) body .sideOpen{z-index:13}   /* a hosszabb átmenet ne takarja a panelt és a panelnyitó gombot */
+  }
+  /* álló iPad (641–1023 px): a jobb oldali adatlap a fejléc ALATT kezdődik – nyitva ne takarja az artist-kártyát és a füleket (állapotmátrix, 2026-11-25) */
+  @media (min-width:641px) and (max-width:1023px){
+    html:not(.fejlecregi) body .panel{top:116px}
   }
   @media (max-width:500px){html:not(.fejlecregi):not(.telefonregi) .koncert{border-radius:8px;border:1px solid rgba(252,191,32,.55)}html:not(.fejlecregi):not(.telefonregi) .koncert img{border-radius:6px}}
   @media (max-width:640px){html:not(.mobilregi) .levels{gap:12px}html:not(.mobilregi) .levels button{font-size:13px;letter-spacing:-.1px}}

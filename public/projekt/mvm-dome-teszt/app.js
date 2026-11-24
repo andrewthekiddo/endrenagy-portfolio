@@ -2901,7 +2901,7 @@ function s1LookV3(root) {
   const f = s1x('padlo', 0.33), fk = s1x('kuzd', 1.2), fh = s1x('homl', 0.3), fl = s1x('lelato', 1.85);
   const SZ = [[/Kuzdoter/i, [0.55 * fk, 0.45 * fk, 0.33 * fk]], [/padlo|terrazzo/i, [f * 1.05, f * 0.97, f * 0.94]],
     ...(HOM_UJ ? [[/^W_(tb|f\d+)_.*(Kulso|Kulter|Homlokzat|Bejarat)(?!.*(szalag|bejaratszam|uveg))/, [fh, fh, fh]]] : []),
-    [/^W_(f\d+_)?L1_(fal|bufe_krem)/, [s1x('fal', 0.45), s1x('fal', 0.45), s1x('fal', 0.45) * 0.95]], [/lelato(?!.*(uveg|lepcso))/i, [fl, fl * 0.97, fl * 0.84]]];
+    [QS.has('s1lookcsak') ? /^W_(f\d+_)?L1_(fal|bufe_krem)/ : /^W_(f\d+_)?L[123]_(fal(?!_teto)|bufe_krem)/, [s1x('fal', 0.45), s1x('fal', 0.45), s1x('fal', 0.45) * 0.95]], [/lelato(?!.*(uveg|lepcso))/i, [fl, fl * 0.97, fl * 0.84]]];
   const kesz = new Set(), lapok = [];
   root.updateMatrixWorld(true);
   root.traverse((o) => {
@@ -3081,7 +3081,8 @@ async function loadLevel(level) {
       // a lámpafoltok + homlokzati fénycsík az S1 V3 sütéssel együtt élesednek; addig csak próbára: ?lampa (LAMPA_BE = true kapcsolja be véglegesen)
       if (UJLOOK && UJLOOK_SZINTEK.has(L.key) && (LAMPA_BE || QS.has('lampa')) && !QS.has('nolampa')) { try { const l = L.key === 'S1' ? sugarLampak(gltf.scene) : null; if (l) gltf.scene.add(l);   // a lámpafoltok csak az alsó szinten (a többin a sétány-sáv keresése nincs hangolva)
  homlokzatFeny(gltf.scene); } catch (e) { console.warn('lámpák', e); } }
-      if (L.key === 'S1' && S1LOOK && UJLOOK) { try { const n = s1LookV3(gltf.scene); if (n) gltf.scene.add(n); } catch (e) { console.warn('s1 V3 kinézet', e); } }
+      // az alsó szint kinézete (küzdőtér egyszínű navy, padló, falak, lelátó, kiemelők) a páholy és a felső szinten is (André, 2026-11-25: „ugyanolyan legyen, mint az alsó”); ?s1lookcsak: csak S1
+      if ((L.key === 'S1' || (!QS.has('s1lookcsak') && (L.key === 'S2' || L.key === 'S3'))) && S1LOOK && UJLOOK) { try { const n = s1LookV3(gltf.scene); if (n) gltf.scene.add(n); } catch (e) { console.warn('s1 V3 kinézet', e); } }
       if (L.key === 'S2' && !QS.has('platinumregi')) { try { const p = platinumLap(gltf.scene); if (p) gltf.scene.add(p); } catch (e) { console.warn('platinum', e); } }
       if (L.key !== 'S1' && UJLOOK_SZINTEK.has(L.key) && !QS.has('lapszinregi')) { try { lapSzinSzabvany(gltf.scene); } catch (e) { console.warn('lapszín', e); } }
       // a páholy és a felső szinten a homlokzat sötétebb (×0,40 / ×0,32), ezért a kapuk fölötti LED-szalag ugyanakkora fénnyel kiégett, széles fehér sávnak
@@ -3365,7 +3366,12 @@ fetch(asset('data/koncert.json')).then((r) => r.json()).then((k) => {
 // nem férne el, kompakt lesz (csak a kép), és csak ha úgy sem fér, halványul el. A szintmenü a badge (vagy a panel) elé igazodik.
 function navIgazit() {
   const L = $('#levels'), K = $('#koncert'); if (!L) return;
+  // (André, 2026-11-25: másik szektorra kattintva a panel rácsúszott a fellépő-kártyára) – a mérés a NYUGALMI helyzetből történik: az átmenet
+  // a mérés idejére ki, különben a még mozgó (félúton eltolt) elemet mérte, és nem tolta el újra. ?navmeresregi: a régi
+  const nyug = !QS.has('navmeresregi'), tr0 = [L.style.transition, K ? K.style.transition : ''];
+  if (nyug) { L.style.transition = 'none'; if (K) K.style.transition = 'none'; }
   L.style.transform = ''; L.classList.remove('szuk', 'szuk2'); if (K) { K.style.transform = ''; K.classList.remove('kompakt', 'rejt'); }
+  if (nyug) { void L.offsetWidth; requestAnimationFrame(() => { L.style.transition = tr0[0]; if (K) K.style.transition = tr0[1]; }); }
   if (VW() < 1024 || !document.body.classList.contains('panel-open')) return;
   const hatar = VW() - Math.min(400, VW()) - 24, bal = $('#lang').getBoundingClientRect().right + 32;
   if (L.getBoundingClientRect().width > hatar - bal) L.classList.add('szuk');
@@ -3382,6 +3388,6 @@ function navIgazit() {
   let dx = Math.min(0, jobb - r.right); if (r.left + dx < bal) dx = bal - r.left;
   if (dx) L.style.transform = `translateX(${dx}px)`;
 }
-new MutationObserver(navIgazit).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+new MutationObserver(() => { navIgazit(); if (!QS.has('navmeresregi')) requestAnimationFrame(() => requestAnimationFrame(navIgazit)); }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
 addEventListener('resize', navIgazit);
 $('#langMas').addEventListener('click', () => setTimeout(navIgazit, 0));
