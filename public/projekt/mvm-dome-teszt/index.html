@@ -10,8 +10,8 @@
 <script>
 // Gyors indulás (V2): a kezdőszint modellje és fénytérképe már a HTML beolvasásakor elkezd letöltődni, nem csak a kód elindulása után
 // MVM_VER: a modellek/adatok verziója – minden modellcserénél EMELNI kell, így a böngésző (iPad Safari is) biztosan az újat tölti
-window.MVM_VER = '2026-11-25g';
-for (const k of ['navbal', 'koncertregi', 'mobilregi', 'telefonregi', 'fejlecregi']) if (new RegExp('[?&]' + k + '(=|&|$)').test(location.search)) document.documentElement.classList.add(k);
+window.MVM_VER = '2026-11-25h';
+for (const k of ['navbal', 'koncertregi', 'mobilregi', 'telefonregi', 'fejlecregi', 'blurregi']) if (new RegExp('[?&]' + k + '(=|&|$)').test(location.search)) document.documentElement.classList.add(k);
 // Mindig a legfrissebb kiadás (felhasználó, 2026-11-23: „egy link legyen, ne ezer verzió”): betöltés után és amikor a lap újra előtérbe kerül
 // (iPad Safari a nyitva hagyott lapot a memóriából mutatja), a néző gyorsítótár nélkül lekéri a saját HTML-jét; ha abban újabb MVM_VER áll,
 // egyszer újratölt (munkamenetenként egy kiadásra legfeljebb egyszer – nincs töltési hurok). ?nofrissit: kikapcsolva
@@ -453,6 +453,12 @@ for (const k of ['navbal', 'koncertregi', 'mobilregi', 'telefonregi', 'fejlecreg
     .tools button.negyzet,.tools .gap{display:none}   /* telefonon két ujjas csípés nagyít */
     body.panel-open .tools{transform:none;opacity:0;pointer-events:none}
   }
+  /* fejléc-háttér (André, 2026-11-24, 25h): az elmosás CSAK a valódi fejléc magasságáig (laptop 96 px, telefon/iPad 116 px) tart, alatta
+     22 px-es, elmosás NÉLKÜLI átmenet; így a 3D-modell teteje és az adatlap fotója nincs elmosva. Telefonon az adatlap a fejléc alatt áll meg. ?blurregi: a régi */
+  html:not(.blurregi) body .brand::before{top:0;bottom:auto;height:100%!important;-webkit-mask-image:none!important;mask-image:none!important;background:rgba(var(--fejlec,10,16,25),.97)!important}
+  html:not(.blurregi) .brand::after{content:"";position:absolute;left:0;right:0;top:100%;height:22px;z-index:-1;pointer-events:none;background:linear-gradient(180deg,rgba(var(--fejlec,10,16,25),.97) 0,rgba(var(--fejlec,10,16,25),.55) 45%,rgba(var(--fejlec,10,16,25),0) 100%)}
+  @media (min-width:641px){html:not(.blurregi) body.panel-open .brand::after{right:min(400px,100vw)}}
+  @media (max-width:640px){html:not(.blurregi) .panel{max-height:calc(100% - 140px);max-height:calc(100dvh - 140px)}}
 </style>
 </head>
 <body>
