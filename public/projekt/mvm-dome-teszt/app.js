@@ -659,7 +659,8 @@ function lapMinuszEresz(lap, eresz, d = 0.04, h = 0.04) {
 }
 // Feliratok a jelölt egységekre (felhasználó, 2026-11-20): minden típusnak saját angol felirata, sötét, nagy betűvel,
 // a helyiség hossztengelyével PÁRHUZAMOSAN (a pontfelhő fő iránya), a betűk teteje az aréna közepe felé – kívülről nézve egyenesen olvasható.
-const ZONA_SZOVEG = { bar: 'BAR', ruhatar: 'CLOAKROOM', wc: 'TOILET', merch: 'MERCH SHOP' };
+// TOILET felirat sehol (André, 2026-11-24: „a toilet felirat nem kell sehova”): a mosdólapokon minden szinten a közös mosdó-ikon. ?toiletregi: a régi szöveg
+const ZONA_SZOVEG = { bar: 'BAR', ruhatar: 'CLOAKROOM', wc: QS.has('toiletregi') ? 'TOILET' : 'TOILET_IKON', merch: 'MERCH SHOP' };
 // EGYFORMA betűméret minden feliraton (felhasználó, 2026-11-20: „a BAR tök nagy, a CLOAKROOM hozzá képest nagyon kicsi … a méret nem stimmel”):
 // minden felirat ugyanakkora (FELIRAT_M méter magas); ha nem fér el a helyiségben, a rövidebb változat jön (RÖVID), és csak ha az sem, akkor kisebb.
 const FELIRAT_M = 2.2;
@@ -1290,7 +1291,7 @@ function wcMennyezet(root, pois) {
     const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute([0, 1, 1, 2, 2, 3, 3, 0].flatMap((k) => P.slice(k * 3, k * 3 + 3)), 3));
     const v = new THREE.LineSegments(sg, new THREE.LineBasicMaterial({ name: 'WEB_wc_menny_szegely', color: ZONA_PALETTA.wc })); v.renderOrder = 6; v.frustumCulled = false; csop.add(v);
     const pts = []; for (let a = t0; a <= t1; a += 0.5) for (let b = 0; b <= 6; b += 0.5) { const q = kpt(a, b); pts.push([q[0], q[2]]); }
-    const f = zonaFeliratPontokra(pts, y + 0.07, 'TOILET'); if (f) csop.add(f);
+    const f = zonaFeliratPontokra(pts, y + 0.07, ZONA_SZOVEG.wc); if (f) csop.add(f);
   }
   return csop.children.length ? csop : null;
 }
@@ -1710,7 +1711,8 @@ function takarJel(m, pont) {
 }
 
 const _v = new THREE.Vector3();
-const PINCSOP = { t: 0 };   // a pin-sorok utolsó újraszámolásának ideje
+const PINCSOP = { t: 0 };
+const PINLAY = { kulcs: '', fo: new Map(), elt: new Map() };   // a stabil pin-elrendezés tárolója   // a pin-sorok utolsó újraszámolásának ideje
 function updateMarkers() {
   if (!current) return;
   const w = VW(), h = VH();
@@ -1748,8 +1750,21 @@ function updateMarkers() {
   // ezért magától követi a nagyítást.
   const lathato = pinSor.filter((a) => !a.rejt).sort((a, b) => (a.m.elozoFo ? 1 : 0) - (b.m.elozoFo ? 1 : 0) || a.x - b.x || a.y - b.y);   // aki az előző képkockán látszott, az marad a látható (ne ugráljon)
   // az összevonás sugara a távolsággal nő: közelről csak az egymást fedők olvadnak össze (1,15 × a két sugár), távolról kb. két pin-átmérőn belül (2,3 ×)
-  const csopK = THREE.MathUtils.clamp(1.15 + (camDist - 90) / 130 * 1.15, 1.15, 2.3);
+  // STABIL ELRENDEZÉS (André, 2026-11-24: „nagyon nem tetszik, ahogy mozognak az ikonok maguktól, ahogy forog a kamera”): a csoportosítás és a
+  // széttolás csak szintváltáskor, szűrő- / kijelölés-váltáskor, egy nagyítási fokozat (25 %) átlépésekor vagy átméretezéskor fut; közben minden pin
+  // a saját 3D-pontjához rögzített, állandó képpont-eltolással mozog – nincs összevonás, szétválás, csúszás. ?pinmozog: a régi (képkockánkénti) viselkedés
+  const selId = selectedEl ? (current.markers.find((x) => x.el === selectedEl)?.p.id || 'sel') : '';
+  const lkulcs = `${current.level}|${activeCat}|${selId}|${Math.round(Math.log(Math.max(camDist, 1)) / Math.log(1.25))}|${w}x${h}`;
+  const tarolt = !QS.has('pinmozog') && PINLAY.kulcs === lkulcs ? PINLAY : null;
+  const eltol = new Map();
   const csoportok = [];
+  if (tarolt) {
+    const fok = new Map();
+    for (const a of lathato) { const fo = tarolt.fo.get(a.m.p.id); if (fo && fo !== a.m.p.id) continue; const g = { fo: a, tagok: [a] }; fok.set(a.m.p.id, g); csoportok.push(g); }
+    for (const a of lathato) { const fo = tarolt.fo.get(a.m.p.id); if (!fo || fo === a.m.p.id) continue; const g = fok.get(fo); if (g) g.tagok.push(a); else { const g2 = { fo: a, tagok: [a] }; fok.set(a.m.p.id, g2); csoportok.push(g2); } }
+    for (const g of csoportok) { const e = tarolt.elt.get(g.fo.m.p.id); if (e) eltol.set(g.fo.m, e); }
+  } else {
+  const csopK = THREE.MathUtils.clamp(1.15 + (camDist - 90) / 130 * 1.15, 1.15, 2.3);
   for (const a of lathato) a.kesz = false;
   for (const a of lathato) {
     if (a.kesz) continue;
@@ -1764,14 +1779,10 @@ function updateMarkers() {
     const n = g.tagok.length;
     csoportok.push(g);
   }
-  // (A különböző típusú pinek széttolása és a közös pinhez futó szárak – a „buborékháló” – a felhasználó kérésére KIVÉVE, 2026-11-20: nem tetszett.)
-  const f = (q) => `${q[0].toFixed(1)} ${q[1].toFixed(1)}`;
-  const szar = (q) => (q.length === 2 ? `M${f(q[0])}L${f(q[1])}` : `M${f(q[0])}L${f(q[1])}L${f(q[2])}L${f(q[3])}M${f(q[4])}L${f(q[5])}`);
-  for (const a of pinSor) if (a.rejt) { a.m.ag.style.display = 'none'; a.m.csopN = 0; a.m.elozoFo = null; }
+
   // Egymást fedő, KÜLÖNBÖZŐ típusú pinek egymás mellé (felhasználó, 2026-11-23: a baba-mama szoba és az akadálymentes mosdó pinje mindig egymásra csúszott):
   // a fedő pinek csoportja egy vízszintes sorba rendeződik a közös középpontjuk körül, pin-szélesség + 4 px távolsággal; a sorrend az azonosító
   // szerint állandó, a csoport tagsága kis hiszterézissel marad (nem villog). ?pinhely=0: a régi (egymásra csúszó) elhelyezés
-  const eltol = new Map();
   if (QS.get('pinhely') !== '0') {
     const L = csoportok.map((g) => { const t = g.fo.q[g.fo.q.length - 1]; return { m: g.fo.m, x: t[0], y: t[1] - 18 * g.fo.s, r: 18 * g.fo.s + 2 }; });
     const szulo = L.map((_, i) => i), gy = (i) => (szulo[i] === i ? i : (szulo[i] = gy(szulo[i])));
@@ -1808,6 +1819,14 @@ function updateMarkers() {
       for (const tagok of kl.values()) { const ids = new Set(tagok.map((A) => A.m.p.id)); for (const A of tagok) A.m.pinCsop = ids; } }
   }
 
+
+    PINLAY.kulcs = lkulcs; PINLAY.fo = new Map(); PINLAY.elt = new Map();
+    for (const g of csoportok) { for (const t of g.tagok) PINLAY.fo.set(t.m.p.id, g.fo.m.p.id); const e = eltol.get(g.fo.m); if (e) PINLAY.elt.set(g.fo.m.p.id, e); }
+  }
+  // (A különböző típusú pinek széttolása és a közös pinhez futó szárak – a „buborékháló” – a felhasználó kérésére KIVÉVE, 2026-11-20: nem tetszett.)
+  const f = (q) => `${q[0].toFixed(1)} ${q[1].toFixed(1)}`;
+  const szar = (q) => (q.length === 2 ? `M${f(q[0])}L${f(q[1])}` : `M${f(q[0])}L${f(q[1])}L${f(q[2])}L${f(q[3])}M${f(q[4])}L${f(q[5])}`);
+  for (const a of pinSor) if (a.rejt) { a.m.ag.style.display = 'none'; a.m.csopN = 0; a.m.elozoFo = null; }
   for (const g of csoportok) {
     const a = g.fo, m = a.m, n = g.tagok.length;
     const t = a.q[a.q.length - 1];

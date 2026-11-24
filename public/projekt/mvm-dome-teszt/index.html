@@ -10,7 +10,7 @@
 <script>
 // Gyors indulás (V2): a kezdőszint modellje és fénytérképe már a HTML beolvasásakor elkezd letöltődni, nem csak a kód elindulása után
 // MVM_VER: a modellek/adatok verziója – minden modellcserénél EMELNI kell, így a böngésző (iPad Safari is) biztosan az újat tölti
-window.MVM_VER = '2026-11-24t';
+window.MVM_VER = '2026-11-24u';
 for (const k of ['navbal', 'koncertregi', 'mobilregi', 'telefonregi']) if (new RegExp('[?&]' + k + '(=|&|$)').test(location.search)) document.documentElement.classList.add(k);
 // Mindig a legfrissebb kiadás (felhasználó, 2026-11-23: „egy link legyen, ne ezer verzió”): betöltés után és amikor a lap újra előtérbe kerül
 // (iPad Safari a nyitva hagyott lapot a memóriából mutatja), a néző gyorsítótár nélkül lekéri a saját HTML-jét; ha abban újabb MVM_VER áll,
@@ -103,7 +103,7 @@ for (const k of ['navbal', 'koncertregi', 'mobilregi', 'telefonregi']) if (new R
   @media (max-width:1023px){.koncert{position:fixed;right:16px;top:26px;margin:0;z-index:12;height:40px;max-width:150px;gap:8px;padding:3px 10px 3px 3px}.koncert img{width:32px;height:32px}.koncert b{font-size:13px;line-height:16px}.koncert small{font-size:11px;line-height:14px}}
   @media (max-width:420px){.koncert{max-width:118px}.koncert small{display:none}}
   /* telefon-menet (André, 2026-11-24, iPhone: a kártya a HU gombra csúszott): 500 px alatt csak a kerek avatar-chip; az alsó sor a biztonsági sáv fölött */
-  @media (max-width:500px){html:not(.telefonregi) .koncert{max-width:44px;width:44px;height:44px;padding:3px;gap:0;border-radius:22px;top:18px}html:not(.telefonregi) .koncert img{width:36px;height:36px;border-radius:18px}html:not(.telefonregi) .koncert span{display:none}
+  @media (max-width:500px){html:not(.telefonregi) .koncert{max-width:44px;width:44px;height:44px;padding:3px;gap:0;border-radius:12px;top:18px}html:not(.telefonregi) .koncert img{width:36px;height:36px;border-radius:8px}html:not(.telefonregi) .koncert span{display:none}
     /* a forrásjelölés és a verziószám ne csússzon egymásra (André iPhone-képe): a forrás balra, a verzió jobbra, külön sorban fölötte */
     html:not(.telefonregi) .forras{left:12px;transform:none;bottom:calc(6px + env(safe-area-inset-bottom));font-size:10px;max-width:calc(100vw - 150px);overflow:hidden;text-overflow:ellipsis}
     html:not(.telefonregi) .verzio{right:12px}
