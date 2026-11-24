@@ -1275,7 +1275,78 @@ function homlokzatLapok(root, key) {
 const WC_FAL = new Set();   // NINCS falra / homlokzatra tett jelölés – a felhasználó kifejezett kérése (2026-11-20): csak mennyezeti jelölés
 // páholy szint: a mosdók a VIP-tömb zárt mennyezete alatt vannak (az ajtós fal kívülről nem látszik) → a mennyezetre, közvetlenül a mosdó-csoport
 // fölé kerül egy kék téglalap: az ajtók oldalirányú sávja ± 2,5 m, a folyosóval ellentétes oldalon 6 m mélyen, a mennyezet ott mért magasságában
-const WC_MENNY = new Set(['S2']);
+const VIPZONA = !QS.has('vipzonaregi');
+const WC_MENNY = new Set(VIPZONA ? [] : ['S2']);
+// Páholy szint (André, 2026-11-24, 25k): a mosdók és bárok kiemelése a VALÓDI mennyezet (L2_fal_teto, vízszintes felső lapjai) körvonalán.
+// A modell-chat mérése szerint (roof_outlines_S2_tetok.json) a helyiségek fölött nincs külön mennyezet: különálló tömb (pl. ~190 m²) → az egész
+// tömb; az összefüggő gyűrűsávon (>400 m²) a helyiség szelete: az egység ajtóinak szögtartománya ± VIP_SZEL m, sugárirányú vágással, teljes mélységben.
+// A bárok a mennyezetükön kapják a lapot és a BAR feliratot; a modell homlokzati bár-csíkja eltűnik. ?vipzonaregi: a régi (becsült téglalap)
+const VIP_SZEL = Number(QS.get('vipszel') ?? 4);
+function vipMennyezet(root, pois, rejtLista) {
+  root.updateMatrixWorld(true);
+  const N = WC_N, cm = 2 * WC_R / (N - 1), menny = new Map();   // cella → a mennyezet magassága (a legmagasabb lap)
+  { const A = new THREE.Vector3(), B = new THREE.Vector3(), C = new THREE.Vector3(), n = new THREE.Vector3(), e1 = new THREE.Vector3(), e2 = new THREE.Vector3();
+    root.traverse((o) => { if (!o.isMesh) return; const g = o.geometry, p = g.attributes.position, ix = g.index, mats = [].concat(o.material), cnt = ix ? ix.count : p.count;
+      for (let k = 0; k < cnt; k += 3) { let mn = mats[0]?.name || ''; if (g.groups.length) for (const gr of g.groups) if (k >= gr.start && k < gr.start + gr.count) { mn = mats[gr.materialIndex]?.name || ''; break; }
+        if (!/L2_fal_teto/.test(mn)) continue;
+        A.fromBufferAttribute(p, ix ? ix.getX(k) : k).applyMatrix4(o.matrixWorld); B.fromBufferAttribute(p, ix ? ix.getX(k + 1) : k + 1).applyMatrix4(o.matrixWorld); C.fromBufferAttribute(p, ix ? ix.getX(k + 2) : k + 2).applyMatrix4(o.matrixWorld);
+        n.crossVectors(e1.subVectors(B, A), e2.subVectors(C, A)); if (n.lengthSq() < 1e-8 || Math.abs(n.normalize().y) < 0.9) continue;   // csak a vízszintes (felső) lapok
+        const x0 = Math.min(A.x, B.x, C.x), x1 = Math.max(A.x, B.x, C.x), z0 = Math.min(A.z, B.z, C.z), z1 = Math.max(A.z, B.z, C.z), ym = (A.y + B.y + C.y) / 3;
+        for (let cy = wcCy(z1); cy <= wcCy(z0); cy++) for (let cx = wcCx(x0); cx <= wcCx(x1); cx++) { const x = wcX(cx), z = wcZ(cy);
+          const s1 = (x - B.x) * (A.z - B.z) - (A.x - B.x) * (z - B.z), s2 = (x - C.x) * (B.z - C.z) - (B.x - C.x) * (z - C.z), s3 = (x - A.x) * (C.z - A.z) - (C.x - A.x) * (z - A.z);
+          if ((s1 < 0 || s2 < 0 || s3 < 0) && (s1 > 0 || s2 > 0 || s3 > 0)) continue; const c = cy * N + cx; if (!(menny.get(c) >= ym)) menny.set(c, ym); } } }); }
+  if (!menny.size) return null;
+  const csop = new THREE.Group(); csop.name = 'WEB_vip_menny';
+  // egységek: azonos típusú POI-k 9 m-en belül; a Platinum bár (külön kérés szerint jelölés nélkül) kimarad
+  const lista = pois.filter((q) => (q.cat === 'wc' || q.cat === 'bar') && !(q.x > -13 && q.x < 13 && -q.y > -71 && -q.y < -57));
+  const egys = []; for (const q of lista) { const e = egys.find((u) => u.cat === q.cat && u.p.some((r) => Math.hypot(r.x - q.x, r.y - q.y) < 9)); if (e) e.p.push(q); else egys.push({ cat: q.cat, p: [q] }); }
+  const kesz = new Set();
+  for (const u of egys) {
+    // mag: az ajtók mögött (kifelé) 2,5 m-re; ha ott nincs mennyezet, a legközelebbi mennyezet-cella 5 m-en belül
+    // a mag a környék LEGMAGASABB mennyezetén (az alacsonyabb, keskeny perem nem); onnan csak az azonos magasságú (± 0,3 m) cellákon terjed
+    let si = -1;
+    for (const q of u.p) { const x = q.x, z = -q.y, r = Math.hypot(x, z) || 1, ux = x / r, uz = z / r, K = Math.round(5 / cm), cx = wcCx(x + ux * 2.5), cy = wcCy(z + uz * 2.5); let lj = 1e9, ymax = -1e9;
+      for (let dy = -K; dy <= K; dy++) for (let dx = -K; dx <= K; dx++) { const h = menny.get((cy + dy) * N + cx + dx); if (h > ymax) ymax = h; }
+      for (let dy = -K; dy <= K; dy++) for (let dx = -K; dx <= K; dx++) { const i = (cy + dy) * N + cx + dx, h = menny.get(i); if (h > ymax - 0.3 && dx * dx + dy * dy < lj) { lj = dx * dx + dy * dy; si = i; } }
+      if (si >= 0) break; }
+    if (si < 0) continue;
+    const h0 = menny.get(si), y = h0 + 0.07;
+    const komp = new Set([si]), verem = [si]; while (verem.length) { const i = verem.pop(); for (const j of [i - 1, i + 1, i - N, i + N]) if (!komp.has(j) && Math.abs((menny.get(j) ?? -1e9) - h0) < 0.3) { komp.add(j); verem.push(j); } }
+    let cellak = [...komp];
+    if (cellak.length * cm * cm > 400) {   // gyűrűsáv: a helyiség szelete
+      const sz = u.p.map((q) => Math.atan2(-q.y, q.x)), k0 = sz[0], kul = (f) => { let d = f - k0; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d; };
+      const ds = sz.map(kul), r = u.p.reduce((s, q) => s + Math.hypot(q.x, q.y), 0) / u.p.length, ra = VIP_SZEL / r, f0 = Math.min(...ds) - ra, f1 = Math.max(...ds) + ra;
+      cellak = cellak.filter((i) => { const d = kul(Math.atan2(wcZ((i - i % N) / N), wcX(i % N))); return d >= f0 && d <= f1; });
+    }
+    // NYITÁS (0,5 m-es zsugorítás + visszahízlalás): a mennyezettel azonos magasságú keskeny peremek (a páholysor előtti párkány) leesnek;
+    // utána a maghoz legközelebbi összefüggő rész marad
+    { const E = Math.round(0.5 / cm), lep = (be, zsug) => { let akt = be; for (const d of [1, N]) { const ki = new Set();
+        if (zsug) { for (const i of akt) { let jo = true; for (let k = -E; k <= E && jo; k++) if (!akt.has(i + k * d)) jo = false; if (jo) ki.add(i); } }
+        else for (const i of akt) for (let k = -E; k <= E; k++) ki.add(i + k * d);
+        akt = ki; } return akt; };
+      const ered = new Set(cellak), ny = [...lep(lep(ered, true), false)].filter((i) => ered.has(i)), hs = new Set(ny);
+      let mag = hs.has(si) ? si : -1; if (mag < 0) { let lj = 1e18; for (const i of ny) { const d = ((i % N) - (si % N)) ** 2 + (((i - i % N) / N) - ((si - si % N) / N)) ** 2; if (d < lj) { lj = d; mag = i; } } }
+      if (mag >= 0) { const kk = new Set([mag]), vv = [mag]; while (vv.length) { const i = vv.pop(); for (const j of [i - 1, i + 1, i - N, i + N]) if (hs.has(j) && !kk.has(j)) { kk.add(j); vv.push(j); } } cellak = [...kk]; } }
+    cellak = cellak.filter((i) => !kesz.has(i)); if (cellak.length * cm * cm < 3) continue; for (const i of cellak) kesz.add(i);
+    const lat = new Set(cellak), szin = ZONA_PALETTA[u.cat], cs = [], ix = [], sz = [];
+    const sorok = new Map(); for (const i of lat) { const x = i % N, yy = (i - x) / N; if (!sorok.has(yy)) sorok.set(yy, []); sorok.get(yy).push(x); }
+    for (const [yy, xs] of sorok) { xs.sort((a, b) => a - b); let x0 = xs[0], e = xs[0];
+      for (let k = 1; k <= xs.length; k++) { if (k < xs.length && xs[k] === e + 1) { e = xs[k]; continue; }
+        const b = cs.length / 3, xa = wcX(x0) - cm / 2, xb = wcX(e) + cm / 2, za = wcZ(yy) + cm / 2, zb = wcZ(yy) - cm / 2;
+        cs.push(xa, y, za, xb, y, za, xb, y, zb, xa, y, zb); ix.push(b, b + 1, b + 2, b, b + 2, b + 3); if (k < xs.length) { x0 = xs[k]; e = xs[k]; } } }
+    for (const i of lat) { const x = i % N, yy = (i - x) / N, xa = wcX(x) - cm / 2, xb = wcX(x) + cm / 2, za = wcZ(yy) + cm / 2, zb = wcZ(yy) - cm / 2, yv = y + 0.02;
+      if (!lat.has(i - 1)) sz.push(xa, yv, za, xa, yv, zb); if (!lat.has(i + 1)) sz.push(xb, yv, za, xb, yv, zb); if (!lat.has(i - N)) sz.push(xa, yv, za, xb, yv, za); if (!lat.has(i + N)) sz.push(xa, yv, zb, xb, yv, zb); }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(cs, 3)); g.setIndex(ix);
+    const anyag = new THREE.MeshBasicMaterial({ name: 'WEB_tetoblokk', color: szin, transparent: true, opacity: ZONA_FEDES, depthWrite: false, side: THREE.DoubleSide }); anyag.userData.zonaTipus = u.cat;
+    const lap = new THREE.Mesh(g, anyag); lap.renderOrder = 5; lap.frustumCulled = false; csop.add(lap);
+    const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(sz, 3));
+    const v = new THREE.LineSegments(sg, new THREE.LineBasicMaterial({ name: 'WEB_tetoblokk_szegely', color: szin })); v.renderOrder = 6; v.frustumCulled = false; csop.add(v);
+    const f = zonaFeliratPontokra(cellak.filter((_, k) => k % 4 === 0).map((i) => [wcX(i % N), wcZ((i - i % N) / N)]), y + 0.02, ZONA_SZOVEG[u.cat]); if (f) csop.add(f);
+    if (u.cat === 'bar') { let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (const i of cellak) { const x = wcX(i % N), z = wcZ((i - i % N) / N); x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
+      rejtLista.push({ x0: x0 - 4, x1: x1 + 4, z0: z0 - 4, z1: z1 + 4 }); }
+  }
+  return csop.children.length ? csop : null;
+}
 function wcMennyezet(root, pois) {
   const mag = wcMagassagTerkep(root), N = WC_N, cm = 2 * WC_R / (N - 1), csop = new THREE.Group(); csop.name = 'WEB_wc_menny';
   const magAt = (x, z) => mag[wcCy(z) * N + wcCx(x)];
@@ -3041,6 +3112,8 @@ async function loadLevel(level) {
       if (LEPCSO_FADE[L.key] && !QS.has('nofade')) lepcsoFade(gltf.scene, LEPCSO_FADE[L.key]);
       // a sütött anyagcsere (lightmap → MeshBasicMaterial) UTÁN: a mozgólépcsők padló alatti részei ne üssenek át a padlón
       if (PADLO_ALATT_REJT[L.key] && !QS.has('nopadloalatt')) { const k = new Set(); gltf.scene.traverse((o) => { if (!o.isMesh) return; for (const m of (Array.isArray(o.material) ? o.material : [o.material])) if (!k.has(m) && PADLO_ALATT_REJT[L.key].test(alapNev(m.name))) { k.add(m); padloAlattRejt(m); } }); }
+      if (VIPZONA && L.key === 'S2') { try { const rj = [], w = vipMennyezet(gltf.scene, data.pois, rj); if (w) gltf.scene.add(w);
+        if (rj.length) gltf.scene.traverse((o) => { if (o.isMesh) for (const m of [].concat(o.material)) if (/UJ_zona_bar_(teto|szegely|betu|felirathatter)/.test(m?.name || '')) zonaRejt(m, rj); }); } catch (e) { console.warn('vip-menny', e); } }
       if (WC_MENNY.has(L.key) && !QS.has('nowcmenny')) { try { const w = wcMennyezet(gltf.scene, data.pois); if (w) gltf.scene.add(w); } catch (e) { console.warn('wc-menny', e); } }
       if (WC_FAL.has(L.key) && !QS.has('nowcfal')) { try { const w = wcFalak(gltf.scene, data.pois); if (w) gltf.scene.add(w); } catch (e) { console.warn('wc-fal', e); } }
       if (HOMLOKZAT[L.key] && !QS.has('nohomlokzat')) { try { const h = homlokzatLapok(gltf.scene, L.key); if (h) gltf.scene.add(h); } catch (e) { console.warn('homlokzat', e); } }
