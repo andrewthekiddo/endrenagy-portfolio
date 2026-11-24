@@ -326,13 +326,22 @@ const LM = { gamma: { value: 1.0 }, gain: { value: 1.0 }, amb: { value: new THRE
 // Második atlasz (sütő chat, 2026-11-23): a "lightmap2.csomopont" nevű csomópont (W_S1_tribun_sutott, W_tb_* anyagok) saját fénytérképet kap.
 // Az első lightmap után fut: a csomópont alatti anyagok lightMap-képét cseréli (a gltfpack UV-transzformációja megmarad); előbb a kicsi,
 // a teljes a háttérben. A gain / gamma közös a szinttel, a k külön (lightmap2.k). ?nolm2: kikapcsolva (marad az első atlasz)
+// HOMLOKZAT = AZ ÉPÜLET NÉZETÉ (André, 2026-11-24, 25n): az alsó / páholy / felső szint homlokzat-atlasza (W_Sx_hom_sutott) a falpaneleken foltos
+// és kékesebb, mint az Épület nézet saját sütése. A falpanelek (ezüst, bronz, fuga, ablakborda) ezért nem kapják az atlaszt: egyenletes
+// színük az Épület nézetben mért képernyőszín (WebKit, 1440×900: ezüst 31/31/39, bronz 14/12/14, borda 6/8/16), a szint homlokzat-sötétítésével
+// (HOMK) visszaosztva. A fénycsíkok, üveg, kapuk, feliratok maradnak az atlaszon. ?homatlasz: a régi (atlasz a paneleken is)
+const HOM_EGY = !QS.has('homatlasz');
+const HOM_PANEL = [[/EF_Kulso_panel_ezust/, QS.get('homezust') || '#2e2b2f'], [/EF_Kulso_panel_bronz|Kulso_panelfuga/, QS.get('hombronz') || '#1d1818'], [/Kulso_ablakborda/, '#05070f']];
 function applyLightmap2(root, info, tex) {
   const node = root.getObjectByName(info.csomopont); if (!node) { console.warn('lightmap2: nincs csomópont', info.csomopont); tex.dispose(); return []; }
   const klonok = [tex], kesz = new Set();
+  const homKey = HOM_EGY && (/^W_(S\d)_hom_sutott$/.exec(info.csomopont) || [])[1];
   node.traverse((o) => {
     if (!o.isMesh) return;
     for (const m of (Array.isArray(o.material) ? o.material : [o.material])) {
       if (!m || !m.lightMap || kesz.has(m)) continue;
+      const hp = homKey && HOM_PANEL.find(([re]) => re.test(m.name || ''));
+      if (hp) { m.lightMap = null; m.color.set(hp[1]).multiplyScalar((homKey === 'S1' ? 1 : 1.3) / (HOMK_SZINT[homKey] || 1));   // páholy / felső: mérve ~25 %-kal sötétebb lett → 1,3 m.needsUpdate = true; kesz.add(m); continue; }
       const t = tex.clone(), r = m.lightMap;
       t.offset.copy(r.offset); t.repeat.copy(r.repeat); t.center.copy(r.center); t.rotation = r.rotation; t.matrixAutoUpdate = r.matrixAutoUpdate; t.matrix.copy(r.matrix);
       t.channel = 1; t.needsUpdate = true; klonok.push(t);
