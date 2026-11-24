@@ -341,7 +341,8 @@ function applyLightmap2(root, info, tex) {
     for (const m of (Array.isArray(o.material) ? o.material : [o.material])) {
       if (!m || !m.lightMap || kesz.has(m)) continue;
       const hp = homKey && HOM_PANEL.find(([re]) => re.test(m.name || ''));
-      if (hp) { m.lightMap = null; m.color.set(hp[1]).multiplyScalar((homKey === 'S1' ? 1 : 1.3) / (HOMK_SZINT[homKey] || 1));   // páholy / felső: mérve ~25 %-kal sötétebb lett → 1,3 m.needsUpdate = true; kesz.add(m); continue; }
+      // páholy / felső: mérve ~25 %-kal sötétebb lett → 1,3
+      if (hp) { m.lightMap = null; m.color.set(hp[1]).multiplyScalar((homKey === 'S1' ? 1 : 1.3) / (HOMK_SZINT[homKey] || 1)); m.needsUpdate = true; kesz.add(m); continue; }
       const t = tex.clone(), r = m.lightMap;
       t.offset.copy(r.offset); t.repeat.copy(r.repeat); t.center.copy(r.center); t.rotation = r.rotation; t.matrixAutoUpdate = r.matrixAutoUpdate; t.matrix.copy(r.matrix);
       t.channel = 1; t.needsUpdate = true; klonok.push(t);
