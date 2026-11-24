@@ -10,7 +10,8 @@
 <script>
 // Gyors indulás (V2): a kezdőszint modellje és fénytérképe már a HTML beolvasásakor elkezd letöltődni, nem csak a kód elindulása után
 // MVM_VER: a modellek/adatok verziója – minden modellcserénél EMELNI kell, így a böngésző (iPad Safari is) biztosan az újat tölti
-window.MVM_VER = '2026-11-24j';
+window.MVM_VER = '2026-11-24k';
+if (/[?&]navbal/.test(location.search)) document.documentElement.classList.add('navbal');
 // Mindig a legfrissebb kiadás (felhasználó, 2026-11-23: „egy link legyen, ne ezer verzió”): betöltés után és amikor a lap újra előtérbe kerül
 // (iPad Safari a nyitva hagyott lapot a memóriából mutatja), a néző gyorsítótár nélkül lekéri a saját HTML-jét; ha abban újabb MVM_VER áll,
 // egyszer újratölt (munkamenetenként egy kiadásra legfeljebb egyszer – nincs töltési hurok). ?nofrissit: kikapcsolva
@@ -86,6 +87,8 @@ window.MVM_VER = '2026-11-24j';
   @media (max-width:1023px){.brand{height:140px;padding:26px 16px 0;align-items:flex-start}.brand::before{background:linear-gradient(180deg,rgba(29,41,57,.95) 0%,rgba(29,41,57,.9) 64%,rgba(29,41,57,0) 100%)}.brand img{margin-top:6px}
     .levels{position:fixed;top:92px;left:16px;right:16px;margin:0;gap:22px;overflow-x:auto;scrollbar-width:none}.levels::-webkit-scrollbar{display:none}.levels button{height:36px;flex:none}}
   @media (min-width:641px) and (max-width:1023px){.side,.sideOpen{top:140px}}
+  /* álló iPad (André, 2026-11-24: „a main navigation el van csúszva”): a szintválasztó a fejléc közepén, mint fekvő nézetben; ?navbal: a régi (balra zárt) */
+  @media (min-width:641px) and (max-width:1023px){html:not(.navbal) .levels{justify-content:center}}
   /* koncertkártya a fejléc jobb szélén (ahol az igazi oldalon a sárga Jegyek gomb van) – adat: data/koncert.json (felhasználó ötlete, 2026-11-22) */
   .koncert{pointer-events:auto;margin-left:auto;display:flex;align-items:center;gap:10px;height:44px;max-width:190px;padding:4px 14px 4px 4px;border-radius:8px;background:rgba(252,252,253,.06);border:1px solid rgba(252,191,32,.55);color:var(--text);text-decoration:none;transition:border-color .3s,background .3s,opacity .2s}
   .koncert[hidden]{display:none}

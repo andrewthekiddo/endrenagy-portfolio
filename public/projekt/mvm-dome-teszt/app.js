@@ -1774,8 +1774,9 @@ function updateMarkers() {
       let uj = false;
       for (let i = 0; i < L.length; i++) for (let j = i + 1; j < L.length; j++) {
         if (gy(i) === gy(j)) continue;
-        const A = L[i], B = L[j], volt = A.m.pinSzomszed === B.m.pinSzomszedKulcs || B.m.pinSzomszed === A.m.pinSzomszedKulcs;
-        const hatar = REGI ? (A.r + B.r) * (volt ? 0.95 : 0.75) : A.r + B.r + (volt ? 8 : 4);
+        const A = L[i], B = L[j], volt = REGI ? (A.m.pinSzomszed === B.m.pinSzomszedKulcs || B.m.pinSzomszed === A.m.pinSzomszedKulcs) : !!A.m.pinCsop?.has(B.m.p.id);
+        // hiszterézis (André, 2026-11-24: forgatás közben a pinek „össze-vissza csúsztak”): aki az előző képkockán egy sorban volt, csak 20 px-rel nagyobb távolságnál válik le
+        const hatar = REGI ? (A.r + B.r) * (volt ? 0.95 : 0.75) : A.r + B.r + (volt ? 24 : 4);
         const dx = Math.abs(xe(A) - xe(B)), dy = Math.abs(A.y - B.y);
         if (REGI ? Math.hypot(A.x - B.x, A.y - B.y) < hatar : (dx < hatar && dy < hatar)) { szulo[gy(i)] = gy(j); uj = true; }
       }
@@ -1790,7 +1791,11 @@ function updateMarkers() {
       }
       if (!uj) break;
     }
+    { const kl = new Map(); L.forEach((A, i) => { const k = gy(i); if (!kl.has(k)) kl.set(k, []); kl.get(k).push(A); });
+      for (const tagok of kl.values()) { const ids = new Set(tagok.map((A) => A.m.p.id)); for (const A of tagok) A.m.pinCsop = ids; } }
   }
+  // az eltolás nem ugrik: képkockánként a cél felé simul (?pinugras: azonnal)
+  if (!QS.has('pinugras')) for (const g of csoportok) { const m = g.fo.m, cel = eltol.get(m) || 0, akt = m.eltolAkt ?? cel, uj = Math.abs(cel - akt) < 0.5 ? cel : akt + (cel - akt) * 0.22; m.eltolAkt = uj; eltol.set(m, uj); }
   for (const g of csoportok) {
     const a = g.fo, m = a.m, n = g.tagok.length;
     const t = a.q[a.q.length - 1];
@@ -2834,13 +2839,24 @@ async function loadLevel(level) {
       // is látszik, a gyűrű ellipszis; kicsit közelebb, mint az eddigi 208 m / 123 m-es pálya. A legnagyobb kitávolítás nem változik. ?kamregi: a régi;
       // próbához ?kamR=…&kamH=… (vízszintes sugár / magasság, m)
       if (['S1', 'S2', 'S3'].includes(L.key) && data.camera?.path && !QS.has('kamregi')) {
-        // keskeny szabad képterület (pl. álló iPad: a bal panel mellett ~500 × 1180 px): a pálya arányosan hátrébb, hogy a teljes gyűrű beférjen
-        // (#79 ellenőrzőlista 10. pont, 2026-11-24); a fekvő iPad (≈ 1,05) és a szélesebb képek változatlanok. ?kamszuk: kikapcsolva
-        const szabadW = Math.max(200, VW() - (VW() > 640 && !document.body.classList.contains('no-side') && !document.body.classList.contains('side-closed') ? 316 : 0)), fa = szabadW / VH();
-        const KK = QS.has('kamszuk') ? 1 : Math.min(2.2, Math.max(1, Math.pow(1.05 / fa, Number(QS.get('kamkit')) || 0.5)));
-        const KR = { S1: [165, 76], S2: [190, 86], S3: [205, 95] }[L.key], R = (Number(QS.get('kamR')) || KR[0]) * KK, H = (Number(QS.get('kamH')) || KR[1]) * KK, E = 6;   // E: a célpont a középponton túl, a túloldal felé (a közeli bódék ne vágódjanak le)
+        const KR = { S1: [165, 76], S2: [190, 86], S3: [205, 95] }[L.key], R = Number(QS.get('kamR')) || KR[0], H = Number(QS.get('kamH')) || KR[1], E = 6;   // E: a célpont a középponton túl, a túloldal felé (a közeli bódék ne vágódjanak le)
         data.camera = { ...data.camera, path: data.camera.path.map((q) => { const dx = q[0] - q[3], dy = q[1] - q[4], d = Math.hypot(dx, dy) || 1, ux = dx / d, uy = dy / d;
           return [ux * R, uy * R, H, -ux * E, -uy * E, 1]; }) };
+      }
+      // keskeny szabad képterület (álló iPad: a bal panel mellett ~500 × 1180 px; telefon): a kezdő pálya MINDEN szinten (épület, lobby is) arányosan
+      // hátrébb, a célponttól mérve, hogy a teljes épület / gyűrű beférjen (#79 10. pont; André, 2026-11-24: álló nézetben levágódott). A fekvő iPad
+      // (≈ 1,05) és a szélesebb képek változatlanok. ?kamszuk: kikapcsolva
+      if (data.camera?.path && !QS.has('kamszuk')) {
+        const oldal = VW() > 640 && !document.body.classList.contains('no-side') && !document.body.classList.contains('side-closed') ? 316 : 0;
+        const fa = Math.max(200, VW() - oldal) / VH(), KK = Math.min(2.2, Math.max(1, Math.pow(1.05 / fa, Number(QS.get('kamkit')) || 0.5)));
+        // épület (S4): a bejárós útvonal a lobbyban indul → csak a külső szakaszon (a középponttól 60–120 m-en túl, fokozatosan) hátrál,
+        // és a célpont az épület közepe felé húzódik (a kezdőkép célpontja x ≈ 40 m-en van, álló képen az épület oldalra csúszott)
+        const sima = (a0, a1, x) => { const t = Math.min(1, Math.max(0, (x - a0) / (a1 - a0))); return t * t * (3 - 2 * t); };
+        if (KK > 1.001) data.camera = { ...data.camera, path: data.camera.path.map((q) => {
+          if (L.key !== 'S4') return [q[3] + (q[0] - q[3]) * KK, q[4] + (q[1] - q[4]) * KK, q[5] + (q[2] - q[5]) * KK, q[3], q[4], q[5]];
+          const sv = sima(60, 120, Math.hypot(q[0], q[1])), k = 1 + (KK - 1) * sv, w = sv * (1 - 1 / KK) * 1.4;
+          const tx = q[3] * (1 - w), ty = q[4] * (1 - w);
+          return [tx + (q[0] - q[3]) * k, ty + (q[1] - q[4]) * k, q[5] + (q[2] - q[5]) * k, tx, ty, q[5]]; }) };
       }
       let c_baked = false, c_lm = null;
       // a modell és a lightmap egyszerre töltődik (V2: gyorsabb betöltés), nem egymás után
