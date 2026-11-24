@@ -23,7 +23,7 @@ if (SHOT) { addEventListener('error', (e) => { document.title = 'JSERR ' + e.mes
 // 4 szint + a teljes épület, mindegyik a saját padlóján (y = 0), az aréna középpontja az origó. A modellek a Blender showreel-fájlból
 // (00_Teljes_epulet/…_showreel_v01.blend) jönnek: _Blender_Projects/00_Web_export/scripts/export_web.py + web_adat.py
 const LEVELS = {
-  felso:  { key: 'S3', name: 'Felső körüljáró szint', model: 'models/S3.glb', meret: 5683828, data: 'data/S3.json', tier: 'Felső lelátó (3xx)' },
+  felso:  { key: 'S3', name: 'Felső körüljáró szint', model: 'models/S3.glb', meret: 7274320, data: 'data/S3.json', tier: 'Felső lelátó (3xx)' },
   paholy: { key: 'S2', name: 'Páholy szint (VIP)', model: 'models/S2.glb', meret: 6139900, data: 'data/S2.json', tier: 'Alsó lelátó (2xx)' },
   also:   { key: 'S1', name: 'Alsó körüljáró szint', model: 'models/S1.glb', meret: 5181284, data: 'data/S1.json', tier: 'Alsó lelátó (2xx)' },
   lobby:  { key: 'S0', name: 'Lobby – Bejárati szint', model: 'models/S0.glb', meret: 1703972, data: 'data/S0.json', tier: 'Küzdőtéri lelátó (1xx)' },
@@ -177,6 +177,7 @@ const STAIRSKEEP = QS.get('stairskeep') !== '0';
 // a V3-on a homlokzat sötét, csak a fénycsíkok, kapuszámok, üveg világítanak (ezek kimaradnak). ?homk=0.5 (minden szintre), ?homkregi: a régi
 const HOMK_SZINT = { S0: 1, S1: 1, S2: 0.4, S3: 0.32, S4: 0.42 };
 const HOMK_U = { value: 1 };
+// S3 (2026-11-24, V3-csomag lightmap3-mal): mérve az 1,0 túl világos (homlokzat-medián 42, az S1 sötét sütése 12) → marad 0,32 (medián 14), amíg sötétre nem sül
 function homkBeallit(key) { HOMK_U.value = QS.has('homkregi') ? 1 : QS.has('homk') ? Number(QS.get('homk')) || 1 : (HOMK_SZINT[key] ?? 1); }
 const LOW = QS.has('dimregi') ? 1 : Math.min(1, Math.max(0.05, Number(QS.get('low')) || 0.45));   // shader-érték; mérve a 100-as sorok ≈ 30 %-os, a 200-asok ≈ 55 %-os fényerőn (a kikapcsolthoz képest)
 function addSectorShader(m) {
