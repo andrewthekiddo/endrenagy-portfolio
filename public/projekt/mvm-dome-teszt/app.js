@@ -1706,6 +1706,7 @@ function takarJel(m, pont) {
 }
 
 const _v = new THREE.Vector3();
+const PINCSOP = { t: 0 };   // a pin-sorok utolsó újraszámolásának ideje
 function updateMarkers() {
   if (!current) return;
   const w = VW(), h = VH();
@@ -1770,9 +1771,14 @@ function updateMarkers() {
     // #79 ellenőrzőlista (2026-11-24): a különböző pinek között legalább 4 px rés – a sorba rendezett csoport sem csúszhat rá a szomszédjára,
     // ezért a széttolt helyzetet újra megnézzük (legfeljebb 4 menet). ?pinresregi: a régi (csak a 75 %-os fedés) határ.
     const REGI = QS.has('pinresregi'), xe = (A) => A.x + (eltol.get(A.m) || 0);
-    for (let menet = 0; menet < (REGI ? 1 : 4); menet++) {
+    // a csoport-tagság legfeljebb 1,5 s-onként változhat (André, 2026-11-24: forgás közben a pinek „csúszkáltak”): közben a sorok fixek,
+    // a pinek az épülettel együtt mozognak. ?pinfriss: minden képkockán újra (a 24h–24k viselkedés)
+    const most = performance.now(), fix = !REGI && !QS.has('pinfriss') && most - (PINCSOP.t || 0) < 1500 && L.every((A) => A.m.pinCsop);
+    if (fix) { for (let i = 0; i < L.length; i++) for (let j = i + 1; j < L.length; j++) if (L[i].m.pinCsop.has(L[j].m.p.id)) szulo[gy(i)] = gy(j); }
+    else PINCSOP.t = most;
+    for (let menet = 0; menet < (fix ? 1 : REGI ? 1 : 4); menet++) {
       let uj = false;
-      for (let i = 0; i < L.length; i++) for (let j = i + 1; j < L.length; j++) {
+      if (!fix) for (let i = 0; i < L.length; i++) for (let j = i + 1; j < L.length; j++) {
         if (gy(i) === gy(j)) continue;
         const A = L[i], B = L[j], volt = REGI ? (A.m.pinSzomszed === B.m.pinSzomszedKulcs || B.m.pinSzomszed === A.m.pinSzomszedKulcs) : !!A.m.pinCsop?.has(B.m.p.id);
         // hiszterézis (André, 2026-11-24: forgatás közben a pinek „össze-vissza csúsztak”): aki az előző képkockán egy sorban volt, csak 20 px-rel nagyobb távolságnál válik le
@@ -1794,8 +1800,7 @@ function updateMarkers() {
     { const kl = new Map(); L.forEach((A, i) => { const k = gy(i); if (!kl.has(k)) kl.set(k, []); kl.get(k).push(A); });
       for (const tagok of kl.values()) { const ids = new Set(tagok.map((A) => A.m.p.id)); for (const A of tagok) A.m.pinCsop = ids; } }
   }
-  // az eltolás nem ugrik: képkockánként a cél felé simul (?pinugras: azonnal)
-  if (!QS.has('pinugras')) for (const g of csoportok) { const m = g.fo.m, cel = eltol.get(m) || 0, akt = m.eltolAkt ?? cel, uj = Math.abs(cel - akt) < 0.5 ? cel : akt + (cel - akt) * 0.22; m.eltolAkt = uj; eltol.set(m, uj); }
+
   for (const g of csoportok) {
     const a = g.fo, m = a.m, n = g.tagok.length;
     const t = a.q[a.q.length - 1];
@@ -2497,6 +2502,9 @@ document.querySelectorAll('#tabs button').forEach((b) => b.addEventListener('cli
 $('#sideX').addEventListener('click', () => document.body.classList.add('side-closed'));
 $('#sideOpen').addEventListener('click', () => { document.body.classList.remove('side-closed'); if (VW() <= 640 && panel.classList.contains('show')) closePanel(false); });
 if (VW() <= 640) document.body.classList.add('side-closed');
+// álló iPad (641–1023 px, álló tájolás – André, 2026-11-24): a panel alapból csukva, a térkép a teljes szélességet kapja (nyitott panel mellett a keskeny sávban
+// levágódott, és a panel teteje a szintválasztó sorába lógott); a panel gombbal nyitható. ?allopanel: a régi (nyitott)
+if (VW() > 640 && VW() < 1024 && VH() > VW() && !QS.has('allopanel')) document.body.classList.add('side-closed');
 // a bal oldali panel (és a jobb oldali adatlap) mellett a 3D kép a szabad terület közepére kerül: vízszintes képeltolás (px)
 let uiEltol = 0, uiEltolY = 0;
 const B = document.body.classList;
