@@ -1785,7 +1785,7 @@ function updateMarkers() {
   // Egymást fedő, KÜLÖNBÖZŐ típusú pinek egymás mellé (felhasználó, 2026-11-23: a baba-mama szoba és az akadálymentes mosdó pinje mindig egymásra csúszott):
   // a fedő pinek csoportja egy vízszintes sorba rendeződik a közös középpontjuk körül, pin-szélesség + 4 px távolsággal; a sorrend az azonosító
   // szerint állandó, a csoport tagsága kis hiszterézissel marad (nem villog). ?pinhely=0: a régi (egymásra csúszó) elhelyezés
-  if (QS.get('pinhely') !== '0') {
+  if (QS.get('pinhely') !== '0' && (QS.has('gyururegi') || !GYURU_SZINT.has(LEVELS[current.level].key))) {
     const L = csoportok.map((g) => { const t = g.fo.q[g.fo.q.length - 1]; return { m: g.fo.m, x: t[0], y: t[1] - 18 * g.fo.s, r: 18 * g.fo.s + 2 }; });
     const szulo = L.map((_, i) => i), gy = (i) => (szulo[i] === i ? i : (szulo[i] = gy(szulo[i])));
     // #79 ellenőrzőlista (2026-11-24): a különböző pinek között legalább 4 px rés – a sorba rendezett csoport sem csúszhat rá a szomszédjára,
@@ -2827,20 +2827,32 @@ function pinKozepre(root, pois, key = 'S1') {
   // Pinek egy gyűrűvonalon (felhasználó, 2026-11-23): a tetőlapok középpontjaira illesztett, középpontos ellipszis (x²/a² + z²/b² = 1, legkisebb
   // négyzetek), egy közös magasságban (a legmagasabb tető + 0,8 m); minden szolgáltatás-pin (a lift kivételével) a saját irányszögénél ül a vonalon.
   // ?pingyuru=0: a régi, szolgáltatásonkénti hely
-  if (QS.get('pingyuru') === '0' || key === 'S2') return;   // a páholyszinten a szolgáltatások nem alkotnak gyűrűt
-  const E = egys.filter((u) => u.S > 4); if (E.length < 6) return;
+  // 2026-11-25 (André: „EGY VONALBAN legyen az összes ikon, a tetők ívében, körbe”): a páholy szinten is; ha kevés a tetőlap, a szolgáltatás-pontokra illeszt
+  if (QS.get('pingyuru') === '0' || (key === 'S2' && QS.has('gyururegi'))) return;
+  const GY_KAT = (c) => !['szektor', 'paholy', 'kapu'].includes(c) && (QS.has('gyururegi') ? !['lift', 'info'].includes(c) : true);
+  let E = egys.filter((u) => u.S > 4);
+  if (E.length < 6 && !QS.has('gyururegi')) E = pois.filter((p) => GY_KAT(p.cat)).map((p) => ({ x: p.x, z: -p.y, y: (p.z || 0) + 1.2 }));
+  if (E.length < 6) return;
   let s11 = 0, s12 = 0, s22 = 0, b1 = 0, b2 = 0;
   for (const u of E) { const X = u.x * u.x, Z = u.z * u.z; s11 += X * X; s12 += X * Z; s22 += Z * Z; b1 += X; b2 += Z; }
   const det = s11 * s22 - s12 * s12; if (Math.abs(det) < 1e-9) return;
   const ua = (b1 * s22 - b2 * s12) / det, ub = (s11 * b2 - s12 * b1) / det; if (!(ua > 0 && ub > 0)) return;
   const H = Math.max(...E.map((u) => u.y)) + 0.8;
   window.__gyuru = { a: 1 / Math.sqrt(ua), b: 1 / Math.sqrt(ub), H };
-  for (const p of pois) {
-    if (['lift', 'szektor', 'paholy', 'kapu', 'info'].includes(p.cat)) continue;
-    const x = p.x, z = -p.y, t = Math.atan2(z, x), c = Math.cos(t), s = Math.sin(t), r = 1 / Math.sqrt(c * c * ua + s * s * ub);
-    p.gyuru = [r * c, H, r * s];
+  const rAt = (t) => { const c = Math.cos(t), s = Math.sin(t); return 1 / Math.sqrt(c * c * ua + s * s * ub); };
+  const lista = pois.filter((p) => GY_KAT(p.cat)).map((p) => ({ p, t: Math.atan2(-p.y, p.x) }));
+  // ütközés: csak a vonal MENTÉN, egyszer (3D-ben) – a szomszédos ikonok közt legalább GY_RES m ív; a sorrend nem változik
+  if (!QS.has('gyururegi') && lista.length > 1) {
+    const GY_RES = Number(QS.get('gyurures')) || 5.5; lista.sort((a, b) => a.t - b.t);
+    for (let it = 0; it < 80; it++) { let mozog = false;
+      for (let i = 0; i < lista.length; i++) { const A = lista[i], B = lista[(i + 1) % lista.length]; let dt = B.t - A.t; if (i === lista.length - 1) dt += Math.PI * 2;
+        const kell = GY_RES / ((rAt(A.t) + rAt(B.t)) / 2); if (dt < kell) { const d = (kell - dt) / 2 * 0.6; A.t -= d; B.t += d; mozog = true; } }
+      if (!mozog) break; }
   }
+  for (const { p, t } of lista) { const r = rAt(t); p.gyuru = [r * Math.cos(t), H, r * Math.sin(t)]; }
+  GYURU_SZINT.add(key);
 }
+const GYURU_SZINT = new Set();   // ahol a pinek a gyűrűvonalon ülnek (ott nincs képernyő-síkú széttolás)
 // S1 „V3 kinézet” (felhasználó a board chaten, 2026-11-23 este: az élő S1 legyen olyan, mint a jóváhagyott Blender V3 render).
 // A jóváhagyott V3 renderen és az élő nézőn mért területátlagok (lineáris fényerő V3/élő): sétány padló 0,34, küzdőtér 0,44 (kevésbé kék),
 // homlokzat 0,39 (a V3 mintában a LED-csíkok is benne → valódi ≈ 0,3), lelátó 1,7. Ezekkel szorozzuk az anyagszínt (a fénytérkép marad).
