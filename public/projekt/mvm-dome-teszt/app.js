@@ -1766,18 +1766,28 @@ function updateMarkers() {
   if (QS.get('pinhely') !== '0') {
     const L = csoportok.map((g) => { const t = g.fo.q[g.fo.q.length - 1]; return { m: g.fo.m, x: t[0], y: t[1] - 18 * g.fo.s, r: 18 * g.fo.s + 2 }; });
     const szulo = L.map((_, i) => i), gy = (i) => (szulo[i] === i ? i : (szulo[i] = gy(szulo[i])));
-    for (let i = 0; i < L.length; i++) for (let j = i + 1; j < L.length; j++) {
-      const A = L[i], B = L[j], volt = A.m.pinSzomszed === B.m.pinSzomszedKulcs || B.m.pinSzomszed === A.m.pinSzomszedKulcs;
-      const hatar = (A.r + B.r) * (volt ? 0.95 : 0.75);   // csak a ténylegesen egymást fedő pinek (a közeli, de külön álló pinek a helyükön maradnak)
-      if (Math.hypot(A.x - B.x, A.y - B.y) < hatar) szulo[gy(i)] = gy(j);
-    }
-    const kl = new Map(); L.forEach((A, i) => { const k = gy(i); if (!kl.has(k)) kl.set(k, []); kl.get(k).push(A); });
-    for (const tagok of kl.values()) {
-      for (const A of tagok) { A.m.pinSzomszedKulcs = A.m.p.id; A.m.pinSzomszed = tagok.length > 1 ? tagok.find((B) => B !== A)?.m.p.id : null; }
-      if (tagok.length < 2) continue;
-      tagok.sort((A, B) => (A.m.p.id < B.m.p.id ? -1 : 1));
-      const kx = tagok.reduce((s, A) => s + A.x, 0) / tagok.length, sz = tagok.reduce((s, A) => s + 2 * A.r + 4, 0);
-      let x = kx - sz / 2; for (const A of tagok) { eltol.set(A.m, x + A.r + 2 - A.x); x += 2 * A.r + 4; }
+    // #79 ellenőrzőlista (2026-11-24): a különböző pinek között legalább 4 px rés – a sorba rendezett csoport sem csúszhat rá a szomszédjára,
+    // ezért a széttolt helyzetet újra megnézzük (legfeljebb 4 menet). ?pinresregi: a régi (csak a 75 %-os fedés) határ.
+    const REGI = QS.has('pinresregi'), xe = (A) => A.x + (eltol.get(A.m) || 0);
+    for (let menet = 0; menet < (REGI ? 1 : 4); menet++) {
+      let uj = false;
+      for (let i = 0; i < L.length; i++) for (let j = i + 1; j < L.length; j++) {
+        if (gy(i) === gy(j)) continue;
+        const A = L[i], B = L[j], volt = A.m.pinSzomszed === B.m.pinSzomszedKulcs || B.m.pinSzomszed === A.m.pinSzomszedKulcs;
+        const hatar = REGI ? (A.r + B.r) * (volt ? 0.95 : 0.75) : A.r + B.r + (volt ? 8 : 4);
+        const dx = Math.abs(xe(A) - xe(B)), dy = Math.abs(A.y - B.y);
+        if (REGI ? Math.hypot(A.x - B.x, A.y - B.y) < hatar : (dx < hatar && dy < hatar)) { szulo[gy(i)] = gy(j); uj = true; }
+      }
+      const kl = new Map(); L.forEach((A, i) => { const k = gy(i); if (!kl.has(k)) kl.set(k, []); kl.get(k).push(A); });
+      eltol.clear();
+      for (const tagok of kl.values()) {
+        for (const A of tagok) { A.m.pinSzomszedKulcs = A.m.p.id; A.m.pinSzomszed = tagok.length > 1 ? tagok.find((B) => B !== A)?.m.p.id : null; }
+        if (tagok.length < 2) continue;
+        tagok.sort((A, B) => (A.m.p.id < B.m.p.id ? -1 : 1));
+        const kx = tagok.reduce((s, A) => s + A.x, 0) / tagok.length, sz = tagok.reduce((s, A) => s + 2 * A.r + 4, 0);
+        let x = kx - sz / 2; for (const A of tagok) { eltol.set(A.m, x + A.r + 2 - A.x); x += 2 * A.r + 4; }
+      }
+      if (!uj) break;
     }
   }
   for (const g of csoportok) {
