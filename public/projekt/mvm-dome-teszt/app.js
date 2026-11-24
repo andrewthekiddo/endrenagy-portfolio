@@ -2431,11 +2431,24 @@ function setHover(s, pont) {
 // (1) egy képpontra csak egyszer fut le (a szektor- és a mennyezetkeresés közösen használja), (2) a páholyokat előbb
 // csak a saját 49 lapjukon keressük – ha ott találat van, a teljes modellt nem is kell végignézni.
 let sugarMemo = null;
+// GYORSABB KATTINTÁS (André, 2026-11-24, 25m): a kattintás / rámutatás sugara a tisztán díszítő, sok-háromszöges hálókat (világító számok,
+// bútor, fotel, hullámvonal, páholyszám, ablakborda) kihagyja – a páholy szinten ezek vitték a sugárkövetés idejének kb. felét. A takaró
+// felületek (falak, homlokzat, lelátó, mennyezet) és a jelölések maradnak. ?kattregi: a régi (teljes jelenet, repülés közben nincs kattintás)
+const KATTREGI = QS.has('kattregi');
+const SUGAR_DISZ = /szam_vilagito|szam_feher|_butor_|hullamvonal|fotel|paholyszam|ablakborda/;
+let sugarCel = null, sugarCelRoot = null, sugarCelN = -1;
+function sugarCelok() {
+  let n = 0; current.root.traverse(() => { n++; });
+  if (sugarCelRoot === current.root && sugarCelN === n) return sugarCel;
+  sugarCel = []; current.root.traverse((o) => { if (o === current.root || !(o.isMesh || o.isLine || o.isPoints || o.isSprite)) return;
+    if (o.isMesh && !/^WEB_/.test(o.name || '') && [].concat(o.material).every((m) => SUGAR_DISZ.test(m?.name || ''))) return; sugarCel.push(o); });
+  sugarCelRoot = current.root; sugarCelN = n; return sugarCel;
+}
 function sugarTalalatok(x, y) {
   if (sugarMemo && sugarMemo.x === x && sugarMemo.y === y && sugarMemo.root === current.root && sugarMemo.cam === camera.matrixWorld.elements.join()) return sugarMemo.hits;
   ndcBe(x, y);
   raycaster.setFromCamera(ndc, camera);
-  const hits = raycaster.intersectObject(current.root, true);
+  const hits = KATTREGI ? raycaster.intersectObject(current.root, true) : raycaster.intersectObjects(sugarCelok(), false);
   sugarMemo = { x, y, root: current.root, cam: camera.matrixWorld.elements.join(), hits };
   return hits;
 }
@@ -2642,7 +2655,7 @@ let lenyom = null;
 canvas.addEventListener('pointerdown', (e) => { lenyom = { x: e.clientX, y: e.clientY, t: performance.now() }; });
 canvas.addEventListener('pointerup', (e) => {
   const l = lenyom; lenyom = null;
-  if (!l || Math.hypot(e.clientX - l.x, e.clientY - l.y) > 6 || performance.now() - l.t > 450 || anim) return;
+  if (!l || Math.hypot(e.clientX - l.x, e.clientY - l.y) > 6 || performance.now() - l.t > 450 || (anim && KATTREGI)) return;   // 25m: kamerarepülés közben is kattintható (az új repülés a mostani helyzetből indul)
   const r = kepponton(e.clientX, e.clientY);
   if (r) { hovZona = null; setHover(null); selectPoi(r.s, r.pont); selZona = r.zona ? { ...r.zona, s: r.s } : null; zonaKiemFrissit(); }
 });
