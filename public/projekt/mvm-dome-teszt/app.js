@@ -1358,7 +1358,7 @@ function zonaUjra(root, lista) {
 const KAPUK = [['I', 141.6], ['II', 122.6], ['III', 90], ['IV', 57.4], ['V', 48.4], ['VI', 38.5], ['VII', -1.1], ['VIII', -30.5], ['IX', -42.3], ['X', -50.3], ['XI', -90], ['XII', -129.8], ['XIII', -138], ['XIV', -179.5]];
 // telefon-menet (André, 2026-11-24, valódi iPhone: „ős káosz”): ≤ 500 px szélességen saját, letisztult nézet; ?telefonregi: a régi
 const TEL = () => VW() <= 500 && !QS.has('telefonregi');
-const KAPU_A = 79.5, KAPU_B = 94, KAPU_H = 3.8 * (VW() <= 500 && !QS.has('telefonregi') ? 0.6 : 1);   // telefonon kisebb kapuszámok   // ellipszis fél-tengelyei (világ x, világ z), betűmagasság (m)
+const KAPU_A = 79.5, KAPU_B = 94, KAPU_H = 3.8 * (VW() <= 500 && !QS.has('telefonregi') ? 0.8 : 1);   // telefonon kicsit kisebb kapuszámok (0,6 olvashatatlan volt – André, 2026-11-24)   // ellipszis fél-tengelyei (világ x, világ z), betűmagasság (m)
 function kapuSzamok(root, y) {
   const csop = new THREE.Group(); csop.name = 'WEB_kapuszamok';
   const font = '700 200px Georgia, "Times New Roman", serif', meres = document.createElement('canvas').getContext('2d'); meres.font = font;
@@ -2007,18 +2007,27 @@ function keretIgazit(pos, tgt) {
     pos.set(tgt.x + d.x / hz * Math.cos(el2) * L, tgt.y + Math.sin(el2) * L, tgt.z + d.z / hz * Math.cos(el2) * L); }
   // a látható szabad terület NDC-ben: balra a panel, fent a fejléc (a fülek alja), lent 3 %
   const fej = W <= 1023 ? (QS.has('mobilregi') ? 140 : 116) : 90;
-  const x0 = -1 + 2 * oldal / W, x1 = 1, y0 = -0.97, y1 = 1 - 2 * fej / H;
+  const tel = TEL(), x0 = -1 + 2 * oldal / W, x1 = 1, y0 = tel ? -1 + 2 * 78 / H : -0.97, y1 = 1 - 2 * fej / H;   // telefonon a jobb gombsor és az alsó sor is foglalt
   const telKozel = TEL() && kint >= 0.999;
   _kcam.copy(camera); let kk = 1;
   for (let it = 0; it < 3; it++) {
     _kcam.position.copy(tgt).addScaledVector(_kp.copy(pos).sub(tgt), kk); _kcam.lookAt(tgt); _kcam.updateMatrixWorld(true);
     let ax = 1e9, bx = -1e9, ay = 1e9, by = -1e9;
     for (const p of KERET.pontok) { _kp.copy(p).project(_kcam); if (_kp.z > 1) { ax = -9; bx = 9; ay = -9; by = 9; break; } ax = Math.min(ax, _kp.x); bx = Math.max(bx, _kp.x); ay = Math.min(ay, _kp.y); by = Math.max(by, _kp.y); }
-    const mg = telKozel ? 0.88 : 0.94, s = Math.max((bx - ax) / ((x1 - x0) * mg), (by - ay) / ((y1 - y0) * mg));
+    const mg = telKozel ? (KERET.szint === 'S4' ? 0.8 : 0.88) : 0.94, s = Math.max((bx - ax) / ((x1 - x0) * mg), (by - ay) / ((y1 - y0) * mg));
     if (s <= 1.001 && !(telKozel && s < 0.9)) break; kk *= 1 + (s - 1) * 0.9;   // telefonon közelebb is jöhet: a gyűrű a kép szélességét töltse ki
   }
   kk = 1 + (Math.min(Math.max(kk, 0.55), 3) - 1) * kint; KERET.kk = kk;
   if (Math.abs(kk - 1) > 0.001) pos.sub(tgt).multiplyScalar(kk).add(tgt);
+  // telefonon a vetület közepe a szabad terület közepére (oldalra és függőlegesen tolva – André: az épület lent ült, fölötte 350 px üres)
+  if (tel && !QS.has('telefonregi')) {
+    _kcam.position.copy(pos); _kcam.lookAt(tgt); _kcam.updateMatrixWorld(true);
+    let ax = 1e9, bx = -1e9, ay = 1e9, by = -1e9;
+    for (const p of KERET.pontok) { _kp.copy(p).project(_kcam); if (_kp.z > 1) return; ax = Math.min(ax, _kp.x); bx = Math.max(bx, _kp.x); ay = Math.min(ay, _kp.y); by = Math.max(by, _kp.y); }
+    const dx = ((ax + bx) - (x0 + x1)) / 2 * kint, dy = ((ay + by) - (y0 + y1)) / 2 * kint, d = pos.distanceTo(tgt), hh = d * Math.tan(THREE.MathUtils.degToRad(_kcam.fov) / 2), hw = hh * _kcam.aspect;
+    const jobb = new THREE.Vector3().setFromMatrixColumn(_kcam.matrixWorld, 0), fel = new THREE.Vector3().setFromMatrixColumn(_kcam.matrixWorld, 1);
+    const elt = jobb.multiplyScalar(dx * hw).add(fel.multiplyScalar(dy * hh)); pos.add(elt); tgt.add(elt);
+  }
 }
 if (QS.get('debugkamera') === '1') {
   const el = document.createElement('div'); el.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:99999;background:rgba(0,0,0,.75);color:#9f9;font:11px/1.35 monospace;padding:6px 8px;border-radius:6px;white-space:pre;pointer-events:none';
