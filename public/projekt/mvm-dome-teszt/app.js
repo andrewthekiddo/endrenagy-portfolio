@@ -2014,17 +2014,18 @@ function keretIgazit(pos, tgt) {
     _kcam.position.copy(tgt).addScaledVector(_kp.copy(pos).sub(tgt), kk); _kcam.lookAt(tgt); _kcam.updateMatrixWorld(true);
     let ax = 1e9, bx = -1e9, ay = 1e9, by = -1e9;
     for (const p of KERET.pontok) { _kp.copy(p).project(_kcam); if (_kp.z > 1) { ax = -9; bx = 9; ay = -9; by = 9; break; } ax = Math.min(ax, _kp.x); bx = Math.max(bx, _kp.x); ay = Math.min(ay, _kp.y); by = Math.max(by, _kp.y); }
-    const mg = telKozel ? (KERET.szint === 'S4' ? 0.8 : 0.88) : 0.94, s = Math.max((bx - ax) / ((x1 - x0) * mg), (by - ay) / ((y1 - y0) * mg));
+    const mg = telKozel ? (KERET.szint === 'S4' ? 0.8 : 0.88) : KERET.szint === 'S4' ? 0.88 : keskeny > 0 ? 0.9 : 0.94, s = Math.max((bx - ax) / ((x1 - x0) * mg), (by - ay) / ((y1 - y0) * mg));
     if (s <= 1.001 && !(telKozel && s < 0.9)) break; kk *= 1 + (s - 1) * 0.9;   // telefonon közelebb is jöhet: a gyűrű a kép szélességét töltse ki
   }
   kk = 1 + (Math.min(Math.max(kk, 0.55), 3) - 1) * kint; KERET.kk = kk;
   if (Math.abs(kk - 1) > 0.001) pos.sub(tgt).multiplyScalar(kk).add(tgt);
   // telefonon a vetület közepe a szabad terület közepére (oldalra és függőlegesen tolva – André: az épület lent ült, fölötte 350 px üres)
-  if (tel && !QS.has('telefonregi')) {
+  // (iPad-audit, 2026-11-24): a középre tolás az épületnél mindig, a körüljárókon keskeny (álló) képen is – asztali / fekvő körüljáró változatlan
+  if ((tel && !QS.has('telefonregi')) || KERET.szint === 'S4' || keskeny > 0) {
     _kcam.position.copy(pos); _kcam.lookAt(tgt); _kcam.updateMatrixWorld(true);
     let ax = 1e9, bx = -1e9, ay = 1e9, by = -1e9;
     for (const p of KERET.pontok) { _kp.copy(p).project(_kcam); if (_kp.z > 1) return; ax = Math.min(ax, _kp.x); bx = Math.max(bx, _kp.x); ay = Math.min(ay, _kp.y); by = Math.max(by, _kp.y); }
-    const dx = ((ax + bx) - (x0 + x1)) / 2 * kint, dy = ((ay + by) - (y0 + y1)) / 2 * kint, d = pos.distanceTo(tgt), hh = d * Math.tan(THREE.MathUtils.degToRad(_kcam.fov) / 2), hw = hh * _kcam.aspect;
+    const ksz = tel || KERET.szint === 'S4' ? 1 : keskeny, dx = ((ax + bx) - (x0 + x1)) / 2 * kint * ksz, dy = ((ay + by) - (y0 + y1)) / 2 * kint * ksz, d = pos.distanceTo(tgt), hh = d * Math.tan(THREE.MathUtils.degToRad(_kcam.fov) / 2), hw = hh * _kcam.aspect;
     const jobb = new THREE.Vector3().setFromMatrixColumn(_kcam.matrixWorld, 0), fel = new THREE.Vector3().setFromMatrixColumn(_kcam.matrixWorld, 1);
     const elt = jobb.multiplyScalar(dx * hw).add(fel.multiplyScalar(dy * hh)); pos.add(elt); tgt.add(elt);
   }
