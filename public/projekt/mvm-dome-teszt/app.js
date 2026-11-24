@@ -2837,8 +2837,9 @@ function lapSzinSzabvany(root) {
   root.traverse((o) => { if (!o.isMesh) return; for (const m of (Array.isArray(o.material) ? o.material : [o.material])) {
     if (!m || kesz.has(m)) continue; kesz.add(m); const n = alapNev(m.name || '');
     let tip = null, szegely = false; const z = /UJ_zona_(bar|wc|ruhatar|merch)_(teto|szegely)/.exec(n);
-    if (z) { tip = z[1]; szegely = z[2] === 'szegely'; } else if (/^WEB_(zona_teto|zona_ujra_teto|tetoblokk|wc_teto|wc_menny|wc_fal|menny_teljes|platinum_teto)/.test(n)) tip = m.userData.zonaTipus || ZONA_SZIN_TIPUS[m.color?.getHex()] || null;
+    if (z) { tip = z[1]; szegely = z[2] === 'szegely'; } else if (/^WEB_(zona_teto|zona_ujra_teto|tetoblokk|wc_teto|wc_menny|wc_fal|menny_teljes|platinum_teto)/.test(n)) tip = m.userData.zonaTipus || ZONA_SZIN_TIPUS[m.color?.getHex()] || (m.color?.getHex() === MERCH_SZIN ? 'merch' : null);
     else if (/^WEB_(zona_szegely|zona_ujra_szegely|tetoblokk_szegely)/.test(n)) { tip = ZONA_SZIN_TIPUS[m.color?.getHex()] || null; szegely = true; }
+    if (tip === 'merch' && /^WEB_/.test(n) && !QS.has('merchregi')) { m.color.setHex(S1_LAP.merch); m.toneMapped = false; if (m.transparent) m.opacity = 0.9; m.userData.zonaTipus = 'merch'; m.userData.alapSzin = m.color.clone(); if (!DIM_ANYAG.includes(m)) DIM_ANYAG.push(m); m.needsUpdate = true; continue; }   // a néző saját merch-lapja is az S1 lilája (S3 audit, 2026-11-24)
     if (!tip || tip === 'merch' || !S1_LAP[tip]) continue;
     m.color.setHex(S1_LAP[tip]); m.toneMapped = false; if (!szegely) { m.userData.zonaTipus = tip; if (m.transparent) m.opacity = 0.9; m.userData.alapSzin = m.color.clone(); if (!DIM_ANYAG.includes(m)) DIM_ANYAG.push(m); }
     m.needsUpdate = true; } });
