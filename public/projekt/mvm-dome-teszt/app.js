@@ -1982,17 +1982,34 @@ function keretSzamol(root, key) {
   if (b.isEmpty()) return;
   const sz = b.getSize(new THREE.Vector3()); if (Math.max(sz.x, sz.z) > 400) return;   // ha a környék is belekerült, inkább semmi
   const c = b.getCenter(new THREE.Vector3()); KERET.gomb = { c, r: 0.5 * Math.hypot(sz.x, sz.y, sz.z) * 0.82 };
+  // a körvonal: az épület / gyűrű befoglaló dobozába írt ellipszis 16 pontja alul és felül (a doboz sarkai túlbecsülnék)
+  const pt = []; for (const y of [b.min.y, b.max.y]) for (let k = 0; k < 16; k++) { const a = k / 16 * Math.PI * 2; pt.push(new THREE.Vector3(c.x + Math.cos(a) * sz.x / 2, y, c.z + Math.sin(a) * sz.z / 2)); }
+  KERET.pontok = pt; KERET.szint = key;
 }
+// 2. változat (2026-11-24, rövid fekvő iPad / André képe): nem gömb-becslés, hanem a valódi vetület – a kamera CSAK akkor lép hátrébb, ha a körvonal
+// ténylegesen kilóg a látható szabad területből (a bal panel és a fejléc nélkül), így asztali gépen semmi sem változik. A célpont az épületnézetben
+// kívülről mindig az épület közepe felé húzódik; a körüljárókon csak keskeny képen. ?kamkeret0: ki
+const _kp = new THREE.Vector3(), _kcam = new THREE.PerspectiveCamera();
 function keretIgazit(pos, tgt) {
-  const g = KERET.gomb; if (!g || !current) return;
-  const oldal = VW() > 640 && !document.body.classList.contains('no-side') && !document.body.classList.contains('side-closed') ? 316 : 0;
-  const fa = Math.max(200, VW() - oldal) / VH(); KERET.fa = fa;
-  const keskeny = 1 - THREE.MathUtils.smoothstep(fa, 0.95, 1.2); if (keskeny <= 0) { KERET.w = 0; return; }
-  const d0 = pos.distanceTo(g.c), w = keskeny * THREE.MathUtils.smoothstep(d0, g.r * 1.15, g.r * 1.7); KERET.w = w; if (w <= 0) return;
-  tgt.lerp(g.c, w);
-  const vf = THREE.MathUtils.degToRad(camera.fov) / 2, hf = Math.atan(Math.tan(vf) * fa), kell = g.r / Math.sin(Math.min(hf, vf)), d = pos.distanceTo(tgt);
-  const kk = d < kell ? 1 + (kell / d - 1) * w : 1; KERET.kk = kk;
-  if (kk > 1) pos.sub(tgt).multiplyScalar(kk).add(tgt);
+  const g = KERET.gomb; if (!g || !current || !KERET.pontok) return;
+  const W = VW(), H = VH(), oldal = W > 640 && !document.body.classList.contains('no-side') && !document.body.classList.contains('side-closed') ? 316 : 0;
+  const fa = Math.max(200, W - oldal) / H; KERET.fa = fa;
+  const kint = THREE.MathUtils.smoothstep(pos.distanceTo(g.c), g.r * 1.15, g.r * 1.7); if (kint <= 0) { KERET.w = 0; KERET.kk = 1; return; }
+  const keskeny = 1 - THREE.MathUtils.smoothstep(fa, 0.95, 1.2), wc = kint * (KERET.szint === 'S4' ? 1 : keskeny); KERET.w = wc;
+  if (wc > 0) tgt.lerp(g.c, wc);
+  // a látható szabad terület NDC-ben: balra a panel, fent a fejléc (a fülek alja), lent 3 %
+  const fej = W <= 1023 ? (QS.has('mobilregi') ? 140 : 116) : 90;
+  const x0 = -1 + 2 * oldal / W, x1 = 1, y0 = -0.97, y1 = 1 - 2 * fej / H;
+  _kcam.copy(camera); let kk = 1;
+  for (let it = 0; it < 3; it++) {
+    _kcam.position.copy(tgt).addScaledVector(_kp.copy(pos).sub(tgt), kk); _kcam.lookAt(tgt); _kcam.updateMatrixWorld(true);
+    let ax = 1e9, bx = -1e9, ay = 1e9, by = -1e9;
+    for (const p of KERET.pontok) { _kp.copy(p).project(_kcam); if (_kp.z > 1) { ax = -9; bx = 9; ay = -9; by = 9; break; } ax = Math.min(ax, _kp.x); bx = Math.max(bx, _kp.x); ay = Math.min(ay, _kp.y); by = Math.max(by, _kp.y); }
+    const s = Math.max((bx - ax) / ((x1 - x0) * 0.94), (by - ay) / ((y1 - y0) * 0.94));
+    if (s <= 1.001) break; kk *= 1 + (s - 1) * 0.9;
+  }
+  kk = 1 + (Math.min(kk, 3) - 1) * kint; KERET.kk = kk;
+  if (kk > 1.001) pos.sub(tgt).multiplyScalar(kk).add(tgt);
 }
 if (QS.get('debugkamera') === '1') {
   const el = document.createElement('div'); el.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:99999;background:rgba(0,0,0,.75);color:#9f9;font:11px/1.35 monospace;padding:6px 8px;border-radius:6px;white-space:pre;pointer-events:none';
