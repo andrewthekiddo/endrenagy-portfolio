@@ -1356,7 +1356,9 @@ function zonaUjra(root, lista) {
 // forgatott római számai helyett minden szinten ugyanaz a webes réteg – egyetlen ellipszis-íven (az épület homlokzata + ~5 m), a betűk az ívet
 // követik, a tetejük az aréna felé. Szögek a Blender-koordinátákban (x tengelytől, +y felé), a modell eredeti számaiból mérve.
 const KAPUK = [['I', 141.6], ['II', 122.6], ['III', 90], ['IV', 57.4], ['V', 48.4], ['VI', 38.5], ['VII', -1.1], ['VIII', -30.5], ['IX', -42.3], ['X', -50.3], ['XI', -90], ['XII', -129.8], ['XIII', -138], ['XIV', -179.5]];
-const KAPU_A = 79.5, KAPU_B = 94, KAPU_H = 3.8;   // ellipszis fél-tengelyei (világ x, világ z), betűmagasság (m)
+// telefon-menet (André, 2026-11-24, valódi iPhone: „ős káosz”): ≤ 500 px szélességen saját, letisztult nézet; ?telefonregi: a régi
+const TEL = () => VW() <= 500 && !QS.has('telefonregi');
+const KAPU_A = 79.5, KAPU_B = 94, KAPU_H = 3.8 * (VW() <= 500 && !QS.has('telefonregi') ? 0.6 : 1);   // telefonon kisebb kapuszámok   // ellipszis fél-tengelyei (világ x, világ z), betűmagasság (m)
 function kapuSzamok(root, y) {
   const csop = new THREE.Group(); csop.name = 'WEB_kapuszamok';
   const font = '700 200px Georgia, "Times New Roman", serif', meres = document.createElement('canvas').getContext('2d'); meres.font = font;
@@ -1711,19 +1713,22 @@ function updateMarkers() {
   if (!current) return;
   const w = VW(), h = VH();
   const camDist = camera.position.distanceTo(controls.target);
-  const kep = THREE.MathUtils.clamp(Math.min(w, h) / 720, 0.62, 1);   // kis képernyőn (telefon) arányosan kisebb pinek és szektorszámok (felhasználó, 2026-11-19)
+  const tel = TEL(), kep = THREE.MathUtils.clamp(Math.min(w, h) / 720, 0.62, 1) * (tel ? 0.85 : 1);   // kis képernyőn (telefon) arányosan kisebb pinek és szektorszámok (felhasználó, 2026-11-19)
   const pinSor = [];
   for (const m of current.markers) {
     if (!isVisible(m.p.cat)) { m.el.classList.add('hidden'); if (m.ag) m.ag.style.display = 'none'; continue; }
+    // telefonon alapból csak a szektorszámok; a szolgáltatás-pinek csak kiválasztott szűrőnél (vagy a kijelölt pin)
+    if (tel && activeCat === null && m.p.cat !== 'szektor' && m.el !== selectedEl) { m.el.classList.add('hidden'); if (m.ag) m.ag.style.display = 'none'; continue; }
     m.el.classList.toggle('focus', activeCat !== null && m.p.cat === activeCat);
     m.el.classList.toggle('dim', activeCat !== null && m.p.cat !== activeCat && m.p.cat !== 'szektor');
     _v.copy(m.world).project(camera);
     if (_v.z > 1) { m.el.classList.add('hidden'); if (m.ag) m.ag.style.display = 'none'; continue; }
-    m.el.classList.remove('hidden');
     const x = (_v.x * 0.5 + 0.5) * w, y = (-_v.y * 0.5 + 0.5) * h;
+    if (tel && (x < 18 || x > w - 18)) { m.el.classList.add('hidden'); if (m.ag) m.ag.style.display = 'none'; continue; }   // telefonon a képszélen levágott pin inkább nem látszik
+    m.el.classList.remove('hidden');
     const focus = activeCat !== null && m.p.cat === activeCat;
     const szek = m.p.cat === 'szektor', halv = activeCat !== null && !focus && !szek;
-    const s = THREE.MathUtils.clamp(95 / camDist + 0.28, 0.5, 1.1) * (szek ? 1.12 : 1.0) * kep * (focus ? 1.35 : halv ? 0.72 : 1);   // a pinek kisebbek (felhasználó, 2026-11-20: inkább kisebb buborékok, mint egymás elé toltak) – korábban 1,4
+    const s = THREE.MathUtils.clamp(95 / camDist + 0.28, 0.5, 1.1) * (szek ? (tel ? 1.55 : 1.12) : 1.0) * kep * (focus ? 1.35 : halv ? 0.72 : 1);   // a pinek kisebbek (felhasználó, 2026-11-20: inkább kisebb buborékok, mint egymás elé toltak) – korábban 1,4
     if (m.ag) {
       // a 3D-s váz pontjai képernyőre vetítve: a gerinc így a folyosó falának irányát követi, nem a képernyő vízszintesét
       let rejt = false;
@@ -1997,19 +2002,23 @@ function keretIgazit(pos, tgt) {
   const kint = THREE.MathUtils.smoothstep(pos.distanceTo(g.c), g.r * 1.15, g.r * 1.7); if (kint <= 0) { KERET.w = 0; KERET.kk = 1; return; }
   const keskeny = 1 - THREE.MathUtils.smoothstep(fa, 0.95, 1.2), wc = kint * (KERET.szint === 'S4' ? 1 : keskeny); KERET.w = wc;
   if (wc > 0) tgt.lerp(g.c, wc);
+  // telefonon (nagyon keskeny kép) a körüljárókon meredekebb rálátás: a gyűrű kevésbé lapos ellipszis, jobban kitölti a magas képet
+  if (TEL() && KERET.szint !== 'S4') { const n = 1 - THREE.MathUtils.smoothstep(fa, 0.55, 0.75), d = _kp.copy(pos).sub(tgt), L = d.length(), hz = Math.hypot(d.x, d.z) || 1e-6, el = Math.atan2(d.y, hz), el2 = el + (Math.max(el, 0.95) - el) * n;
+    pos.set(tgt.x + d.x / hz * Math.cos(el2) * L, tgt.y + Math.sin(el2) * L, tgt.z + d.z / hz * Math.cos(el2) * L); }
   // a látható szabad terület NDC-ben: balra a panel, fent a fejléc (a fülek alja), lent 3 %
   const fej = W <= 1023 ? (QS.has('mobilregi') ? 140 : 116) : 90;
   const x0 = -1 + 2 * oldal / W, x1 = 1, y0 = -0.97, y1 = 1 - 2 * fej / H;
+  const telKozel = TEL() && kint >= 0.999;
   _kcam.copy(camera); let kk = 1;
   for (let it = 0; it < 3; it++) {
     _kcam.position.copy(tgt).addScaledVector(_kp.copy(pos).sub(tgt), kk); _kcam.lookAt(tgt); _kcam.updateMatrixWorld(true);
     let ax = 1e9, bx = -1e9, ay = 1e9, by = -1e9;
     for (const p of KERET.pontok) { _kp.copy(p).project(_kcam); if (_kp.z > 1) { ax = -9; bx = 9; ay = -9; by = 9; break; } ax = Math.min(ax, _kp.x); bx = Math.max(bx, _kp.x); ay = Math.min(ay, _kp.y); by = Math.max(by, _kp.y); }
-    const s = Math.max((bx - ax) / ((x1 - x0) * 0.94), (by - ay) / ((y1 - y0) * 0.94));
-    if (s <= 1.001) break; kk *= 1 + (s - 1) * 0.9;
+    const mg = telKozel ? 0.88 : 0.94, s = Math.max((bx - ax) / ((x1 - x0) * mg), (by - ay) / ((y1 - y0) * mg));
+    if (s <= 1.001 && !(telKozel && s < 0.9)) break; kk *= 1 + (s - 1) * 0.9;   // telefonon közelebb is jöhet: a gyűrű a kép szélességét töltse ki
   }
-  kk = 1 + (Math.min(kk, 3) - 1) * kint; KERET.kk = kk;
-  if (kk > 1.001) pos.sub(tgt).multiplyScalar(kk).add(tgt);
+  kk = 1 + (Math.min(Math.max(kk, 0.55), 3) - 1) * kint; KERET.kk = kk;
+  if (Math.abs(kk - 1) > 0.001) pos.sub(tgt).multiplyScalar(kk).add(tgt);
 }
 if (QS.get('debugkamera') === '1') {
   const el = document.createElement('div'); el.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:99999;background:rgba(0,0,0,.75);color:#9f9;font:11px/1.35 monospace;padding:6px 8px;border-radius:6px;white-space:pre;pointer-events:none';

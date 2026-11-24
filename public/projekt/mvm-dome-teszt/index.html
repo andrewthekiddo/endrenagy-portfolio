@@ -3,15 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>MVM Dome térkép</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="modulepreload" href="/projekt/mvm-dome-teszt/vendor/three/build/three.module.js">
 <script>
 // Gyors indulás (V2): a kezdőszint modellje és fénytérképe már a HTML beolvasásakor elkezd letöltődni, nem csak a kód elindulása után
 // MVM_VER: a modellek/adatok verziója – minden modellcserénél EMELNI kell, így a böngésző (iPad Safari is) biztosan az újat tölti
-window.MVM_VER = '2026-11-24p';
-for (const k of ['navbal', 'koncertregi', 'mobilregi']) if (new RegExp('[?&]' + k + '(=|&|$)').test(location.search)) document.documentElement.classList.add(k);
+window.MVM_VER = '2026-11-24q';
+for (const k of ['navbal', 'koncertregi', 'mobilregi', 'telefonregi']) if (new RegExp('[?&]' + k + '(=|&|$)').test(location.search)) document.documentElement.classList.add(k);
 // Mindig a legfrissebb kiadás (felhasználó, 2026-11-23: „egy link legyen, ne ezer verzió”): betöltés után és amikor a lap újra előtérbe kerül
 // (iPad Safari a nyitva hagyott lapot a memóriából mutatja), a néző gyorsítótár nélkül lekéri a saját HTML-jét; ha abban újabb MVM_VER áll,
 // egyszer újratölt (munkamenetenként egy kiadásra legfeljebb egyszer – nincs töltési hurok). ?nofrissit: kikapcsolva
@@ -102,6 +102,9 @@ for (const k of ['navbal', 'koncertregi', 'mobilregi']) if (new RegExp('[?&]' + 
   @media (max-width:1179px){html.koncertregi .koncert{display:none!important}}
   @media (max-width:1023px){.koncert{position:fixed;right:16px;top:26px;margin:0;z-index:12;height:40px;max-width:150px;gap:8px;padding:3px 10px 3px 3px}.koncert img{width:32px;height:32px}.koncert b{font-size:13px;line-height:16px}.koncert small{font-size:11px;line-height:14px}}
   @media (max-width:420px){.koncert{max-width:118px}.koncert small{display:none}}
+  /* telefon-menet (André, 2026-11-24, iPhone: a kártya a HU gombra csúszott): 500 px alatt csak a kerek avatar-chip; az alsó sor a biztonsági sáv fölött */
+  @media (max-width:500px){html:not(.telefonregi) .koncert{max-width:44px;width:44px;height:44px;padding:3px;gap:0;border-radius:22px;top:18px}html:not(.telefonregi) .koncert img{width:36px;height:36px;border-radius:18px}html:not(.telefonregi) .koncert span{display:none}
+    html:not(.telefonregi) .sideOpen{bottom:calc(20px + env(safe-area-inset-bottom))}html:not(.telefonregi) .tools{bottom:calc(20px + env(safe-area-inset-bottom))}html:not(.telefonregi) .verzio{bottom:calc(4px + env(safe-area-inset-bottom))}}
   /* telefonon a szintválasztó kisebb betűvel és réssel (430 px-en mind az 5 fül kifér, 390 px-en az aktív fül a látható részre görgetődik); ?mobilregi: a régi */
   /* álló iPad (641–1023 px): a panelnyitó gomb a szintválasztó sora ALÁ (a későbbi .sideOpen{top:104px} felülírta a 140 px-et, a gomb a fülekre lógott) */
   @media (min-width:641px) and (max-width:1023px){html:not(.mobilregi) body .sideOpen{top:124px}html:not(.mobilregi) body .side{top:120px}}
