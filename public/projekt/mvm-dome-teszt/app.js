@@ -1276,6 +1276,7 @@ const WC_FAL = new Set();   // NINCS falra / homlokzatra tett jelölés – a fe
 // páholy szint: a mosdók a VIP-tömb zárt mennyezete alatt vannak (az ajtós fal kívülről nem látszik) → a mennyezetre, közvetlenül a mosdó-csoport
 // fölé kerül egy kék téglalap: az ajtók oldalirányú sávja ± 2,5 m, a folyosóval ellentétes oldalon 6 m mélyen, a mennyezet ott mért magasságában
 const VIPZONA = !QS.has('vipzonaregi');
+const KONYOK = !QS.has('szarregi');
 const WC_MENNY = new Set(VIPZONA ? [] : ['S2']);
 // Páholy szint (André, 2026-11-24, 25k): a mosdók és bárok kiemelése a VALÓDI mennyezet (L2_fal_teto, vízszintes felső lapjai) körvonalán.
 // A modell-chat mérése szerint (roof_outlines_S2_tetok.json) a helyiségek fölött nincs külön mennyezet: különálló tömb (pl. ~190 m²) → az egész
@@ -1725,9 +1726,14 @@ function buildMarkers(pois, padlo = 0, mag = null) {
       // 3D-s váz (világkoordináta): ajtó alja → ajtó fölött (gerinc vége) … gerinc a fal vonalában … → másik ajtó alja; a gerinc közepéről föl a pinhez
       const G = 3.3, P = 2.4;
       // az információs pult pinje alacsonyabban áll (felhasználó, 2026-11-19): a lobbyban a mögötte lévő ruhatár-pinnel egybelógott
-      if (!p.ajtok) { const al = poiWorld(p); return { p, el, world, ag, vaz: [al.clone().setY(al.y + 0.15), p.gyuru ? new THREE.Vector3(...p.gyuru) : al.clone().setY(p.cat === 'info' ? al.y + 1.9 : pinTeto(mag, al, al.y + G + P))] }; }
+      // KÖNYÖKÖS szár (André, 2026-11-24, 25l): a gyűrűvonalon oldalra tolt pinhez nem ferdén fut – az ajtóból függőlegesen föl (G m),
+      // vízszintesen a pin alá, onnan függőlegesen föl a pinhez. ?szarregi: a régi, egyenes (ferde) szár
+      if (!p.ajtok) { const al = poiWorld(p), tet = p.gyuru ? new THREE.Vector3(...p.gyuru) : al.clone().setY(p.cat === 'info' ? al.y + 1.9 : pinTeto(mag, al, al.y + G + P));
+        if (KONYOK && p.gyuru && Math.hypot(tet.x - al.x, tet.z - al.z) > 0.3) { const h = Math.min(al.y + G, tet.y - 0.5); return { p, el, world, ag, vaz: [al.clone().setY(al.y + 0.15), al.clone().setY(h), tet.clone().setY(h), tet] }; }
+        return { p, el, world, ag, vaz: [al.clone().setY(al.y + 0.15), tet] }; }
       const [a, b] = p.ajtok.map(poiWorld);
       const fa = a.clone().setY(a.y + G), fb = b.clone().setY(b.y + G), kz = fa.clone().lerp(fb, 0.5), tet = p.gyuru ? new THREE.Vector3(...p.gyuru) : kz.clone().setY(pinTeto(mag, kz, kz.y + P));
+      if (KONYOK && p.gyuru && Math.hypot(tet.x - kz.x, tet.z - kz.z) > 0.3) return { p, el, world, ag, vaz: [a.clone().setY(a.y + 0.15), fa, fb, b.clone().setY(b.y + 0.15), kz, tet.clone().setY(Math.min(kz.y, tet.y - 0.5)), tet] };
       return { p, el, world, ag, vaz: [a.clone().setY(a.y + 0.15), fa, fb, b.clone().setY(b.y + 0.15), kz, tet] };
     }
     return { p, el, world };
@@ -1902,7 +1908,10 @@ function updateMarkers() {
   }
   // (A különböző típusú pinek széttolása és a közös pinhez futó szárak – a „buborékháló” – a felhasználó kérésére KIVÉVE, 2026-11-20: nem tetszett.)
   const f = (q) => `${q[0].toFixed(1)} ${q[1].toFixed(1)}`;
-  const szar = (q) => (q.length === 2 ? `M${f(q[0])}L${f(q[1])}` : `M${f(q[0])}L${f(q[1])}L${f(q[2])}L${f(q[3])}M${f(q[4])}L${f(q[5])}`);
+  // könyökös szár a KÉPERNYŐHÖZ igazítva (25l): az ajtóból függőlegesen föl a pin magasságáig, onnan vízszintesen a pinhez – sehol sem ferde
+  const konyok = (p0, p1) => `M${f(p0)}L${p0[0].toFixed(1)} ${p1[1].toFixed(1)}L${f(p1)}`;
+  const szar = (q) => (q.length === 2 ? `M${f(q[0])}L${f(q[1])}` : q.length === 4 ? konyok(q[0], q[3])
+    : q.length === 7 ? `M${f(q[0])}L${f(q[1])}L${f(q[2])}L${f(q[3])}` + konyok(q[4], q[6]) : `M${f(q[0])}L${f(q[1])}L${f(q[2])}L${f(q[3])}M${f(q[4])}L${f(q[5])}`);
   for (const a of pinSor) if (a.rejt) { a.m.ag.style.display = 'none'; a.m.csopN = 0; a.m.elozoFo = null; }
   for (const g of csoportok) {
     const a = g.fo, m = a.m, n = g.tagok.length;
