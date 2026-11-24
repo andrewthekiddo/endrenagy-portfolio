@@ -1057,7 +1057,7 @@ function zonaMind(root, key, pois = [], tetok = null) {
   const wcTipus = (pp) => { let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (const [x, z] of pp) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
     const bent = pois.filter((p) => p.cat === 'wc' && p.x > x0 - 3 && p.x < x1 + 3 && -p.y > z0 - 3 && -p.y < z1 + 3).map((p) => p.ikon);
     const f = bent.includes('wc_ferfi'), n = bent.includes('wc_noi');
-    return QS.has('regiwcikon') || f === n ? 'TOILET_IKON' : f ? 'TOILET_FERFI' : 'TOILET_NOI'; };
+    return QS.has('regiwcikon') || !QS.has('wcregi') || f === n ? 'TOILET_IKON' : f ? 'TOILET_FERFI' : 'TOILET_NOI'; };   // #81: mindig a közös ikon
   for (const f of modellLapFeliratok(root, /UJ_zona_wc_teto/, 'TOILET_IKON', undefined, wcTipus)) csop.add(f);   // alsó szint: felirat helyett kék mosdó-ikon, mint a lobbyban (felhasználó, 2026-11-21)   // alsó szint: felirat helyett kék mosdó-ikon, mint a lobbyban (felhasználó, 2026-11-21)
   // a modell zóna-anyagai (a mosdó kivételével) az újrarajzolt egységek dobozaiban eldobva
   if (rejt.length) root.traverse((o) => { if (!o.isMesh) return; for (const m of (Array.isArray(o.material) ? o.material : [o.material]))
@@ -1543,6 +1543,15 @@ function mosdoAjtokhoz(root, pois) {
     for (const a of p.ajtok) { let leg = null, ld = 8; for (const c of cl) { if (foglalt.has(c)) continue; const d = Math.hypot(c.x - a.x, c.z + a.y); if (d < ld) { ld = d; leg = c; } }
       if (leg) { foglalt.add(leg); a.x = +leg.x.toFixed(2); a.y = +(-leg.z).toFixed(2); } }
     p.x = (p.ajtok[0].x + p.ajtok[1].x) / 2; p.y = (p.ajtok[0].y + p.ajtok[1].y) / 2; }
+}
+// #81 (felhasználó, 2026-11-24): az alaprajz a hiteles forrás – minden mosdóblokk közös (férfi + női) mosdó. A modell wc_ferfi / wc_noi nevei
+// belsők, a felületen sehol sem jelennek meg: cím „Mosdó N” (a szektorszámok sorrendjében), közös ikon, a panel szövege a közös leírás.
+// Az akadálymentes és a babaszoba külön szolgáltatás marad. Kapcsoló: ?wcregi.
+function mosdoKozos(pois) {
+  const szek = pois.filter((p) => p.cat === 'szektor'), szam = (p) => { let leg = null, ld = 1e9; for (const s of szek) { const d = Math.hypot(s.x - p.x, s.y - p.y); if (d < ld) { ld = d; leg = s; } } return leg ? parseInt(String(leg.name).replace(/\D/g, ''), 10) || 0 : 0; };
+  const w = pois.filter((p) => p.cat === 'wc' && /^wc(_ferfi|_noi)?$/.test(p.ikon || ''));
+  w.forEach((p) => { p.ikon = 'wc'; p._sz = szam(p); p._sz2 = Math.atan2(p.x, p.y); });
+  w.sort((a, b) => a._sz - b._sz || a._sz2 - b._sz2).forEach((p, i) => { p.name = `Mosdó ${i + 1}`; delete p.szoveg; delete p._sz; delete p._sz2; });
 }
 function osszevonMosdo(pois, szintKulcs) {
   const w = pois.filter((p) => p.ikon === 'wc_ferfi' || p.ikon === 'wc_noi');
@@ -2276,7 +2285,7 @@ function szektorKepponton(x, y) {
 // kattintásra ugyanaz történik, mint a gombjára kattintva. A kurzor alatti színes lapból (webes lap vagy a modell UJ_zona_*_teto anyaga)
 // a típus jön, a hozzá tartozó hely pedig a legközelebbi ilyen POI. A villanás csak annak az egy egységnek a háromszögeit rajzolja ki
 // (ami ehhez a POI-hoz van a legközelebb), így a lobbin sem gyullad ki egyszerre az összes bár.
-const ZONA_TETO = /(UJ_zona_(bar|wc|ruhatar|merch)_teto|WEB_(zona_teto|zona_ujra_teto|zona|tetoblokk|menny_teljes|wc_menny|wc_fal|wc_teto|homlokzat))(\.\d+)?$/;
+const ZONA_TETO = /(UJ_zona_(bar|wc|ruhatar|merch)_teto|WEB_(zona_teto|zona_ujra_teto|zona|tetoblokk|menny_teljes|wc_menny|wc_fal|wc_teto|homlokzat|platinum_teto))(\.\d+)?$/;
 const ZONA_SZIN_TIPUS = Object.fromEntries(Object.entries(ZONA_PALETTA).map(([k, v]) => [v, k]));
 const ZONA_CAT = { bar: 'bar', wc: 'wc', ruhatar: 'ruhatar', merch: 'merch' };
 function zonaAnyag(h) { const m = h.object.material; return Array.isArray(m) ? m[h.face?.materialIndex ?? 0] : m; }
@@ -2697,6 +2706,37 @@ const srgbLin = (r, g, b) => new THREE.Color().setRGB(r / 255, g / 255, b / 255,
 const S1_TETO = srgbLin(14, 23, 38), S1_KUZD = srgbLin(18, 25, 36);
 const S1_NEON = { bar: 0xff2f78, wc: 0x2b8cff, ruhatar: 0xffb21e, merch: 0xa66bff };
 const S1_LAP = { bar: 0xd62a5e, wc: 0x184a8a, ruhatar: 0xd8961a, merch: 0x7c45d6 };
+// #79 (2026-11-24): a lobby, páholy és felső szint kiemelő lapjai is az S1 színeit kapják (bár rózsaszín, mosdó kék, ruhatár sárga), tónusleképezés nélkül,
+// 0,9 fedéssel, a modell szegélye ugyanabban a színben (egyetlen körvonal), és kijelöléskor ugyanúgy halványulnak. A merch (lila, átszínező shader) marad. ?lapszinregi: a régi.
+function lapSzinSzabvany(root) {
+  const kesz = new Set();
+  root.traverse((o) => { if (!o.isMesh) return; for (const m of (Array.isArray(o.material) ? o.material : [o.material])) {
+    if (!m || kesz.has(m)) continue; kesz.add(m); const n = alapNev(m.name || '');
+    let tip = null, szegely = false; const z = /UJ_zona_(bar|wc|ruhatar|merch)_(teto|szegely)/.exec(n);
+    if (z) { tip = z[1]; szegely = z[2] === 'szegely'; } else if (/^WEB_(zona_teto|zona_ujra_teto|tetoblokk|wc_teto|wc_menny|wc_fal|menny_teljes|platinum_teto)/.test(n)) tip = m.userData.zonaTipus || ZONA_SZIN_TIPUS[m.color?.getHex()] || null;
+    else if (/^WEB_(zona_szegely|zona_ujra_szegely|tetoblokk_szegely)/.test(n)) { tip = ZONA_SZIN_TIPUS[m.color?.getHex()] || null; szegely = true; }
+    if (!tip || tip === 'merch' || !S1_LAP[tip]) continue;
+    m.color.setHex(S1_LAP[tip]); m.toneMapped = false; if (!szegely) { m.userData.zonaTipus = tip; if (m.transparent) m.opacity = 0.9; m.userData.alapSzin = m.color.clone(); if (!DIM_ANYAG.includes(m)) DIM_ANYAG.push(m); }
+    m.needsUpdate = true; } });
+}
+// #80 (felhasználó, 2026-11-24): a páholy szint Visa Platinum Lounge bárja is rózsaszín bár-kiemelést kap, mint minden bár: a lap a kék gyűrűtető
+// (L2_bar_gyuru_teto) felső síkjának burka, 2 cm-rel fölötte. ?platinumregi: nincs lap (a régi).
+function platinumLap(root) {
+  root.updateMatrixWorld(true); const pt = []; let ymax = -1e9; const V = new THREE.Vector3();
+  root.traverse((o) => { if (!o.isMesh) return; const ms = Array.isArray(o.material) ? o.material : [o.material]; if (!ms.some((m) => /L2_bar_gyuru_teto/.test(m?.name || ''))) return;
+    const g = o.geometry, p = g.attributes.position, ix = g.index, cnt = ix ? ix.count : p.count;
+    for (let t = 0; t < cnt; t++) { const tri = t - t % 3; let mn = ms[0]?.name || ''; if (g.groups.length) for (const gr of g.groups) if (tri >= gr.start && tri < gr.start + gr.count) { mn = ms[gr.materialIndex]?.name || ''; break; }
+      if (!/L2_bar_gyuru_teto/.test(mn)) continue; V.fromBufferAttribute(p, ix ? ix.getX(t) : t).applyMatrix4(o.matrixWorld); pt.push([V.x, V.y, V.z]); ymax = Math.max(ymax, V.y); } });
+  const fent = pt.filter((q) => q[1] > ymax - 0.05).map((q) => [q[0], q[2]]); if (fent.length < 3) return null;
+  fent.sort((p, q) => p[0] - q[0] || p[1] - q[1]);
+  const kr = (o, p, q) => (p[0] - o[0]) * (q[1] - o[1]) - (p[1] - o[1]) * (q[0] - o[0]), lo = [], up = [];
+  for (const p of fent) { while (lo.length >= 2 && kr(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
+  for (let i = fent.length - 1; i >= 0; i--) { const p = fent[i]; while (up.length >= 2 && kr(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
+  const hull = lo.slice(0, -1).concat(up.slice(0, -1)); if (hull.length < 3) return null;
+  const g = new THREE.Group(); g.name = 'WEB_platinum';
+  for (const o of poligonLap(hull, ymax + 0.02, S1_LAP.bar, 'WEB_platinum')) { o.material.userData.zonaTipus = 'bar'; g.add(o); }
+  return g;
+}
 function s1LookV3(root) {
   const f = s1x('padlo', 0.33), fk = s1x('kuzd', 1.2), fh = s1x('homl', 0.3), fl = s1x('lelato', 1.85);
   const SZ = [[/Kuzdoter/i, [0.55 * fk, 0.45 * fk, 0.33 * fk]], [/padlo|terrazzo/i, [f * 1.05, f * 0.97, f * 0.94]],
@@ -2774,6 +2814,7 @@ async function loadLevel(level) {
           a.x = (a.x + b.x) / 2; a.y = (a.y + b.y) / 2; a.tagok = [a.id, b.id]; ki.add(b); }
         data.pois = data.pois.filter((p) => !ki.has(p)); }
       if (!QS.has('kulonwc')) data.pois = osszevonMosdo(data.pois, L.key);   // férfi + női mosdó egy közös pin
+      if (!QS.has('wcregi')) mosdoKozos(data.pois);   // #81: minden mosdó „Mosdó N”, közös ikon (az alaprajz szerint nincs csak férfi / csak női blokk)
       if (KAMERAK[L.key] && !QS.has('regikamera')) data.camera = KAMERAK[L.key];   // V2: tág áttekintő kamera (data/kamerak.json)
       // körüljáró-szintek kezdő kamerája (felhasználó, 2026-11-23, célkép): laposabb, ferdébb rálátás – a túloldali lelátófal és a homlokzat belseje
       // is látszik, a gyűrű ellipszis; kicsit közelebb, mint az eddigi 208 m / 123 m-es pálya. A legnagyobb kitávolítás nem változik. ?kamregi: a régi;
@@ -2865,6 +2906,8 @@ async function loadLevel(level) {
       if (UJLOOK && UJLOOK_SZINTEK.has(L.key) && (LAMPA_BE || QS.has('lampa')) && !QS.has('nolampa')) { try { const l = L.key === 'S1' ? sugarLampak(gltf.scene) : null; if (l) gltf.scene.add(l);   // a lámpafoltok csak az alsó szinten (a többin a sétány-sáv keresése nincs hangolva)
  homlokzatFeny(gltf.scene); } catch (e) { console.warn('lámpák', e); } }
       if (L.key === 'S1' && S1LOOK && UJLOOK) { try { const n = s1LookV3(gltf.scene); if (n) gltf.scene.add(n); } catch (e) { console.warn('s1 V3 kinézet', e); } }
+      if (L.key === 'S2' && !QS.has('platinumregi')) { try { const p = platinumLap(gltf.scene); if (p) gltf.scene.add(p); } catch (e) { console.warn('platinum', e); } }
+      if (L.key !== 'S1' && UJLOOK_SZINTEK.has(L.key) && !QS.has('lapszinregi')) { try { lapSzinSzabvany(gltf.scene); } catch (e) { console.warn('lapszín', e); } }
       // a sütött-fény átalakítás új anyagpéldányt adhat, a szektor-kiemelő shader pedig felülírja az onBeforeCompile-t → a zóna-elrejtést a végleges anyagokra újra rátesszük
       if (ZONA_REJT[L.key] && !QS.has('norejt')) gltf.scene.traverse((o) => { if (!o.isMesh) return; for (const m of (Array.isArray(o.material) ? o.material : [o.material])) { const d = ZONA_REJT[L.key].filter((d) => d.minta.test(m.name || '')); if (d.length && !String(m.customProgramCacheKey?.() || '').includes('|zonarejt')) zonaRejt(m, d); } });
       c = cache[level] = { level, baked: c_baked, lm: c_lm, root: gltf.scene, anim: animObj, data, path: buildPath(data.camera) };
@@ -3061,7 +3104,7 @@ const EN = [
   // helyek
   ['Visa Platinum Lounge bár', 'Visa Platinum Lounge bar'], ['Akadálymentes mosdó', 'Accessible toilet'], ['Baba-mama szoba', 'Baby care room'],
   ['Férfi mosdó', 'Men’s toilet'], ['Női mosdó', 'Women’s toilet'], ['Büfé, bár', 'Food & drinks'], ['VIP páholyok', 'VIP boxes'], ['VIP páholy', 'VIP box'],
-  ['VIP bejárat', 'VIP entrance'], ['Elsősegély', 'First aid'], ['Információ', 'Information'], ['Ruhatár', 'Cloakroom'], ['Mosdó', 'Toilet'],
+  ['VIP bejárat', 'VIP entrance'], ['Elsősegély', 'First aid'], ['Információ', 'Information'], ['Ruhatár', 'Cloakroom'], ['Mosdó', 'Restroom'],
   ['Büfé', 'Bar'], ['Szektorok', 'Sectors'], ['Szektor', 'Sector'], ['Páholy', 'Box'], [' – kelet', ' – east'], [' – nyugat', ' – west'],
 ].sort((a, b) => b[0].length - a[0].length);
 function tr(s) {
