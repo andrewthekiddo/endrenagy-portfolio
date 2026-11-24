@@ -2834,7 +2834,11 @@ async function loadLevel(level) {
       // is látszik, a gyűrű ellipszis; kicsit közelebb, mint az eddigi 208 m / 123 m-es pálya. A legnagyobb kitávolítás nem változik. ?kamregi: a régi;
       // próbához ?kamR=…&kamH=… (vízszintes sugár / magasság, m)
       if (['S1', 'S2', 'S3'].includes(L.key) && data.camera?.path && !QS.has('kamregi')) {
-        const KR = { S1: [165, 76], S2: [190, 86], S3: [205, 95] }[L.key], R = Number(QS.get('kamR')) || KR[0], H = Number(QS.get('kamH')) || KR[1], E = 6;   // E: a célpont a középponton túl, a túloldal felé (a közeli bódék ne vágódjanak le)
+        // keskeny szabad képterület (pl. álló iPad: a bal panel mellett ~500 × 1180 px): a pálya arányosan hátrébb, hogy a teljes gyűrű beférjen
+        // (#79 ellenőrzőlista 10. pont, 2026-11-24); a fekvő iPad (≈ 1,05) és a szélesebb képek változatlanok. ?kamszuk: kikapcsolva
+        const szabadW = Math.max(200, VW() - (VW() > 640 && !document.body.classList.contains('no-side') && !document.body.classList.contains('side-closed') ? 316 : 0)), fa = szabadW / VH();
+        const KK = QS.has('kamszuk') ? 1 : Math.min(2.2, Math.max(1, Math.pow(1.05 / fa, Number(QS.get('kamkit')) || 0.5)));
+        const KR = { S1: [165, 76], S2: [190, 86], S3: [205, 95] }[L.key], R = (Number(QS.get('kamR')) || KR[0]) * KK, H = (Number(QS.get('kamH')) || KR[1]) * KK, E = 6;   // E: a célpont a középponton túl, a túloldal felé (a közeli bódék ne vágódjanak le)
         data.camera = { ...data.camera, path: data.camera.path.map((q) => { const dx = q[0] - q[3], dy = q[1] - q[4], d = Math.hypot(dx, dy) || 1, ux = dx / d, uy = dy / d;
           return [ux * R, uy * R, H, -ux * E, -uy * E, 1]; }) };
       }
