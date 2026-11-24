@@ -412,7 +412,10 @@ function zonaVag(m, v) {
 // Nem átlátszóság, ezért a sütött fény és a rajzolási sorrend érintetlen. A homlokzat anyagai kimaradnak (a lobby kivágott homlokzat-alakja marad).
 const LEPCSO_FADE = { S0: { xMin: 17, xMax: 38, zMin: -77, zMax: -57, y0: 3.0, y1: 6.2 },
   // alsó körüljáró (2026-11-23): a két, a páholyszintre felvezető lépcső + mozgólépcső (|x| 31–56 m, z −59…−43, 0 → 5 m); ?lepcsoregi=1: ki
-  ...(QS.get('lepcsoregi') === '1' ? {} : { S1: { xMin: 28, xMax: 58, zMin: -61, zMax: -41, y0: 1.2, y1: 5.2 } }) };
+  ...(QS.get('lepcsoregi') === '1' ? {} : { S1: { xMin: 28, xMax: 58, zMin: -61, zMax: -41, y0: 1.2, y1: 5.2 } }),
+  // páholy szint (#79, 2026-11-24): a felső szintre vezető két lépcső + mozgólépcső (|x| 41–64 m, z −60…−30, a padló 0 m-étől 5,1 m-ig); ?lepcsoregi=1: ki.
+  // A felső szinten a lépcsők a padlónál véget érnek – ott nincs levágott rész, nem kell áttűnés.
+  ...(QS.get('lepcsoregi') === '1' ? {} : { S2: { xMin: 40, xMax: 65, zMin: -61, zMax: -29, y0: 1.2, y1: 5.2 } }) };
 function lepcsoFade(root, v) {
   const kesz = new Set();
   root.traverse((o) => {
