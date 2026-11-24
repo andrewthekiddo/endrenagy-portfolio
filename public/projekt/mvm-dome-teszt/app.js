@@ -28,7 +28,7 @@ const LEVELS = {
   also:   { key: 'S1', name: 'Alsó körüljáró szint', model: 'models/S1.glb', meret: 5181284, data: 'data/S1.json', tier: 'Alsó lelátó (2xx)' },
   lobby:  { key: 'S0', name: 'Lobby – Bejárati szint', model: 'models/S0.glb', meret: 1703972, data: 'data/S0.json', tier: 'Küzdőtéri lelátó (1xx)' },
   // a teljes, megépített épület kívülről (homlokzat bekapcsolva, nyitott tető): a kezdőnézet, ha a fájljai megvannak (lásd VAN_EPULET)
-  epulet: { key: 'S4', name: 'MVM Dome', model: 'models/S4.glb', meret: 6375816, data: 'data/S4.json', tier: 'Lelátó' },
+  epulet: { key: 'S4', name: 'MVM Dome', model: 'models/S4.glb', meret: 6347036, data: 'data/S4.json', tier: 'Lelátó' },
 };
 
 // Pinek: funkciónként színes (a térkép-stílus palettája), az ikon fehér vagy sötét a jobb olvashatóságért
@@ -175,7 +175,7 @@ const WALK = QS.has('dimregi') ? 1 : Math.min(1, Math.max(0.1, Number(QS.get('wa
 const STAIRSKEEP = QS.get('stairskeep') !== '0';
 // A külső homlokzat (a lapok KÜLSŐ oldala) szintenként sötétebb, a jóváhagyott Blender V3 render szerint (felhasználó, 2026-11-23: „nem azt beszéltük?”):
 // a V3-on a homlokzat sötét, csak a fénycsíkok, kapuszámok, üveg világítanak (ezek kimaradnak). ?homk=0.5 (minden szintre), ?homkregi: a régi
-const HOMK_SZINT = { S0: 1, S1: 1, S2: 0.4, S3: 0.32, S4: 0.42 };
+const HOMK_SZINT = { S0: 1, S1: 1, S2: 0.4, S3: 0.32, S4: 0.6 };   // S4: V3-csomag (2026-11-24), mérve 0,6 ≈ a régi fényesség (0,42: 16, 1,0: 24, régi: 20)
 const HOMK_U = { value: 1 };
 // S2 (2026-11-24, V3-csomag): 1,0-val a külső homlokzatsáv kivilágosodott, 0,40 marad (a régivel egyezik). S3 (2026-11-24, V3-csomag lightmap3-mal): mérve az 1,0 túl világos (homlokzat-medián 42, az S1 sötét sütése 12) → marad 0,32 (medián 14), amíg sötétre nem sül
 function homkBeallit(key) { HOMK_U.value = QS.has('homkregi') ? 1 : QS.has('homk') ? Number(QS.get('homk')) || 1 : (HOMK_SZINT[key] ?? 1); }
@@ -1975,7 +1975,7 @@ function stepTour(now) {
 // Csak az épületnézet (S4); a lobby belsejében (a gömbön belül) nem változik semmi. ?kamkeret0: kikapcsolva. ?debugkamera=1: adatok a képen.
 const KERET = { gomb: null, w: 0, fa: 0, kk: 1 };
 function keretSzamol(root, key) {
-  KERET.gomb = null; if (key !== 'S4' || QS.has('kamkeret0')) return;
+  KERET.gomb = null; if (!['S1', 'S2', 'S3', 'S4'].includes(key) || QS.has('kamkeret0')) return;   // mobil-menet (2026-11-24): a körüljárók gyűrűje is
   const b = new THREE.Box3(), bb = new THREE.Box3(); root.updateMatrixWorld(true);
   root.traverse((o) => { if (!o.isMesh || /^WEB_/.test(o.name || '')) return; const ms = Array.isArray(o.material) ? o.material : [o.material];
     if (!ms.some((m) => /Kulso|Kulter|_hm_|Homlokzat/i.test(m?.name || ''))) return; bb.setFromObject(o); b.union(bb); });
@@ -1984,7 +1984,7 @@ function keretSzamol(root, key) {
   const c = b.getCenter(new THREE.Vector3()); KERET.gomb = { c, r: 0.5 * Math.hypot(sz.x, sz.y, sz.z) * 0.82 };
 }
 function keretIgazit(pos, tgt) {
-  const g = KERET.gomb; if (!g || !current || LEVELS[current.level]?.key !== 'S4') return;
+  const g = KERET.gomb; if (!g || !current) return;
   const oldal = VW() > 640 && !document.body.classList.contains('no-side') && !document.body.classList.contains('side-closed') ? 316 : 0;
   const fa = Math.max(200, VW() - oldal) / VH(); KERET.fa = fa;
   const keskeny = 1 - THREE.MathUtils.smoothstep(fa, 0.95, 1.2); if (keskeny <= 0) { KERET.w = 0; return; }
@@ -2544,7 +2544,7 @@ $('#sideOpen').addEventListener('click', () => { document.body.classList.remove(
 if (VW() <= 640) document.body.classList.add('side-closed');
 // álló iPad (641–1023 px, álló tájolás – André, 2026-11-24): a panel alapból csukva, a térkép a teljes szélességet kapja (nyitott panel mellett a keskeny sávban
 // levágódott, és a panel teteje a szintválasztó sorába lógott); a panel gombbal nyitható. ?allopanel: a régi (nyitott)
-if (VW() > 640 && VW() < 1024 && VH() > VW() && !QS.has('allopanel')) document.body.classList.add('side-closed');
+if (VW() > 640 && VW() <= 1366 && VH() > VW() && !QS.has('allopanel')) document.body.classList.add('side-closed');   // (mobil-menet: az 1024 px-es álló iPad Pro is)
 // a bal oldali panel (és a jobb oldali adatlap) mellett a 3D kép a szabad terület közepére kerül: vízszintes képeltolás (px)
 let uiEltol = 0, uiEltolY = 0;
 const B = document.body.classList;
@@ -2901,7 +2901,7 @@ async function loadLevel(level) {
         // és a célpont az épület közepe felé húzódik (a kezdőkép célpontja x ≈ 40 m-en van, álló képen az épület oldalra csúszott)
         const sima = (a0, a1, x) => { const t = Math.min(1, Math.max(0, (x - a0) / (a1 - a0))); return t * t * (3 - 2 * t); };
         if (KK > 1.001) data.camera = { ...data.camera, path: data.camera.path.map((q) => {
-          if (L.key === 'S4' && !QS.has('kamkeret0')) return q;   // az épületnél a futás közbeni keret-igazítás (keretIgazit) dolgozik
+          if (L.key !== 'S0' && !QS.has('kamkeret0')) return q;   // S1–S4: a futás közbeni keret-igazítás (keretIgazit) dolgozik
           if (L.key !== 'S4') return [q[3] + (q[0] - q[3]) * KK, q[4] + (q[1] - q[4]) * KK, q[5] + (q[2] - q[5]) * KK, q[3], q[4], q[5]];
           const sv = sima(60, 120, Math.hypot(q[0], q[1])), k = 1 + (KK - 1) * sv, w = sv * (1 - 1 / KK) * 1.4;
           const tx = q[3] * (1 - w), ty = q[4] * (1 - w);
@@ -3017,6 +3017,7 @@ async function loadLevel(level) {
     $('#lvlSub').textContent = L.name;
     $('#forras').style.display = L.key === 'S4' ? '' : 'none';   // a teljes épület környékrajza OpenStreetMap-adatból készült → forrásmegjelölés (ODbL)
     document.querySelectorAll('#levels button').forEach(b => b.classList.toggle('active', b.dataset.level === level));
+    if (!QS.has('mobilregi')) { const ab = document.querySelector('#levels button.active'); if (ab && VW() <= 1023) ab.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); }   // telefonon az aktív szint-fül mindig látszik
     renderer.compile(scene, camera);
     await Promise.race([Promise.all(IKON_ELO.map((k) => k.decode?.().catch(() => {}))), new Promise((r) => setTimeout(r, 1500))]);   // a betöltő csak akkor tűnik el, ha az ikonok is megvannak
     if (!performance.getEntriesByName('mvm-kesz').length) performance.mark('mvm-kesz');   // a push rutin mérése ehhez igazodik
