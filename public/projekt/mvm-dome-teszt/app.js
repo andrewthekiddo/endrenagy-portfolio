@@ -3072,6 +3072,10 @@ async function loadLevel(level) {
       if (L.key === 'S1' && S1LOOK && UJLOOK) { try { const n = s1LookV3(gltf.scene); if (n) gltf.scene.add(n); } catch (e) { console.warn('s1 V3 kinézet', e); } }
       if (L.key === 'S2' && !QS.has('platinumregi')) { try { const p = platinumLap(gltf.scene); if (p) gltf.scene.add(p); } catch (e) { console.warn('platinum', e); } }
       if (L.key !== 'S1' && UJLOOK_SZINTEK.has(L.key) && !QS.has('lapszinregi')) { try { lapSzinSzabvany(gltf.scene); } catch (e) { console.warn('lapszín', e); } }
+      // a páholy és a felső szinten a homlokzat sötétebb (×0,40 / ×0,32), ezért a kapuk fölötti LED-szalag ugyanakkora fénnyel kiégett, széles fehér sávnak
+      // látszott (André, 2026-11-24, VIP belépő-szárnyak) → a szalag fénye ott 2,2 → 0,8 (a sütő chat kérése). ?szalagregi: a régi
+      if ((L.key === 'S2' || L.key === 'S3') && !QS.has('szalagregi')) gltf.scene.traverse((o) => { if (!o.isMesh) return; for (const m of (Array.isArray(o.material) ? o.material : [o.material]))
+        if (m && /EF_Kulso_szalag_feher(\.\d+)?$/.test(m.name || '') && m.emissiveIntensity > 1) m.emissiveIntensity = 0.8; });
       // a páholy és a felső szint fekete tetői / mennyezetei ugyanazt a sötét navyt kapják, mint az alsó szint fal_teto-ja (André, 2026-11-24: „az ALSÓ a minta”) – ?feketeteto: a régi
       if ((L.key === 'S2' || L.key === 'S3') && !QS.has('feketeteto')) { const kesz = new Set(); gltf.scene.traverse((o) => { if (!o.isMesh) return; for (const m of (Array.isArray(o.material) ? o.material : [o.material])) {
         if (!m || kesz.has(m) || !/^W_(f\d+_)?(L2_fal_teto|L3_teto)$/.test(m.name || '')) continue; kesz.add(m); m.color.setRGB(...S1_TETO); m.map = null; m.lightMap = null; m.toneMapped = false; m.needsUpdate = true; } }); }
