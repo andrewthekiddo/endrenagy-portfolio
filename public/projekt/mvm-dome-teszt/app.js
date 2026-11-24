@@ -1966,8 +1966,48 @@ function stepTour(now) {
   }
   if (zoomCel !== null) { tour.zoom += (zoomCel - tour.zoom) * Math.min(1, dt * 8); if (Math.abs(zoomCel - tour.zoom) < 0.002) { tour.zoom = zoomCel; zoomCel = null; } }
   pathAt(tour.u, camera.position, controls.target);
+  keretIgazit(camera.position, controls.target);
 }
 
+// Futás közbeni keret-igazítás (André, 2026-11-24: álló iPaden az épület a bal szélre csúszott és levágódott – a repülés célpontjai a fekvő képre
+// vannak komponálva). Ha a ténylegesen látható szabad vászon keskeny (szélesség / magasság < 1,2) és a kamera az épületen kívül van, a célpont az
+// épület befoglaló gömbjének közepe felé húzódik, a kamera pedig annyira hátrál, hogy a gömb a valódi vízszintes látószögbe beférjen.
+// Csak az épületnézet (S4); a lobby belsejében (a gömbön belül) nem változik semmi. ?kamkeret0: kikapcsolva. ?debugkamera=1: adatok a képen.
+const KERET = { gomb: null, w: 0, fa: 0, kk: 1 };
+function keretSzamol(root, key) {
+  KERET.gomb = null; if (key !== 'S4' || QS.has('kamkeret0')) return;
+  const b = new THREE.Box3(), bb = new THREE.Box3(); root.updateMatrixWorld(true);
+  root.traverse((o) => { if (!o.isMesh || /^WEB_/.test(o.name || '')) return; const ms = Array.isArray(o.material) ? o.material : [o.material];
+    if (!ms.some((m) => /Kulso|Kulter|_hm_|Homlokzat/i.test(m?.name || ''))) return; bb.setFromObject(o); b.union(bb); });
+  if (b.isEmpty()) return;
+  const sz = b.getSize(new THREE.Vector3()); if (Math.max(sz.x, sz.z) > 400) return;   // ha a környék is belekerült, inkább semmi
+  const c = b.getCenter(new THREE.Vector3()); KERET.gomb = { c, r: 0.5 * Math.hypot(sz.x, sz.y, sz.z) * 0.82 };
+}
+function keretIgazit(pos, tgt) {
+  const g = KERET.gomb; if (!g || !current || LEVELS[current.level]?.key !== 'S4') return;
+  const oldal = VW() > 640 && !document.body.classList.contains('no-side') && !document.body.classList.contains('side-closed') ? 316 : 0;
+  const fa = Math.max(200, VW() - oldal) / VH(); KERET.fa = fa;
+  const keskeny = 1 - THREE.MathUtils.smoothstep(fa, 0.95, 1.2); if (keskeny <= 0) { KERET.w = 0; return; }
+  const d0 = pos.distanceTo(g.c), w = keskeny * THREE.MathUtils.smoothstep(d0, g.r * 1.15, g.r * 1.7); KERET.w = w; if (w <= 0) return;
+  tgt.lerp(g.c, w);
+  const vf = THREE.MathUtils.degToRad(camera.fov) / 2, hf = Math.atan(Math.tan(vf) * fa), kell = g.r / Math.sin(Math.min(hf, vf)), d = pos.distanceTo(tgt);
+  const kk = d < kell ? 1 + (kell / d - 1) * w : 1; KERET.kk = kk;
+  if (kk > 1) pos.sub(tgt).multiplyScalar(kk).add(tgt);
+}
+if (QS.get('debugkamera') === '1') {
+  const el = document.createElement('div'); el.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:99999;background:rgba(0,0,0,.75);color:#9f9;font:11px/1.35 monospace;padding:6px 8px;border-radius:6px;white-space:pre;pointer-events:none';
+  document.body.appendChild(el);
+  setInterval(() => { const cv = document.getElementById('c'), r = cv?.getBoundingClientRect(), vv = window.visualViewport, g = KERET.gomb; let pr = '-';
+    if (g && camera) { const v = g.c.clone().project(camera); pr = `${Math.round((v.x + 1) / 2 * VW())},${Math.round((1 - v.y) / 2 * VH())}`; }
+    el.textContent = `ver ${window.MVM_VER}
+inner ${innerWidth}x${innerHeight} dpr ${devicePixelRatio}
+vv ${vv ? Math.round(vv.width) + 'x' + Math.round(vv.height) + ' off ' + Math.round(vv.offsetLeft) + ',' + Math.round(vv.offsetTop) : '-'}
+canvas ${r ? Math.round(r.left) + ',' + Math.round(r.top) + ' ' + Math.round(r.width) + 'x' + Math.round(r.height) : '-'} buf ${cv?.width}x${cv?.height}
+VW/VH ${VW()}x${VH()} fov ${camera?.fov?.toFixed(1)} asp ${camera?.aspect?.toFixed(2)}
+view ${camera?.view ? Math.round(camera.view.offsetX) + ',' + Math.round(camera.view.offsetY) : '-'} body ${document.body.className}
+keret ${g ? 'r ' + g.r.toFixed(0) + ' kp ' + pr : 'nincs'} fa ${KERET.fa.toFixed(2)} w ${KERET.w.toFixed(2)} kk ${KERET.kk.toFixed(2)}
+szint ${current ? current.level : '-'} u ${tour?.u?.toFixed(3)}`; }, 500);
+}
 // Húzás körút-módban: csak a pálya mentén (jobbra-balra), föl-le nem
 const DRAG_GAIN = 0.00055; // pálya-hossz / px
 canvas.addEventListener('pointerdown', (e) => {
@@ -2861,6 +2901,7 @@ async function loadLevel(level) {
         // és a célpont az épület közepe felé húzódik (a kezdőkép célpontja x ≈ 40 m-en van, álló képen az épület oldalra csúszott)
         const sima = (a0, a1, x) => { const t = Math.min(1, Math.max(0, (x - a0) / (a1 - a0))); return t * t * (3 - 2 * t); };
         if (KK > 1.001) data.camera = { ...data.camera, path: data.camera.path.map((q) => {
+          if (L.key === 'S4' && !QS.has('kamkeret0')) return q;   // az épületnél a futás közbeni keret-igazítás (keretIgazit) dolgozik
           if (L.key !== 'S4') return [q[3] + (q[0] - q[3]) * KK, q[4] + (q[1] - q[4]) * KK, q[5] + (q[2] - q[5]) * KK, q[3], q[4], q[5]];
           const sv = sima(60, 120, Math.hypot(q[0], q[1])), k = 1 + (KK - 1) * sv, w = sv * (1 - 1 / KK) * 1.4;
           const tx = q[3] * (1 - w), ty = q[4] * (1 - w);
@@ -2964,6 +3005,7 @@ async function loadLevel(level) {
     }
     scene.add(c.root); if (c.anim) scene.add(c.anim.root);
     const pk = c.pois || c.data.pois;
+    try { keretSzamol(c.root, L.key); } catch (e) { console.warn('keret', e); }
     current = { ...c, pois: pk, markers: buildMarkers(pk, c.data.padlo || 0, QS.has('pinregi') ? null : wcMagassagTerkep(c.root)), lights: c.baked ? [] : addPoiLights(pk) };
     camShift = [c.data.camera.shift_x || 0, c.data.camera.shift_y || 0];
     lookAlkalmaz(LEVELS[level].key);
@@ -3098,7 +3140,7 @@ loadLevel(LEVELS[start] && (start !== 'epulet' || VAN_EPULET) ? start : ALAP)
   }
 });
 
-window.__mvm = { HL, scene, camera, controls, THREE, loadLevel, modellLapFeliratok, zonaFeliratPontokra, magTerkep: () => wcMagassagTerkep(current.root), WC_N, WC_R, get current() { return current; }, get mode() { return mode; }, hl: (sz) => { hovSec = sz ? current.pois.find((p) => p.id === 'szektor_' + sz) || null : null; hlFrissit(); return !!hovSec; } };   // hl: tesztekhez (szektor kiemelése kóddal)
+window.__mvm = { HL, scene, camera, controls, THREE, loadLevel, get tour() { return tour; }, KERET, modellLapFeliratok, zonaFeliratPontokra, magTerkep: () => wcMagassagTerkep(current.root), WC_N, WC_R, get current() { return current; }, get mode() { return mode; }, hl: (sz) => { hovSec = sz ? current.pois.find((p) => p.id === 'szektor_' + sz) || null : null; hlFrissit(); return !!hovSec; } };   // hl: tesztekhez (szektor kiemelése kóddal)
 
 // ---------------------------------------------------------------------------------------------
 // Nyelvválasztó HU / EN (2026-11-22, a mvm-dome.hu fejléce szerint). A felület feliratait egy szótár fordítja:
