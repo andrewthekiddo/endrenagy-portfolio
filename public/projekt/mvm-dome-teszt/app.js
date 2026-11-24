@@ -459,8 +459,12 @@ function lepcsoFade(root, v) {
 const ZONA_REJT = { S2: [{ minta: /UJ_zona_bar_/, x0: -13, x1: 13, z0: -71, z1: -57 }],
 };
 const ZONA_REJT_KESZ = new WeakSet();   // (a userData átmásolódna az anyag klónjára, ezért külön halmaz)
+// a rejtett dobozok anyagonként: a rámutatás / kijelölés sugara ezekben a modell elrejtett lapját NEM találja el – különben a kiemelés a rejtett
+// keskeny csík alakját kapná (felső szint, bárok: „dupla highlight”, André 2026-11-24, 25i). ?kiemregi: a régi
+const ZONA_REJT_DOBOZ = new WeakMap();
+const rejtettPont = (m, p) => !QS.has('kiemregi') && (ZONA_REJT_DOBOZ.get(m) || []).some((d) => p.x > d.x0 && p.x < d.x1 && p.z > d.z0 && p.z < d.z1);
 function zonaRejt(m, v) {
-  ZONA_REJT_KESZ.add(m);
+  ZONA_REJT_KESZ.add(m); ZONA_REJT_DOBOZ.set(m, (ZONA_REJT_DOBOZ.get(m) || []).concat(v));
   const elozo = m.onBeforeCompile, kulcs = m.customProgramCacheKey?.bind(m);
   m.onBeforeCompile = (sh, r) => {
     elozo?.call(m, sh, r);
@@ -2418,7 +2422,7 @@ function zonaKepponton(x, y) {
   if (!current) return null;
   for (const h of sugarTalalatok(x, y)) {
     if (!h.object.visible || !h.object.isMesh || h.object.userData.zonaKiem) continue;
-    const m = zonaAnyag(h); if (!m || m.visible === false) continue;
+    const m = zonaAnyag(h); if (!m || m.visible === false || rejtettPont(m, h.point)) continue;
     const nev = alapNev(m.name || '');
     if (ZONA_TETO.test(nev)) {
       const t = (nev.match(/UJ_zona_(bar|wc|ruhatar|merch)_/) || [])[1] || m.userData.zonaTipus || ZONA_SZIN_TIPUS[m.color?.getHex()];   // userData: az S1 V3 átszínezése után a szín már nem árulja el a típust
@@ -2511,14 +2515,16 @@ function zonaPontAlatt(p) {
   const rc = new THREE.Raycaster(new THREE.Vector3(p.x, 60, -p.y), new THREE.Vector3(0, -1, 0)), cel = [];
   current.root.traverse((o) => { if (o.isMesh && o.visible && !o.userData.zonaKiem && [].concat(o.material).some((m) => ZONA_TETO.test(alapNev(m?.name || '')))) cel.push(o); });
   for (let r = 0; r <= 3; r += 1.5) for (const [dx, dz] of [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r]]) { rc.ray.origin.set(p.x + dx, 60, -p.y + dz);
-    for (const h of rc.intersectObjects(cel, false)) { const m = zonaAnyag(h); if (!m || !ZONA_TETO.test(alapNev(m.name || ''))) continue; return { obj: h.object, mi: Array.isArray(h.object.material) ? h.face.materialIndex : -1, face: h.faceIndex, szin: m.color?.getHex() ?? 0xffffff }; } }
+    for (const h of rc.intersectObjects(cel, false)) { const m = zonaAnyag(h); if (!m || !ZONA_TETO.test(alapNev(m.name || '')) || rejtettPont(m, h.point)) continue; return { obj: h.object, mi: Array.isArray(h.object.material) ? h.face.materialIndex : -1, face: h.faceIndex, szin: m.color?.getHex() ?? 0xffffff }; } }
   return null;
 }
 function zonaKiemelesEpit(z) {
   const o = z.obj, g = o.geometry, pos = g.attributes.position, idx = g.index, komp = zonaKomponensek(o, z.mi), cel = komp.get(z.face);
   o.updateWorldMatrix(true, false);
   const M = new THREE.Matrix4().multiplyMatrices(new THREE.Matrix4().copy(current.root.matrixWorld).invert(), o.matrixWorld), a = new THREE.Vector3(), out = [];
-  for (const [t, c] of komp) if (c === cel) for (let j = 0; j < 3; j++) { a.fromBufferAttribute(pos, idx ? idx.getX(t * 3 + j) : t * 3 + j).applyMatrix4(M); out.push(a.x, a.y, a.z); }
+  // a néző saját lapjai (WEB_*: tetőtömb, mennyezet) soronkénti sávokból állnak → az egész egység izzik fel, ne csak az eltalált sáv (25i, ?kiemregi)
+  const egesz = !QS.has('kiemregi') && /^WEB_(tetoblokk|menny_teljes)$/.test(alapNev([].concat(o.material)[Math.max(0, z.mi)]?.name || ''));
+  for (const [t, c] of komp) if (egesz || c === cel) for (let j = 0; j < 3; j++) { a.fromBufferAttribute(pos, idx ? idx.getX(t * 3 + j) : t * 3 + j).applyMatrix4(M); out.push(a.x, a.y, a.z); }
   if (!out.length) return null;
   const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(out, 3));
   // ráadásként hozzáadva: a saját színében izzik fel, nem fakul ki (a világos kék mosdónál kisebb erővel, különben kifehéredik)
