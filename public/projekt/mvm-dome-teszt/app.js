@@ -1358,6 +1358,8 @@ function zonaUjra(root, lista) {
 const KAPUK = [['I', 141.6], ['II', 122.6], ['III', 90], ['IV', 57.4], ['V', 48.4], ['VI', 38.5], ['VII', -1.1], ['VIII', -30.5], ['IX', -42.3], ['X', -50.3], ['XI', -90], ['XII', -129.8], ['XIII', -138], ['XIV', -179.5]];
 // telefon-menet (André, 2026-11-24, valódi iPhone: „ős káosz”): ≤ 500 px szélességen saját, letisztult nézet; ?telefonregi: a régi
 const TEL = () => VW() <= 500 && !QS.has('telefonregi');
+// telefonon rövid fülnevek (mind az 5 fül kifér 375 px-en is, görgetés nélkül, egyenletesen elosztva)
+if (TEL()) { const R = { epulet: 'Épület', lobby: 'Lobby', also: 'Alsó', paholy: 'VIP', felso: 'Felső' }; document.querySelectorAll('#levels button').forEach((b) => { if (R[b.dataset.level]) { if (!b.title) b.title = b.textContent.trim(); b.textContent = R[b.dataset.level]; } }); }
 const KAPU_A = 79.5, KAPU_B = 94, KAPU_H = 3.8 * (VW() <= 500 && !QS.has('telefonregi') ? 0.8 : 1);   // telefonon kicsit kisebb kapuszámok (0,6 olvashatatlan volt – André, 2026-11-24)   // ellipszis fél-tengelyei (világ x, világ z), betűmagasság (m)
 function kapuSzamok(root, y) {
   const csop = new THREE.Group(); csop.name = 'WEB_kapuszamok';
@@ -3053,7 +3055,7 @@ async function loadLevel(level) {
     $('#lvlSub').textContent = L.name;
     $('#forras').style.display = L.key === 'S4' ? '' : 'none';   // a teljes épület környékrajza OpenStreetMap-adatból készült → forrásmegjelölés (ODbL)
     document.querySelectorAll('#levels button').forEach(b => b.classList.toggle('active', b.dataset.level === level));
-    if (!QS.has('mobilregi')) { const ab = document.querySelector('#levels button.active'); if (ab && VW() <= 1023) ab.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); }   // telefonon az aktív szint-fül mindig látszik
+    // (a 24o-s scrollIntoView kivéve: a fülsort görgette, az első fül levágódott – André: „a main nav mindig el van csúszva”; telefonon a fülek most rövid névvel, teljes szélességben, görgetés nélkül)
     renderer.compile(scene, camera);
     await Promise.race([Promise.all(IKON_ELO.map((k) => k.decode?.().catch(() => {}))), new Promise((r) => setTimeout(r, 1500))]);   // a betöltő csak akkor tűnik el, ha az ikonok is megvannak
     if (!performance.getEntriesByName('mvm-kesz').length) performance.mark('mvm-kesz');   // a push rutin mérése ehhez igazodik
@@ -3218,7 +3220,7 @@ const EN = [
   // szintek, lelátók, oldalak
   ['Lobby – Bejárati szint', 'Lobby – Entrance level'], ['Felső körüljáró szint', 'Upper concourse level'], ['Alsó körüljáró szint', 'Lower concourse level'],
   ['Páholy szint (VIP)', 'Box level (VIP)'], ['VIP páholy szint', 'VIP box level'], ['Lobby és küzdőtér', 'Lobby and arena floor'], ['Teljes épület', 'Whole building'],
-  ['Felső körüljáró', 'Upper concourse'], ['Alsó körüljáró', 'Lower concourse'], ['Páholy (VIP)', 'Boxes (VIP)'], ['Épület', 'Building'],
+  ['Felső körüljáró', 'Upper concourse'], ['Alsó körüljáró', 'Lower concourse'], ['Felső', 'Upper'], ['Alsó', 'Lower'], ['Páholy (VIP)', 'Boxes (VIP)'], ['Épület', 'Building'],
   ['Küzdőtéri lelátó', 'Floor-level stands'], ['Alsó lelátó', 'Lower tier'], ['Felső lelátó', 'Upper tier'], ['Lelátó', 'Stand'],
   ['Északi oldal', 'North side'], ['Nyugati oldal', 'West side'], ['Déli oldal', 'South side'], ['Keleti oldal', 'East side'], ['Oldal', 'Side'],
   ['Állapot', 'Status'], ['Szélesség', 'Width'], ['Szabad', 'Available'], ['szabad', 'available'], ['Elkelt', 'Sold'],

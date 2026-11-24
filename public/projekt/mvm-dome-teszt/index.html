@@ -10,7 +10,7 @@
 <script>
 // Gyors indulás (V2): a kezdőszint modellje és fénytérképe már a HTML beolvasásakor elkezd letöltődni, nem csak a kód elindulása után
 // MVM_VER: a modellek/adatok verziója – minden modellcserénél EMELNI kell, így a böngésző (iPad Safari is) biztosan az újat tölti
-window.MVM_VER = '2026-11-24s';
+window.MVM_VER = '2026-11-24t';
 for (const k of ['navbal', 'koncertregi', 'mobilregi', 'telefonregi']) if (new RegExp('[?&]' + k + '(=|&|$)').test(location.search)) document.documentElement.classList.add(k);
 // Mindig a legfrissebb kiadás (felhasználó, 2026-11-23: „egy link legyen, ne ezer verzió”): betöltés után és amikor a lap újra előtérbe kerül
 // (iPad Safari a nyitva hagyott lapot a memóriából mutatja), a néző gyorsítótár nélkül lekéri a saját HTML-jét; ha abban újabb MVM_VER áll,
@@ -114,6 +114,9 @@ for (const k of ['navbal', 'koncertregi', 'mobilregi', 'telefonregi']) if (new R
   /* tömörebb fejléc 1023 px alatt (André képe, 2026-11-24: a fejléc + fülek + panelgomb elvitte a kép felét): 140 → 116 px, a fülek 72 px-en */
   @media (max-width:1023px){html:not(.mobilregi) .brand{height:116px;padding-top:20px}html:not(.mobilregi) .levels{top:70px}html:not(.mobilregi) .koncert{top:20px}}
   @media (max-width:640px){html:not(.mobilregi) .levels{gap:12px}html:not(.mobilregi) .levels button{font-size:13px;letter-spacing:-.1px}}
+  /* telefon (≤ 500 px): a fülsor a teljes szélességen, egyenletesen elosztva, görgetés nélkül; az oldal nem húzható el (gumi-hatás ki) */
+  @media (max-width:500px){html:not(.telefonregi) .levels{left:12px;right:12px;justify-content:space-between;gap:0;overflow:visible}html:not(.telefonregi) .levels button{font-size:14px}}
+  html,body{overscroll-behavior:none}
   /* nyitott adatlap: a badge a panel elé csúszik (app.js navIgazit), szűk helyen kompakt, végső esetben elhalványul */
   .koncert{transition:border-color .3s,background .3s,opacity .2s,transform .35s cubic-bezier(.2,.8,.2,1)}
   .koncert.kompakt{padding:4px;gap:0}
