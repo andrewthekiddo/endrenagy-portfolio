@@ -3072,6 +3072,9 @@ async function loadLevel(level) {
       if (L.key === 'S1' && S1LOOK && UJLOOK) { try { const n = s1LookV3(gltf.scene); if (n) gltf.scene.add(n); } catch (e) { console.warn('s1 V3 kinézet', e); } }
       if (L.key === 'S2' && !QS.has('platinumregi')) { try { const p = platinumLap(gltf.scene); if (p) gltf.scene.add(p); } catch (e) { console.warn('platinum', e); } }
       if (L.key !== 'S1' && UJLOOK_SZINTEK.has(L.key) && !QS.has('lapszinregi')) { try { lapSzinSzabvany(gltf.scene); } catch (e) { console.warn('lapszín', e); } }
+      // a páholy és a felső szint fekete tetői / mennyezetei ugyanazt a sötét navyt kapják, mint az alsó szint fal_teto-ja (André, 2026-11-24: „az ALSÓ a minta”) – ?feketeteto: a régi
+      if ((L.key === 'S2' || L.key === 'S3') && !QS.has('feketeteto')) { const kesz = new Set(); gltf.scene.traverse((o) => { if (!o.isMesh) return; for (const m of (Array.isArray(o.material) ? o.material : [o.material])) {
+        if (!m || kesz.has(m) || !/^W_(f\d+_)?(L2_fal_teto|L3_teto)$/.test(m.name || '')) continue; kesz.add(m); m.color.setRGB(...S1_TETO); m.map = null; m.lightMap = null; m.toneMapped = false; m.needsUpdate = true; } }); }
       // a sütött-fény átalakítás új anyagpéldányt adhat, a szektor-kiemelő shader pedig felülírja az onBeforeCompile-t → a zóna-elrejtést a végleges anyagokra újra rátesszük
       if (ZONA_REJT[L.key] && !QS.has('norejt')) gltf.scene.traverse((o) => { if (!o.isMesh) return; for (const m of (Array.isArray(o.material) ? o.material : [o.material])) { const d = ZONA_REJT[L.key].filter((d) => d.minta.test(m.name || '')); if (d.length && !String(m.customProgramCacheKey?.() || '').includes('|zonarejt')) zonaRejt(m, d); } });
       c = cache[level] = { level, baked: c_baked, lm: c_lm, root: gltf.scene, anim: animObj, data, path: buildPath(data.camera) };
