@@ -2225,6 +2225,8 @@ function setPhotos(p, c) {
 }
 function selectPoi(p, anchor) {
   if (selZona && selZona.s !== p) { selZona = null; zonaKiemFrissit(); }
+  // felső szint (2026-11-24, tábla döntése André helyett): a lelátó kinyúló része alá eső egységnél a pinre kattintva is kiemelődik a tetőlap (röntgen)
+  if (!selZona && RONTGEN() && ['bar', 'ruhatar', 'merch', 'wc'].includes(p.cat)) { const z = zonaPontAlatt(p); if (z) { selZona = { ...z, s: p }; zonaKiemFrissit(); } }
   const m = current.markers.find(x => x.p === p);
   selectedEl?.classList.remove('sel'); selectedEl = m?.el || null; selectedEl?.classList.add('sel');
   const c = CATS[p.cat];
@@ -2492,6 +2494,24 @@ function zonaKomponensek(o, mi) {
   }
   zonaKomp.set(k, komp); return komp;
 }
+// felső szint: a lelátó kinyúló része alá eső egységek pinje a beton fölé kerül (mindig megtalálható – tábla döntése, 2026-11-24)
+function pinKinyulasFole(cur) {
+  const cel = []; cur.root.updateMatrixWorld(true);
+  cur.root.traverse((o) => { if (o.isMesh && o.visible && !/^WEB_/.test(o.name || '') && ![].concat(o.material).some((m) => /^WEB_|zona|felirat|ikon|uveg/i.test(m?.name || ''))) cel.push(o); });
+  const rc = new THREE.Raycaster(); rc.ray.direction.set(0, -1, 0);
+  for (const m of cur.markers) { if (!['bar', 'ruhatar', 'merch', 'wc'].includes(m.p.cat) || !m.vaz) continue;
+    const t = m.vaz[m.vaz.length - 1]; rc.ray.origin.set(t.x, 80, t.z); const h = rc.intersectObjects(cel, false)[0];
+    if (h && h.point.y > t.y + 0.5) { const uj = h.point.y + 1.2; t.y = uj; if (m.world) m.world.y = Math.max(m.world.y, uj); } }
+}
+const RONTGEN = () => current && LEVELS[current.level]?.key === 'S3' && !QS.has('rontgenregi');
+// a pont alatti (felülről lőtt sugárral) legfelső kiemelő tetőlap – a lelátón át is
+function zonaPontAlatt(p) {
+  const rc = new THREE.Raycaster(new THREE.Vector3(p.x, 60, -p.y), new THREE.Vector3(0, -1, 0)), cel = [];
+  current.root.traverse((o) => { if (o.isMesh && o.visible && !o.userData.zonaKiem && [].concat(o.material).some((m) => ZONA_TETO.test(alapNev(m?.name || '')))) cel.push(o); });
+  for (let r = 0; r <= 3; r += 1.5) for (const [dx, dz] of [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r]]) { rc.ray.origin.set(p.x + dx, 60, -p.y + dz);
+    for (const h of rc.intersectObjects(cel, false)) { const m = zonaAnyag(h); if (!m || !ZONA_TETO.test(alapNev(m.name || ''))) continue; return { obj: h.object, mi: Array.isArray(h.object.material) ? h.face.materialIndex : -1, face: h.faceIndex, szin: m.color?.getHex() ?? 0xffffff }; } }
+  return null;
+}
 function zonaKiemelesEpit(z) {
   const o = z.obj, g = o.geometry, pos = g.attributes.position, idx = g.index, komp = zonaKomponensek(o, z.mi), cel = komp.get(z.face);
   o.updateWorldMatrix(true, false);
@@ -2502,6 +2522,7 @@ function zonaKiemelesEpit(z) {
   // ráadásként hozzáadva: a saját színében izzik fel, nem fakul ki (a világos kék mosdónál kisebb erővel, különben kifehéredik)
   const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ name: 'WEB_zona_kiem', color: z.szin, transparent: true, opacity: z.szin === ZONA_PALETTA.wc ? 0.38 : 0.55, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }));
   mesh.renderOrder = 6; mesh.frustumCulled = false; mesh.userData.zonaKiem = true; mesh.raycast = () => {};
+  if (RONTGEN()) { mesh.material.depthTest = false; mesh.material.opacity = 0.5; mesh.renderOrder = 20; }   // felső szint: a kiemelés a lelátó kinyúló részén át is látszik
   return mesh;
 }
 function zonaKiemFrissit() {
@@ -3065,6 +3086,7 @@ async function loadLevel(level) {
     const pk = c.pois || c.data.pois;
     try { keretSzamol(c.root, L.key); } catch (e) { console.warn('keret', e); }
     current = { ...c, pois: pk, markers: buildMarkers(pk, c.data.padlo || 0, QS.has('pinregi') ? null : wcMagassagTerkep(c.root)), lights: c.baked ? [] : addPoiLights(pk) };
+    if (L.key === 'S3' && !QS.has('rontgenregi')) { try { pinKinyulasFole(current); } catch (e) { console.warn('pin-kinyúlás', e); } }
     camShift = [c.data.camera.shift_x || 0, c.data.camera.shift_y || 0];
     lookAlkalmaz(LEVELS[level].key);
     LM.gain.value = Number(QS.get('lmg')) || c.data.lightmap?.gain || 1; LM.gamma.value = Number(QS.get('lmgam')) || c.data.lightmap?.gamma || 1;

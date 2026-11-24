@@ -10,8 +10,8 @@
 <script>
 // Gyors indulás (V2): a kezdőszint modellje és fénytérképe már a HTML beolvasásakor elkezd letöltődni, nem csak a kód elindulása után
 // MVM_VER: a modellek/adatok verziója – minden modellcserénél EMELNI kell, így a böngésző (iPad Safari is) biztosan az újat tölti
-window.MVM_VER = '2026-11-24v';
-for (const k of ['navbal', 'koncertregi', 'mobilregi', 'telefonregi']) if (new RegExp('[?&]' + k + '(=|&|$)').test(location.search)) document.documentElement.classList.add(k);
+window.MVM_VER = '2026-11-24x';
+for (const k of ['navbal', 'koncertregi', 'mobilregi', 'telefonregi', 'fejlecregi']) if (new RegExp('[?&]' + k + '(=|&|$)').test(location.search)) document.documentElement.classList.add(k);
 // Mindig a legfrissebb kiadás (felhasználó, 2026-11-23: „egy link legyen, ne ezer verzió”): betöltés után és amikor a lap újra előtérbe kerül
 // (iPad Safari a nyitva hagyott lapot a memóriából mutatja), a néző gyorsítótár nélkül lekéri a saját HTML-jét; ha abban újabb MVM_VER áll,
 // egyszer újratölt (munkamenetenként egy kiadásra legfeljebb egyszer – nincs töltési hurok). ?nofrissit: kikapcsolva
@@ -113,6 +113,18 @@ for (const k of ['navbal', 'koncertregi', 'mobilregi', 'telefonregi']) if (new R
   @media (min-width:641px) and (max-width:1023px){html:not(.mobilregi) body .sideOpen{top:124px}html:not(.mobilregi) body .side{top:120px}}
   /* tömörebb fejléc 1023 px alatt (André képe, 2026-11-24: a fejléc + fülek + panelgomb elvitte a kép felét): 140 → 116 px, a fülek 72 px-en */
   @media (max-width:1023px){html:not(.mobilregi) .brand{height:116px;padding-top:20px}html:not(.mobilregi) .levels{top:70px}html:not(.mobilregi) .koncert{top:20px}}
+  /* fejléc 1023 px alatt (André, 2026-11-24): (1) az átmenet a fülek ALATT kezdődik és hosszan, lágyan fogy el – nem vág bele a feliratokba;
+     (2) közös szélmargó (--szel) a logóra, a fülsorra és a jobb oldali csempére: az első fül bal széle a logóé, az utolsó jobb széle a csempéé. ?fejlecregi: a régi */
+  html:not(.fejlecregi){--szel:16px}
+  @media (max-width:1023px){
+    html:not(.fejlecregi):not(.mobilregi) .brand{padding-left:var(--szel);padding-right:var(--szel)}
+    html:not(.fejlecregi):not(.mobilregi) .brand::before{inset:0 0 auto 0;height:calc(100% + 84px);-webkit-mask-image:none;mask-image:none;
+      background:linear-gradient(180deg,rgba(var(--fejlec),.97) 0,rgba(var(--fejlec),.97) 114px,rgba(var(--fejlec),.9) 128px,rgba(var(--fejlec),.72) 142px,rgba(var(--fejlec),.48) 156px,rgba(var(--fejlec),.27) 170px,rgba(var(--fejlec),.11) 184px,rgba(var(--fejlec),.03) 194px,rgba(var(--fejlec),0) 100%)}
+    html:not(.fejlecregi):not(.mobilregi) .levels{left:var(--szel);right:var(--szel);justify-content:space-between;gap:8px}
+    html:not(.fejlecregi):not(.mobilregi) .koncert{right:var(--szel)}
+    html:not(.fejlecregi) body .side,html:not(.fejlecregi) body .sideOpen{z-index:13}   /* a hosszabb átmenet ne takarja a panelt és a panelnyitó gombot */
+  }
+  @media (max-width:500px){html:not(.fejlecregi):not(.telefonregi) .koncert{border-radius:8px;border:1px solid rgba(252,191,32,.55)}html:not(.fejlecregi):not(.telefonregi) .koncert img{border-radius:6px}}
   @media (max-width:640px){html:not(.mobilregi) .levels{gap:12px}html:not(.mobilregi) .levels button{font-size:13px;letter-spacing:-.1px}}
   /* telefon (≤ 500 px): a fülsor a teljes szélességen, egyenletesen elosztva, görgetés nélkül; az oldal nem húzható el (gumi-hatás ki) */
   @media (max-width:500px){html:not(.telefonregi) .levels{left:12px;right:12px;justify-content:space-between;gap:0;overflow:visible}html:not(.telefonregi) .levels button{font-size:14px}}
