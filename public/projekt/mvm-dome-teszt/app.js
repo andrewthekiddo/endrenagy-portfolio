@@ -619,6 +619,40 @@ const ZONA_UJRA = {};
 // a helyiség hossztengelye mentén, a betűk teteje az aréna közepe felé (kívülről nézve egyenesen olvasható). A modell lapja, szegélye,
 // felirata és háttérlapja ezeken a szinteken elrejtve. Ha egy helyiség elárasztása kifut (nyitott), annál az egységnél a modell lapja marad.
 const ZONA_MIND = new Set(['S1']);   // a páholy és a felső szinten az egységek a lelátó / mennyezet alatt vannak, felülről nem látszanak a falaik → ott a modell lapja marad
+// #77 (2026-11-24): a lap = a modell saját kiemelő lapja (S1_UJ_zona_*) MÍNUSZ az eresz (S1_UJ_eresz_*, a bár magasabb, előrenyúló sávja),
+// mindkettőtől 4 cm-rel beljebb (data/tetok_S1.json, a modell-chat exportja) → a lap nem lóg az eresz / hátfal alá. Kapcsoló: ?tetoregi.
+const TETO_KORVONAL = { S1: QS.has('tetoregi') ? null : fetch(asset('data/tetok_S1.json')).then((r) => (r.ok ? r.json() : null)).catch(() => null) };
+const TETO_BELJEBB = Number(QS.get('tetobe') ?? 0.04);
+function poliBenne(p, x, z) { let b = false; for (let i = 0, j = p.length - 1; i < p.length; j = i++) { const [xi, zi] = p[i], [xj, zj] = p[j]; if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) b = !b; } return b; }
+function poliSzelTav(p, x, z) { let m = 1e9; for (let i = 0; i < p.length; i++) { const [ax, az] = p[i], [bx, bz] = p[(i + 1) % p.length], dx = bx - ax, dz = bz - az, L = dx * dx + dz * dz || 1e-9, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L)); m = Math.min(m, Math.hypot(ax + dx * t - x, az + dz * t - z)); } return m; }
+// a modell kiemelő lapja MÍNUSZ az eresz (a bár magasabb, előrenyúló sávja) – mindkettőtől d-vel beljebb; 4 cm-es rácson, a határ láncolva, Douglas–Peucker
+function lapMinuszEresz(lap, eresz, d = 0.04, h = 0.04) {
+  let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (const [x, z] of lap) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
+  const nx = Math.ceil((x1 - x0) / h) + 2, nz = Math.ceil((z1 - z0) / h) + 2, X = (i) => x0 - h + i * h, Z = (j) => z0 - h + j * h, M = new Uint8Array(nx * nz);
+  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) { const x = X(i), z = Z(j);
+    if (poliBenne(lap, x, z) && poliSzelTav(lap, x, z) >= d && !(eresz && (poliBenne(eresz, x, z) || poliSzelTav(eresz, x, z) < d))) M[j * nx + i] = 1; }
+  // legnagyobb összefüggő folt
+  const cimke = new Int32Array(nx * nz).fill(-1); let leg = -1, legN = 0;
+  for (let k = 0; k < M.length; k++) { if (!M[k] || cimke[k] >= 0) continue; const v = [k]; cimke[k] = k; let n = 0;
+    while (v.length) { const q = v.pop(); n++; const i = q % nx; for (const r of [i > 0 ? q - 1 : -1, i < nx - 1 ? q + 1 : -1, q - nx, q + nx]) if (r >= 0 && r < M.length && M[r] && cimke[r] < 0) { cimke[r] = k; v.push(r); } }
+    if (n > legN) { legN = n; leg = k; } }
+  if (leg < 0) return null;
+  const be = (i, j) => i >= 0 && j >= 0 && i < nx && j < nz && cimke[j * nx + i] === leg;
+  // a cellák határélei (sarokpontok rácsindexe), irányítva: a folt mindig balra
+  const kov = new Map(), kulcs = (a, b) => a * 100000 + b;
+  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) { if (!be(i, j)) continue;
+    if (!be(i, j - 1)) kov.set(kulcs(i, j), [i + 1, j]); if (!be(i + 1, j)) kov.set(kulcs(i + 1, j), [i + 1, j + 1]);
+    if (!be(i, j + 1)) kov.set(kulcs(i + 1, j + 1), [i, j + 1]); if (!be(i - 1, j)) kov.set(kulcs(i, j + 1), [i, j]); }
+  let legH = null; const volt = new Set();
+  for (const [k0] of kov) { if (volt.has(k0)) continue; const hurok = []; let k = k0;
+    while (!volt.has(k) && kov.has(k)) { volt.add(k); const a = Math.floor(k / 100000), b = k % 100000; hurok.push([X(a) - h / 2, Z(b) - h / 2]); const [c, e] = kov.get(k); k = kulcs(c, e); }
+    if (!legH || hurok.length > legH.length) legH = hurok; }
+  const dp = (p, eps) => { if (p.length < 3) return p; let mx = 0, mi = 0; const [ax, az] = p[0], [bx, bz] = p[p.length - 1], L = Math.hypot(bx - ax, bz - az) || 1e-9;
+    for (let i = 1; i < p.length - 1; i++) { const t = Math.abs((bx - ax) * (az - p[i][1]) - (ax - p[i][0]) * (bz - az)) / L; if (t > mx) { mx = t; mi = i; } }
+    return mx > eps ? dp(p.slice(0, mi + 1), eps).slice(0, -1).concat(dp(p.slice(mi), eps)) : [p[0], p[p.length - 1]]; };
+  const fel = Math.floor(legH.length / 2), ki = dp(legH.slice(0, fel + 1), h * 0.75).slice(0, -1).concat(dp(legH.slice(fel).concat([legH[0]]), h * 0.75).slice(0, -1));
+  return ki.length >= 3 ? ki : null;
+}
 // Feliratok a jelölt egységekre (felhasználó, 2026-11-20): minden típusnak saját angol felirata, sötét, nagy betűvel,
 // a helyiség hossztengelyével PÁRHUZAMOSAN (a pontfelhő fő iránya), a betűk teteje az aréna közepe felé – kívülről nézve egyenesen olvasható.
 const ZONA_SZOVEG = { bar: 'BAR', ruhatar: 'CLOAKROOM', wc: 'TOILET', merch: 'MERCH SHOP' };
@@ -916,7 +950,8 @@ function poligonLap(poli, y, szin, nev) {
   const v = new THREE.LineLoop(sg, new THREE.LineBasicMaterial({ name: nev + '_szegely', color: szin })); v.renderOrder = 6; v.frustumCulled = false;
   return [lap, v];
 }
-function zonaMind(root, key, pois = []) {
+function zonaMind(root, key, pois = [], tetok = null) {
+  const tetoSzabad = tetok ? tetok.egysegek.map((t) => ({ ...t, cx: t.lap.reduce((q, p) => q + p[0], 0) / t.lap.length, cz: t.lap.reduce((q, p) => q + p[1], 0) / t.lap.length })) : [];
   const mag = wcMagassagTerkep(root), N = WC_N, cm = 2 * WC_R / (N - 1);
   root.updateMatrixWorld(true);
   // a modell zóna-lapjai: csúcsok egységenként (5 m-en belül összefüggő csoportok), típus és szín az anyagból
@@ -995,8 +1030,12 @@ function zonaMind(root, key, pois = []) {
       if (!bov.has(i - 1)) sz.push(xa, yv, za, xa, yv, zb); if (!bov.has(i + 1)) sz.push(xb, yv, za, xb, yv, zb);
       if (!bov.has(i - N)) sz.push(xa, yv, za, xb, yv, za); if (!bov.has(i + N)) sz.push(xa, yv, zb, xb, yv, zb); }
     let poli = QS.has('pixeles') ? null : ((u.par && u.par.lat && !QS.has('nokozos') && kozosPoli(u)) || (QS.has('regisarok') ? racsPoligon(QS.has('bov') ? bov : lat, 0.3, u.tipus === 'ruhatar' && !u.par) : burokPoligon(QS.has('lapregi') ? lat : lapMagSzur(lat, mag))));
-    if (poli && !QS.has('lapregi') && !QS.has('regisarok')) {
-      // (a téglalap / erózió próbája mérve rosszabb volt – 2026-11-24: kivéve)
+    let tetoLap = false;
+    if (tetoSzabad.length) {   // #77: a modell kiemelő lapja mínusz az eresz (típus + legközelebbi középpont, 10 m-en belül)
+      const tip = u.tipus === 'merch' ? 'ruhatar' : u.tipus, [ux, uz] = poli ? [poli.reduce((q, p) => q + p[0], 0) / poli.length, poli.reduce((q, p) => q + p[1], 0) / poli.length] : [u.x, u.z];
+      let leg = null, lt = 10; for (const t of tetoSzabad) { if (t.tipus !== tip) continue; const tv = Math.hypot(t.cx - ux, t.cz - uz); if (tv < lt) { lt = tv; leg = t; } }
+      if (leg) { tetoSzabad.splice(tetoSzabad.indexOf(leg), 1); const uj = lapMinuszEresz(leg.lap, leg.eresz, TETO_BELJEBB); if (uj) { poli = uj; tetoLap = true; }
+        (window.__tetoPar ||= []).push({ id: leg.id, tipus: u.tipus, tav: +lt.toFixed(2), n: uj ? uj.length : 0 }); }
     }   // a különálló ruhatár téglalap: a ferde sarok-levágás is elhagyható   // a fal BELSŐ oldaláig (a kihízlalt „bov” a falon túl lógott – felhasználó, 2026-11-21)
     if (poli) { for (const o of poligonLap(poli, y, ZONA_PALETTA[u.tipus] ?? u.szin, 'WEB_zona')) csop.add(o); }
     else {
@@ -1011,7 +1050,8 @@ function zonaMind(root, key, pois = []) {
     // felirat minden egységre, a helyiség hossztengelyével párhuzamosan
     { // a sima lap háromszögei → az ikon a lap közepén, a leghosszabb élével párhuzamosan (egyenesen), mint a lobbyban
       let hsz = null; if (poli) { const tr = THREE.ShapeUtils.triangulateShape(poli.map(([x, z]) => new THREE.Vector2(x, z)), []); hsz = tr.map((q) => q.flatMap((k) => poli[k])); const ef = ereszFedes(root); hsz.lathato = (x, z) => mag[wcCy(z) * N + wcCx(x)] < y + 0.6 && ef(x, z) < y + 0.3; }
-      const f = zonaFeliratPontokra([...lat].map((i) => [wcX(i % N), wcZ((i - i % N) / N)]), y, ZONA_SZOVEG[u.tipus] || u.tipus.toUpperCase(), undefined, hsz); if (f) csop.add(f); }
+      const fp = tetoLap && poli ? (() => { let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (const [x, z] of poli) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); } const q = []; for (let x = x0; x <= x1; x += 0.25) for (let z = z0; z <= z1; z += 0.25) if (poliBenne(poli, x, z)) q.push([x, z]); return q; })() : [...lat].map((i) => [wcX(i % N), wcZ((i - i % N) / N)]);   // #77: a felirat az új lap pontjain
+      const f = zonaFeliratPontokra(fp, y, ZONA_SZOVEG[u.tipus] || u.tipus.toUpperCase(), undefined, hsz); if (f) csop.add(f); }
   }
   // a tetőn a tömb valódi típusa: ha csak férfi (+ akadálymentes) mosdó van benne → férfi-ikon, csak női → női, vegyes → közös piktogram
   const wcTipus = (pp) => { let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (const [x, z] of pp) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
@@ -2812,7 +2852,7 @@ async function loadLevel(level) {
             if (!QS.has('regilift')) { m.material.polygonOffset = true; m.material.polygonOffsetFactor = -6; m.material.polygonOffsetUnits = -6; m.renderOrder = 9; } } }
         if (g.children.length) gltf.scene.add(g);
       }
-      if (ZONA_MIND.has(L.key) && !QS.has('noujra')) { try { const u = zonaMind(gltf.scene, L.key, data.pois); if (u) gltf.scene.add(u); } catch (e) { console.warn('zóna-mind', e); } }
+      if (ZONA_MIND.has(L.key) && !QS.has('noujra')) { try { const u = zonaMind(gltf.scene, L.key, data.pois, TETO_KORVONAL[L.key] ? await TETO_KORVONAL[L.key] : null); if (u) gltf.scene.add(u); } catch (e) { console.warn('zóna-mind', e); } }
       if ((L.key === 'S1' || (!SZABVANY_S1 && (L.key === 'S2' || L.key === 'S3'))) && !QS.has('pinregi')) { try { pinKozepre(gltf.scene, data.pois, L.key); } catch (e) { console.warn('pin-közép', e); } }
       if (ZONA_UJRA[L.key] && !QS.has('noujra')) { try { const u = zonaUjra(gltf.scene, ZONA_UJRA[L.key]); if (u) gltf.scene.add(u); } catch (e) { console.warn('zóna-újra', e); } }
       // ahol a modell már ad kék mosdó-tetőt (UJ_zona_wc…), ott a néző nem épít másikat – különben duplán lenne
