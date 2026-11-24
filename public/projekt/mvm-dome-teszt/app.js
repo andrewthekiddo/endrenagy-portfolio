@@ -177,7 +177,7 @@ const WALK = QS.has('dimregi') ? 1 : Math.min(1, Math.max(0.1, Number(QS.get('wa
 const STAIRSKEEP = QS.get('stairskeep') !== '0';
 // A külső homlokzat (a lapok KÜLSŐ oldala) szintenként sötétebb, a jóváhagyott Blender V3 render szerint (felhasználó, 2026-11-23: „nem azt beszéltük?”):
 // a V3-on a homlokzat sötét, csak a fénycsíkok, kapuszámok, üveg világítanak (ezek kimaradnak). ?homk=0.5 (minden szintre), ?homkregi: a régi
-const HOMK_SZINT = { S0: 1, S1: 1, S2: 0.4, S3: 0.32, S4: 0.6 };   // S4: V3-csomag (2026-11-24), mérve 0,6 ≈ a régi fényesség (0,42: 16, 1,0: 24, régi: 20)
+const HOMK_SZINT = { S0: 1, S1: 1, S2: 0.4, S3: 0.32, S4: 0.6 };   // S4: újrasütés a dobon kívüli lámpák nélkül (2026-11-24 25e): 0,6-tal a semleges homlokzat 21 → 20, a kék folt eltűnt; korábban V3-csomag, mérve 0,6 ≈ a régi fényesség (0,42: 16, 1,0: 24, régi: 20)
 const HOMK_U = { value: 1 };
 // S2 (2026-11-24, V3-csomag): 1,0-val a külső homlokzatsáv kivilágosodott, 0,40 marad (a régivel egyezik). S3 (2026-11-24, V3-csomag lightmap3-mal): mérve az 1,0 túl világos (homlokzat-medián 42, az S1 sötét sütése 12) → marad 0,32 (medián 14), amíg sötétre nem sül
 function homkBeallit(key) { HOMK_U.value = QS.has('homkregi') ? 1 : QS.has('homk') ? Number(QS.get('homk')) || 1 : (HOMK_SZINT[key] ?? 1); }
